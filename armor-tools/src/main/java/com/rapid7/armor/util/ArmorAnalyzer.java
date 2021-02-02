@@ -1,0 +1,135 @@
+package com.rapid7.armor.util;
+
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rapid7.armor.read.SlowArmorShard;
+import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.shard.ColumnShardId;
+import com.rapid7.armor.shard.ShardId;
+import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.component.DictionaryWriter;
+
+import tech.tablesaw.api.Table;
+
+/**
+ * Compares two columns as a writer for analysis, note this should be two columns of the same type but different versions.
+ */
+public class ArmorAnalyzer {
+  public static void main(String[] args) throws IOException, ParseException {
+    Options options = new Options();
+    options.addOption("p", "path", true, "Path to the armor file or directory");
+    options.addOption("m", "mode", true, "Reader or writer mode each output has different set of files it pushes out");
+    options.addOption("d", "destination", true, "Destination directory for the ouptut files");
+
+    if (args.length == 0) {
+      HelpFormatter formatter = new HelpFormatter();
+      formatter.printHelp("armor-tools", options );
+      return;
+    }
+      
+    CommandLineParser parser = new DefaultParser();
+    CommandLine cmd = parser.parse(options, args);
+
+    Path path = Paths.get(cmd.getOptionValue("p"));
+    Path targetPath = Paths.get(cmd.getOptionValue("d"));
+    if (!Files.isDirectory(targetPath))
+      throw new RuntimeException("Target should be a directory");
+    String mode = cmd.getOptionValue("m");
+    if (mode.equals("write")) {
+      
+      for (Path columnFile : listFiles(path)) {
+        ColumnName columnName = null;
+        try {
+          columnName = new ColumnName(columnFile.getFileName().toString());
+        } catch (Exception e) {
+          continue;
+          // Just skip
+        }
+        try (ColumnWriter writer = new ColumnWriter(new DataInputStream(Files.newInputStream(columnFile, StandardOpenOption.READ)),
+            new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
+          ObjectMapper objectMapper = new ObjectMapper();
+          Files.copy(
+              new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getMetadata())),
+              targetPath.resolve(columnName.getName() + "-metadata.json"),
+              StandardCopyOption.REPLACE_EXISTING);
+          DictionaryWriter entityDictionaryWriter = writer.getEntityDictionary();
+          Files.copy(
+              new ByteArrayInputStream(objectMapper.writeValueAsBytes(entityDictionaryWriter.getStrToInt())),
+              targetPath.resolve(columnName.getName() + "-entity-dictionary-str2Int.json"),
+              StandardCopyOption.REPLACE_EXISTING);
+          Files.copy(
+              new ByteArrayInputStream(objectMapper.writeValueAsBytes(entityDictionaryWriter.getIntToStr())),
+              targetPath.resolve(columnName.getName() + "-entity-dictionary-int2Str.json"),
+              StandardCopyOption.REPLACE_EXISTING);
+          Files.copy(
+              new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getEntityRecordSummaries())),
+              targetPath.resolve(columnName.getName() + "-ordered-enity-summaries.json"),
+              StandardCopyOption.REPLACE_EXISTING);
+          Files.copy(
+              new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getEntites())),
+              targetPath.resolve(columnName.getName() + "-raw-entity-map.json"),
+              StandardCopyOption.REPLACE_EXISTING);
+          
+          DictionaryWriter rgDict = writer.getRowGroupWriter().getDictionaryWriter();
+          if (rgDict != null) {
+            Files.copy(
+                new ByteArrayInputStream(objectMapper.writeValueAsBytes(rgDict.getStrToInt())),
+                targetPath.resolve("rowgroup-dictionary-str2Int.json"),
+                StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(
+                new ByteArrayInputStream(objectMapper.writeValueAsBytes(rgDict.getIntToStr())),
+                targetPath.resolve("rowgroup-dictionary-int2Str.json"),
+                StandardCopyOption.REPLACE_EXISTING);
+          }
+          
+          // Finally lets dump the output of the shard out into something we can consume visually
+          ColumnShardVisualReader reader = new ColumnShardVisualReader(columnName, targetPath);
+          reader.process(writer);
+        }
+      }
+    } else if (mode.equals("read")) {
+      Table table = Table.create("table-result");
+      for (Path columnFile : listFiles(path)) {
+        try {
+          SlowArmorShard armorReader = new SlowArmorShard(Files.newInputStream(columnFile, StandardOpenOption.READ));
+          table.addColumns(armorReader.getColumn());
+        } catch (Exception e) {
+          continue;
+        }
+      }
+      Files.copy(
+          new ByteArrayInputStream(table.printAll().getBytes()),
+          targetPath.resolve("table-result"),
+          StandardCopyOption.REPLACE_EXISTING);
+    } else
+      throw new RuntimeException("The mode " + mode + " is not supported");
+    System.out.println("All done!!!");
+    System.exit(0);
+  }
+  
+  public static Set<Path> listFiles(Path dir) throws IOException {
+    try (Stream<Path> stream = Files.list(dir)) {
+        return stream
+          .filter(file -> !Files.isDirectory(file))
+          .collect(Collectors.toSet());
+    }
+  }
+}

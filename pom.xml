@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.rapid7</groupId>
+    <artifactId>armor-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>armor</name>
+    <description>A Java library that will help you create queries for Presto programmatically. This will help you test your code and create dynamic queries.</description>
+    <url>https://github.com/rapid7/armor</url>
+
+    <organization>
+        <name>Rapid 7, Inc.</name>
+        <url>http://www.rapid7.com</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>http://www.opensource.org/licenses/mit-license.php</url>
+        </license>
+    </licenses>
+
+    <scm>
+        <connection>scm:git:git@github.com:rapid7/armor.git</connection>
+        <developerConnection>scm:git:git@github.com:rapid7/armor.git</developerConnection>
+        <url>https://github.com/rapid7/armor</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <developers>
+        <developer>
+            <name>Austin Lee</name>
+            <email>alee@rapid7.com</email>
+            <organization>Rapid7</organization>
+            <organizationUrl>http://www.rapid7.com/</organizationUrl>
+        </developer>
+        <developer>
+            <name>Vikram Jiandani</name>
+            <email>vjiandani@rapid7.com</email>
+            <organization>Rapid7</organization>
+            <organizationUrl>http://www.rapid7.com/</organizationUrl>
+        </developer>
+    </developers>
+
+    <modules>
+        <module>armor-base</module>
+        <module>armor-write</module>
+        <module>armor-read</module>
+        <module>armor-tools</module>
+    </modules>
+
+    <properties>
+        <junit.version>5.7.0</junit.version>
+        <commons.version>1.5</commons.version>
+        <s3mock.version>0.2.6</s3mock.version>
+        <roaringBitmap.version>0.9.3</roaringBitmap.version>
+        <aws.version>1.11.445</aws.version>
+        <slf4j.version>1.7.26</slf4j.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.rapid7</groupId>
+                <artifactId>armor-base</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.rapid7</groupId>
+                <artifactId>armor-read</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.rapid7</groupId>
+                <artifactId>armor-write</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.roaringbitmap</groupId>
+            <artifactId>RoaringBitmap</artifactId>
+            <version>${roaringBitmap.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-s3</artifactId>
+            <version>${aws.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.findify</groupId>
+            <artifactId>s3mock_2.13</artifactId>
+            <version>${s3mock.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.0</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.22.2</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
