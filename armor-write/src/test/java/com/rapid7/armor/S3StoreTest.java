@@ -160,7 +160,6 @@ public class S3StoreTest {
   @Test
   public void basicTests() throws Exception {
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
-    //FileReadStore fileReadStore = new FileReadStore(testDirectory);
     String myorg = "myorg";
     String table = "vulntable";
     ColumnName name = new ColumnName("name", DataType.STRING.getCode());
