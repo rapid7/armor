@@ -82,6 +82,6 @@ public class S3ReadStoreTest {
 
     S3ReadStore readStore = new S3ReadStore(client, TEST_BUCKET);
     assertEquals(Sets.newHashSet("org1", "org2"), Sets.newHashSet(readStore.getOrgs()));
-    List<String> test = readStore.getTables("org2");
+    readStore.getTables("org2");
   }
 }
