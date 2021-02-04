@@ -154,6 +154,10 @@ public class ShardWriter {
     writer.write(transaction, writeRequests);
   }
 
+  /**
+   * Verifies the save request is "consistent" across columns with the shard. Part of the the consistency check
+   * is to build a "entity id" column derived from the consistency check.
+   */
   private ColumnMetadata consistencyCheck(String transaction) throws IOException {
     // First for all columns do check a do a defrag before continuing.
     for (Map.Entry<ColumnShardId, ColumnWriter> entry : writers.entrySet()) {

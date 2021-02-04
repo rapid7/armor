@@ -8,8 +8,9 @@ import com.rapid7.armor.store.WriteStore;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,7 +22,8 @@ public class TableWrite implements Closeable {
   private final String entityColumnId;
   private final DataType entityColumnType;
   private final WriteStore store;
-  private final Map<ShardId, ShardWriter> shards = new HashMap<>();
+  // Must be have some synchronization to prevent lost shards.
+  private final Map<ShardId, ShardWriter> shards = new ConcurrentHashMap<>();
 
   public TableWrite(String org, String table, String entityColumnId, DataType dataType, WriteStore store) {
     this.store = store;

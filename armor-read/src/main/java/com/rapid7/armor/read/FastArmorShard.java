@@ -59,7 +59,7 @@ public class FastArmorShard {
     return metadata.getColumnName();
   }
 
-  public FastArmorColumnReader getFastReader() {
+  public FastArmorColumnReader getFastArmorColumnReader() {
     return new FastArmorColumnReader(
         columnValues,
         rowsIsNull,

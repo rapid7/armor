@@ -24,7 +24,7 @@ public class FastArmorReader {
     if (shardId == null)
       return null;
     FastArmorShard armorShard = store.getFastArmorShard(shardId, columnName);
-    return armorShard.getFastReader();
+    return armorShard.getFastArmorColumnReader();
   }
 
   public ColumnMetadata getColumnMetadata(String org, String table, String columnName, int shardNum) throws IOException {

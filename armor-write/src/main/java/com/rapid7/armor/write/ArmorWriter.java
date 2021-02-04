@@ -39,13 +39,25 @@ public class ArmorWriter implements Closeable {
   private boolean selfPool = true;
   private final BiPredicate<ShardId, String> captureWrites;
   private boolean compress = false;
+  private String name;
 
-  public ArmorWriter(String name, WriteStore store, int numThreads, boolean compress, Supplier<Integer> defragTrigger, BiPredicate<ShardId, String> captureWrites) {
+  public ArmorWriter(String name, WriteStore store, boolean compress, int numThreads) {
+    this.store = store;
+    this.threadPool = Executors.newFixedThreadPool(numThreads);
+    this.selfPool = true;
+    this.compress = compress;
+    this.name = name;
+    this.defragTrigger = () -> 50;
+    this.captureWrites = null;
+  }
+
+  public ArmorWriter(String name, WriteStore store, boolean compress, int numThreads, Supplier<Integer> defragTrigger, BiPredicate<ShardId, String> captureWrites) {
     this.store = store;
     this.threadPool = Executors.newFixedThreadPool(numThreads);
     this.selfPool = true;
     this.captureWrites = captureWrites;
     this.compress = compress;
+    this.name = name;
     if (defragTrigger == null) {
       this.defragTrigger = () -> 50;
     } else
@@ -57,11 +69,16 @@ public class ArmorWriter implements Closeable {
     this.threadPool = pool;
     this.captureWrites = captureWrites;
     this.selfPool = false;
+    this.name = name;
     this.compress = compress;
     if (defragTrigger == null) {
       this.defragTrigger = () -> 50;
     } else
       this.defragTrigger = defragTrigger;
+  }
+
+  public String getName() {
+    return name;
   }
 
   public String startTransaction() {
@@ -204,7 +221,6 @@ public class ArmorWriter implements Closeable {
       entityUpdates.add(entity);
     }
     int numShards = shardToUpdates.size();
-
     ExecutorCompletionService<Void> ecs = new ExecutorCompletionService<>(threadPool);
     for (Map.Entry<ShardId, List<Entity>> entry : shardToUpdates.entrySet()) {
       ecs.submit(

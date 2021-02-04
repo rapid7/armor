@@ -167,7 +167,7 @@ public class S3StoreTest {
     ColumnName vuln = new ColumnName("vuln", DataType.INTEGER.getCode());
     ColumnName asset = new ColumnName("asset", DataType.INTEGER.getCode());
     List<ColumnName> columns = Arrays.asList(name, time, vuln);
-    try (ArmorWriter armorWriter = new ArmorWriter("test", writeStore, 10, false, () -> 1, null)) {
+    try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, false, 10, () -> 1, null)) {
       String transction = armorWriter.startTransaction();
       Entity e11 = Entity.buildEntity("asset", 1, 1, null, name, time, vuln);
       e11.addRows(
@@ -308,7 +308,7 @@ public class S3StoreTest {
       e32.addRow("1", null, -1);
       e32.addRow(null, null, null);
   
-      ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, 10, false, () -> 1, null);
+      ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, false, 10, () -> 1, null);
       Map<Integer, EntityRecord> records5a = amrorWriter2.getColumnEntityRecords(myorg, table, "vuln", 0);
   
       amrorWriter2.write(transction, myorg, table, Collections.singletonList(e32));
