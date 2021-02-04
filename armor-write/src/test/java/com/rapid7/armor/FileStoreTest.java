@@ -276,7 +276,7 @@ public class FileStoreTest {
           new Integer[] {null, null, null, null, 6, 6, -1, null},
           vulnInts.asObjectArray());
 
-      FastArmorReader rapidArmorReader = new FastArmorReader(fileReadStore);
+      FastArmorReader fastArmorReader = new FastArmorReader(fileReadStore);
       ColumnMetadata rShard = armorReader.getColumnMetadata(myorg, table, "vuln", 0);
       assertEquals(DataType.INTEGER, rShard.getDataType());
       assertEquals(Integer.valueOf(0), Integer.valueOf(rShard.getFragmentationLevel()));
@@ -296,7 +296,7 @@ public class FileStoreTest {
       //"1", null, 6
       //"1", null, -1
       //null, null, null
-      FastArmorColumnReader fastReader1 = rapidArmorReader.getColumn(myorg, table, "vuln", 0);
+      FastArmorColumnReader fastReader1 = fastArmorReader.getColumn(myorg, table, "vuln", 0);
       FastArmorBlock a1a = fastReader1.getIntegerBlock(1);
       assertTrue(fastReader1.hasNext());
       FastArmorBlock a2a = fastReader1.getIntegerBlock(1);
@@ -314,14 +314,14 @@ public class FileStoreTest {
       FastArmorBlock a8a = fastReader1.getIntegerBlock(1);
       assertFalse(fastReader1.hasNext());
 
-      FastArmorColumnReader fastReader1a = rapidArmorReader.getColumn(myorg, table, "vuln", 0);
+      FastArmorColumnReader fastReader1a = fastArmorReader.getColumn(myorg, table, "vuln", 0);
       FastArmorBlock a1aa = fastReader1a.getIntegerBlock(2);
       assertTrue(fastReader1a.hasNext());
       FastArmorBlock a2aa = fastReader1a.getIntegerBlock(10);
       assertFalse(fastReader1a.hasNext());
 
 
-      FastArmorColumnReader fastReader2 = rapidArmorReader.getColumn(myorg, table, "name", 0);
+      FastArmorColumnReader fastReader2 = fastArmorReader.getColumn(myorg, table, "name", 0);
       FastArmorBlock a1b = fastReader2.getStringBlock(1);
       assertTrue(fastReader2.hasNext());
       FastArmorBlock a2b = fastReader2.getStringBlock(1);
@@ -339,7 +339,7 @@ public class FileStoreTest {
       FastArmorBlock a8b = fastReader2.getStringBlock(1);
       assertFalse(fastReader2.hasNext());
 
-      FastArmorColumnReader fastReader2aa = rapidArmorReader.getColumn(myorg, table, "name", 0);
+      FastArmorColumnReader fastReader2aa = fastArmorReader.getColumn(myorg, table, "name", 0);
       FastArmorBlock a1ba = fastReader2aa.getStringBlock(2);
       assertTrue(fastReader2aa.hasNext());
       FastArmorBlock a2ba = fastReader2aa.getStringBlock(10);
