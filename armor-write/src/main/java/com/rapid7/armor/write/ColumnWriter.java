@@ -480,10 +480,10 @@ public class ColumnWriter implements AutoCloseable {
       WriteRequest maxVersionWriteRequest = groupByMax.get(wr.getEntityId());
       if (maxVersionWriteRequest == null) {
         EntityRecord er = entityRecordWriter.getEntityRecord(getEntityId(wr.getEntityId()));
-        if (er == null || er.getVersion() < wr.getVersion())
+        if (er == null || er.getVersion() <= wr.getVersion())
           groupByMax.put(wr.getEntityId(), wr);
       } else {
-        if (maxVersionWriteRequest.getVersion() < wr.getVersion())
+        if (maxVersionWriteRequest.getVersion() <= wr.getVersion())
           groupByMax.put(wr.getEntityId(), wr);
       }
     }

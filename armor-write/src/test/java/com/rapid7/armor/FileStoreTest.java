@@ -15,11 +15,14 @@ import com.rapid7.armor.store.FileReadStore;
 import com.rapid7.armor.store.FileWriteStore;
 import com.rapid7.armor.write.ArmorWriter;
 import com.google.common.collect.Sets;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -38,6 +41,15 @@ public class FileStoreTest {
     assertEquals(nullLength, eir.getNullLength());
     assertEquals(deleted, eir.getDeleted());
   }
+  
+  private void removeDirectory(Path removeDirectory) throws IOException {
+    Files.walk(removeDirectory).filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
+    Files.walk(removeDirectory)
+      .sorted(Comparator.reverseOrder())
+      .map(Path::toFile)
+      .filter(File::isDirectory)
+      .forEach(File::delete);
+  }
 
   @Test
   public void emptyWithSome() throws IOException {
@@ -45,7 +57,6 @@ public class FileStoreTest {
     Path testDirectory = Files.createTempDirectory("filestore");
     FileWriteStore fileStore = new FileWriteStore(testDirectory, new ModShardStrategy(1));
     ColumnName vuln = new ColumnName("vuln", DataType.INTEGER.getCode());
-    ColumnName asset = new ColumnName("asset", DataType.INTEGER.getCode());
     Entity e1 = Entity.buildEntity("asset", 1, 1, instanceId, vuln);
 
     Entity e2 = Entity.buildEntity("asset", 2, 1, instanceId, vuln);
@@ -61,18 +72,22 @@ public class FileStoreTest {
 
     Entity e7 = Entity.buildEntity("asset", 7, 1, instanceId, vuln);
 
-    try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, 10, false, null, null)) {
-      String transaction = armorWriter.startTransaction();
-      armorWriter.write(transaction, "myorg", "testtable", Arrays.asList(e1, e2, e3, e4, e5, e6, e7));
-      armorWriter.getColumnEntityRecords("myorg", "testtable", "vuln", 0);
-      armorWriter.save(transaction, "myorg", "testtable");
-    }
-
-    try (ArmorWriter armorWriter2 = new ArmorWriter("test", fileStore, 10, false, null, null)) {
-      String transaction = armorWriter2.startTransaction();
-      Entity e8 = Entity.buildEntity("asset", 8, 1, null, vuln);
-      armorWriter2.write(transaction, "myorg", "testtable", Collections.singletonList(e8));
-      armorWriter2.save(transaction, "myorg", "testtable");
+    try {
+      try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, 10, false, null, null)) {
+        String transaction = armorWriter.startTransaction();
+        armorWriter.write(transaction, "myorg", "testtable", Arrays.asList(e1, e2, e3, e4, e5, e6, e7));
+        armorWriter.getColumnEntityRecords("myorg", "testtable", "vuln", 0);
+        armorWriter.save(transaction, "myorg", "testtable");
+      }
+  
+      try (ArmorWriter armorWriter2 = new ArmorWriter("test", fileStore, 10, false, null, null)) {
+        String transaction = armorWriter2.startTransaction();
+        Entity e8 = Entity.buildEntity("asset", 8, 1, null, vuln);
+        armorWriter2.write(transaction, "myorg", "testtable", Collections.singletonList(e8));
+        armorWriter2.save(transaction, "myorg", "testtable");
+      }
+    } finally {
+      removeDirectory(testDirectory);
     }
   }
 
@@ -261,12 +276,6 @@ public class FileStoreTest {
           new Integer[] {null, null, null, null, 6, 6, -1, null},
           vulnInts.asObjectArray());
 
-//      Column<?> id3Vulns = armorReader.getColumn(myorg, table, "vuln", Integer.valueOf(3));
-//      Assert.assertArrayEquals(
-//          new Integer[] {6,-1,null},
-//          id3Vulns.asObjectArray());
-
-
       FastArmorReader rapidArmorReader = new FastArmorReader(fileReadStore);
       ColumnMetadata rShard = armorReader.getColumnMetadata(myorg, table, "vuln", 0);
       assertEquals(DataType.INTEGER, rShard.getDataType());
@@ -335,9 +344,9 @@ public class FileStoreTest {
       assertTrue(fastReader2aa.hasNext());
       FastArmorBlock a2ba = fastReader2aa.getStringBlock(10);
       assertFalse(fastReader2aa.hasNext());
-
+     
     } finally {
-      // Files.deleteIfExists(testDirectory);
+      removeDirectory(testDirectory);
     }
   }
 
