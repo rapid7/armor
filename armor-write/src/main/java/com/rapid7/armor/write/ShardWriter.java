@@ -102,7 +102,7 @@ public class ShardWriter {
   public ShardMetadata save(String transaction) throws IOException {
     boolean committed = false;
     try {
-      ColumnMetadata entityColumnMetadata = syncEntityColumn(transaction);
+      ColumnMetadata entityColumnMetadata = consistencyCheck(transaction);
 
       for (Map.Entry<ColumnShardId, ColumnWriter> entry : writers.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
@@ -154,7 +154,7 @@ public class ShardWriter {
     writer.write(transaction, writeRequests);
   }
 
-  private ColumnMetadata syncEntityColumn(String transaction) throws IOException {
+  private ColumnMetadata consistencyCheck(String transaction) throws IOException {
     // First for all columns do check a do a defrag before continuing.
     for (Map.Entry<ColumnShardId, ColumnWriter> entry : writers.entrySet()) {
       ColumnWriter cw = writers.get(entry.getKey());
