@@ -169,39 +169,6 @@ public class FileStoreTestV2 {
     entityTable = entityTable.sortAscendingOn("vuln").select("assetId", "vuln", "time", "status");
     checkEntity = checkEntity.sortAscendingOn("vuln").select("assetId", "vuln", "time", "status");
     assertTableEquals(checkEntity, entityTable);
-//    int totalRows = 0;
-//    for (ShardId shardId : shardIds) {
-//      Integer shardRows = null;
-//      for (ColumnName columnName : COLUMNS) {
-//        FastArmorShard fas = readStore.getFastArmorShard(shardId, columnName.getName());
-//        FastArmorColumnReader far = fas.getFastArmorColumnReader();
-//        DataType dt = fas.getDataType();
-//        FastArmorBlock fab = null;
-//        switch (dt) {
-//        case INTEGER:
-//          fab = far.getIntegerBlock(5000);
-//          break;
-//        case LONG:
-//          fab = far.getLongBlock(5000);
-//          break;
-//        case STRING:
-//          fab = far.getStringBlock(5000);
-//          break;
-//        }
-//        
-//        if (shardRows == null) {
-//          shardRows = fab.getNumRows();
-//        } else if (shardRows != fab.getNumRows()) {
-//          throw new RuntimeException("Within a shard the two column row counts do not match");
-//        }
-//      }
-//      totalRows += shardRows;
-//    }
-//    assertEquals(expectedNumberRows, totalRows);
-    
-    // Check schema against store
-    
-    //
   }
   
   private void verifyTableReaderPOV(int expectedNumberRows, Path path, int numShards) {
@@ -272,6 +239,18 @@ public class FileStoreTestV2 {
       verifyTableReaderPOV(numEntities*2, testDirectory, numShards);
       int random = RANDOM.nextInt(999);
       verifyEntityReaderPOV(entities.get(random), testDirectory);
+      
+      // Now lets delete them all
+      writer = new ArmorWriter("aw1", store, true, numShards, null, null);
+      xact = writer.startTransaction();
+      for (int i = 0; i < 1000; i++) {
+        writer.delete(xact, TENANT, TABLE, i);
+      }
+      writer.save(xact, TENANT, TABLE);
+      writer.close();
+      
+      verifyTableReaderPOV(0, testDirectory, numShards);
+
       
       
       

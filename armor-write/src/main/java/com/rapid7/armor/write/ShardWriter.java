@@ -187,23 +187,38 @@ public class ShardWriter {
       }
       otherEntitiesList.put(cw.getColumnShardId(), currentSummaries);
     }
-
-    // Once baseline is established, find the ones that need to be defragged.
-    otherEntitiesList.remove(baselineColumn);
-
-    // For the ones that have the same number of entities, do a check to make sure
-    // a) In the right order
-    // b) Same number of rows
-    Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherEntitiesList.entrySet().iterator();
-    while (iterator.hasNext()) {
-      Map.Entry<ColumnShardId, List<EntityRecordSummary>> entry = iterator.next();
-      List<EntityRecordSummary> testSummaries = entry.getValue();
-      if (testSummaries.size() == baselineSummaries.size()) {
-        ColumnShardId testColumn = entry.getKey();
-        if (!testSummaries.equals(baselineSummaries)) {
+    
+    // If baseline column is null, that means the table is empty. In this case we should ensure all summaries should be set to zero.
+    if (baselineColumn == null) {
+      // Ensure its all zeros
+      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherEntitiesList.entrySet().iterator();
+      while (iterator.hasNext()) {
+        Map.Entry<ColumnShardId, List<EntityRecordSummary>> entry = iterator.next();
+        List<EntityRecordSummary> testSummaries = entry.getValue();
+        if (testSummaries.size() > 0) {
+          ColumnShardId testColumn = entry.getKey();
           reportError(transaction, baselineColumn, testColumn, baselineSummaries, testSummaries);
+          iterator.remove();
         }
-        iterator.remove();
+      }
+    } else {
+
+      // Once baseline is established, find the ones that need to be defragged.
+      otherEntitiesList.remove(baselineColumn);
+      // For the ones that have the same number of entities, do a check to make sure
+      // a) In the right order
+      // b) Same number of rows
+      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherEntitiesList.entrySet().iterator();
+      while (iterator.hasNext()) {
+        Map.Entry<ColumnShardId, List<EntityRecordSummary>> entry = iterator.next();
+        List<EntityRecordSummary> testSummaries = entry.getValue();
+        if (testSummaries.size() == baselineSummaries.size()) {
+          ColumnShardId testColumn = entry.getKey();
+          if (!testSummaries.equals(baselineSummaries)) {
+            reportError(transaction, baselineColumn, testColumn, baselineSummaries, testSummaries);
+          }
+          iterator.remove();
+        }
       }
     }
 
@@ -211,15 +226,20 @@ public class ShardWriter {
     for (ColumnShardId column : otherEntitiesList.keySet()) {
       LOGGER.info("The column {} needs to be resync according to the baseline, this may be expected if its a new column", column);
       ColumnWriter cw = writers.get(column);
-      cw.defrag(baselineSummaries);
+      cw.defrag(baselineSummaries == null ? new ArrayList<>() : baselineSummaries);
     }
 
     // To be extra careful, do another check with these left over columns
     for (ColumnShardId column : otherEntitiesList.keySet()) {
       ColumnWriter cw = writers.get(column);
       List<EntityRecordSummary> testSummaries = cw.getEntityRecordSummaries();
-      if (!testSummaries.equals(baselineSummaries)) {
-        reportError(transaction, baselineColumn, cw.getColumnShardId(), baselineSummaries, testSummaries);
+      if (baselineSummaries == null) {
+        if (testSummaries.size() > 0)
+          reportError(transaction, baselineColumn, cw.getColumnShardId(), baselineSummaries, testSummaries);
+      } else {
+        if (!testSummaries.equals(baselineSummaries)) {
+          reportError(transaction, baselineColumn, cw.getColumnShardId(), baselineSummaries, testSummaries);
+        }
       }
     }
 
@@ -227,14 +247,16 @@ public class ShardWriter {
     String randomId = UUID.randomUUID().toString();
     try (ColumnWriter cw = new ColumnWriter(new ColumnShardId(shardId, cn))) {
       List<WriteRequest> putRequests = new ArrayList<>();
-      for (EntityRecordSummary summary : baselineSummaries) {
-        Column ecv = new Column(cn);
-        int numRows = summary.getNumRows();
-        Object entityId = summary.getId();
-        for (int i = 0; i < numRows; i++)
-          ecv.addValue(entityId);
-        WriteRequest put = new WriteRequest(entityId, summary.getVersion(), randomId, ecv);
-        putRequests.add(put);
+      if (baselineSummaries != null) {
+        for (EntityRecordSummary summary : baselineSummaries) {
+          Column ecv = new Column(cn);
+          int numRows = summary.getNumRows();
+          Object entityId = summary.getId();
+          for (int i = 0; i < numRows; i++)
+            ecv.addValue(entityId);
+          WriteRequest put = new WriteRequest(entityId, summary.getVersion(), randomId, ecv);
+          putRequests.add(put);
+        }
       }
       cw.write(transaction, putRequests);
       try {
@@ -251,41 +273,61 @@ public class ShardWriter {
   }
 
   private void reportError(
-      String transaction, ColumnShardId baselineColumn, ColumnShardId testColumn, List<EntityRecordSummary> baselineSummaries, List<EntityRecordSummary> testSummaries) throws IOException {
-    ColumnWriter baselineCw = writers.get(baselineColumn);
-    Set<Object> baselineSummariesIds = baselineSummaries.stream().map(EntityRecordSummary::getId).collect(Collectors.toSet());
+    String transaction,
+    ColumnShardId baselineColumn,
+    ColumnShardId testColumn,
+    List<EntityRecordSummary> baselineSummaries,
+    List<EntityRecordSummary> testSummaries) throws IOException {
+    
+    ColumnWriter baselineCw = null;
+    if (baselineColumn != null)
+      baselineCw = writers.get(baselineColumn);
+    Set<Object> baselineSummariesIds;
+    if (baselineSummaries != null)
+      baselineSummariesIds = baselineSummaries.stream().map(EntityRecordSummary::getId).collect(Collectors.toSet());
+    else
+      baselineSummariesIds = null;
     Set<Object> testSummariesIds = testSummaries.stream().map(EntityRecordSummary::getId).collect(Collectors.toSet());
-    Set<Object> baselineDiff = baselineSummariesIds.stream().filter(id -> !testSummariesIds.contains(id)).collect(Collectors.toSet());
-    Set<Object> testDiff = testSummariesIds.stream().filter(id -> !baselineSummariesIds.contains(id)).collect(Collectors.toSet());
-    if (!baselineDiff.isEmpty() || !testDiff.isEmpty()) {
+    Set<Object> baselineDiff = null;
+    if (baselineSummariesIds != null)
+      baselineDiff = baselineSummariesIds.stream().filter(id -> !testSummariesIds.contains(id)).collect(Collectors.toSet());
+    Set<Object> testDiff = testSummariesIds.stream().filter(id -> baselineSummaries != null && !baselineSummariesIds.contains(id)).collect(Collectors.toSet());
+    if ((baselineDiff != null && !baselineDiff.isEmpty()) || !testDiff.isEmpty()) {
       LOGGER.error(
           "Base column {} entities don't match test column {} on table {} transaction {} base column has this {} while test column has this {}",
-          baselineColumn.getColumnName(),
+          baselineColumn == null ? "none" : baselineColumn.getColumnName(),
           testColumn.getColumnName(),
-          baselineColumn.getTable(),
+          baselineColumn == null ? "none" : baselineColumn.getTable(),
           transaction,
           baselineDiff,
           testDiff);
     } else {
-      for (int i = 0; i < baselineSummaries.size(); i++) {
-        if (!baselineSummaries.get(i).equals(testSummaries.get(i))) {
-          LOGGER.error("The baseline {} for {} differs from {} for {} at position (0-indexed based) {}",
-              baselineColumn.toSimpleString(), baselineSummaries.get(i), testColumn.toSimpleString(), testSummaries.get(i), i);
+      if (baselineSummaries != null) {
+        for (int i = 0; i < baselineSummaries.size(); i++) {
+          if (!baselineSummaries.get(i).equals(testSummaries.get(i))) {
+            LOGGER.error("The baseline {} for {} differs from {} for {} at position (0-indexed based) {}",
+                baselineColumn.toSimpleString(), baselineSummaries.get(i), testColumn.toSimpleString(), testSummaries.get(i), i);
+          }
         }
       }
+        
     }
-    Set<Object> corruptedBaseLine = baselineCw.getEntityDictionary().isCorrupted();
-    if (!corruptedBaseLine.isEmpty()) {
-      LOGGER.error("The entity dictionary in {} is corrupted check these values {}", baselineColumn, corruptedBaseLine);
+    if (baselineCw != null) {
+      Set<Object> corruptedBaseLine = baselineCw.getEntityDictionary().isCorrupted();
+      if (!corruptedBaseLine.isEmpty()) {
+        LOGGER.error("The entity dictionary in {} is corrupted check these values {}", baselineColumn, corruptedBaseLine);
+      }
     }
     Set<Object> corruptedTest = writers.get(testColumn).getEntityDictionary().isCorrupted();
     if (!corruptedTest.isEmpty()) {
       LOGGER.error("The entity dictionary in {} is corrupted check these values {}", testColumn, corruptedTest);
     }
 
-    StreamProduct baselineStream = baselineCw.buildInputStream(compress);
-    try (InputStream is = baselineStream.getInputStream()) {
-      store.saveError(transaction, baselineCw.getColumnShardId(), baselineStream.getByteSize(), is, "Entity mismatch baseline column");
+    if (baselineCw != null) {
+      StreamProduct baselineStream = baselineCw.buildInputStream(compress);
+      try (InputStream is = baselineStream.getInputStream()) {
+        store.saveError(transaction, baselineCw.getColumnShardId(), baselineStream.getByteSize(), is, "Entity mismatch baseline column");
+      }
     }
     ColumnWriter testWriter = writers.get(testColumn);
     StreamProduct testColumnStreamProduct = testWriter.buildInputStream(compress);
@@ -296,7 +338,7 @@ public class ShardWriter {
     // Save other columns for analysis
     for (Map.Entry<ColumnShardId, ColumnWriter> e1 : writers.entrySet()) {
       ColumnWriter cw = e1.getValue();
-      if (cw.getColumnName().equals(baselineColumn.getColumnName()) || cw.getColumnName().equals(testColumn.getColumnName())) {
+      if (cw.getColumnName().equals(baselineColumn == null ? "none" : baselineColumn.getColumnName()) || cw.getColumnName().equals(testColumn.getColumnName())) {
         continue;
       }
       StreamProduct otherColumnStreamProduct = cw.buildInputStream(compress);

@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletionService;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
@@ -34,7 +35,7 @@ public class ArmorWriter implements Closeable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ArmorWriter.class);
   private final ExecutorService threadPool;
   private final WriteStore store;
-  private final Map<TableWriteId, TableWrite> tables = new HashMap<>();
+  private final Map<TableWriteId, TableWrite> tables = new ConcurrentHashMap<>();
   private final Supplier<Integer> defragTrigger;
   private boolean selfPool = true;
   private final BiPredicate<ShardId, String> captureWrites;
@@ -153,31 +154,40 @@ public class ArmorWriter implements Closeable {
 
   public void delete(String transaction, String org, String table, Object entityId) {
     ShardId shardId = store.findShardId(org, table, entityId);
+    if (shardId.getShardNum() == 8)
+      System.out.println("");
     if (captureWrites != null && captureWrites.test(shardId, ArmorWriter.class.getSimpleName()))
       store.captureWrites(transaction, shardId, null, null, entityId);
     TableWriteId tableId = new TableWriteId(org, table);
-    TableWrite twriter = tables.get(tableId);
-    if (twriter != null) {
-      ShardWriter sw = twriter.getShard(shardId.getShardNum());
+    TableWrite tableWriter = tables.get(tableId);
+    if (tableWriter != null) {
+      ShardWriter sw = tableWriter.getShard(shardId.getShardNum());
       if (sw != null) {
         sw.delete(transaction, entityId);
         return;
       }
     }
-    // If its null then maybe its not loaded, load it up if it doesn't exist.
+    // If it is null then table doesn't exist yet which means we can just return.
+    // If it is not null then table does exist, in that case load it up and attempt a delete.
     TableMetadata tableMeta = store.loadTableMetadata(org, table);
-    if (tableMeta != null) {
-      TableWrite tableWrite = new TableWrite(
-          org,
-          table,
-          tableMeta.getEntityColumnId(),
-          DataType.getDataType(tableMeta.getEntityColumnIdType()),
-          store
-      );
-      ShardWriter sw = tableWrite.getShard(shardId.getShardNum());
-      if (sw != null)
-        sw.delete(transaction, entityId);
+    if (tableMeta == null)
+      return;
+    if (tableWriter == null) {
+      tableWriter = new TableWrite(
+        org,
+        table,
+        tableMeta.getEntityColumnId(),
+        DataType.getDataType(tableMeta.getEntityColumnIdType()),
+        store);
     }
+    tables.put(tableId, tableWriter);
+    ShardWriter sw = tableWriter.getShard(shardId.getShardNum());
+    if (sw == null) {
+      sw = new ShardWriter(tableWriter, shardId, store, compress, defragTrigger, captureWrites);
+      tableWriter.addShard(sw);
+    }
+    System.out.println("Delete on shard " + shardId.getShardNum());
+    sw.delete(transaction, entityId);
   }
 
   private void createTableMetadata(String transaction, TableWrite tableWrite) {

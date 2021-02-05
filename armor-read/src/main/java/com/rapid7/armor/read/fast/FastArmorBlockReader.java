@@ -74,6 +74,9 @@ public class FastArmorBlockReader {
 
   public FastArmorBlock getLongBlock(int batchRows) {
     batchNum++;
+    if (numRows == 0) {
+      return new FastArmorBlock(new long[0], null, 0, batchNum);
+    }
     // Long blocks we dont need to do any slicing by entities, rather we can
     // pass a page of longs at at time.
 
@@ -122,6 +125,9 @@ public class FastArmorBlockReader {
 
   public FastArmorBlock getIntegerBlock(int batchRows) {
     batchNum++;
+    if (numRows == 0) {
+      return new FastArmorBlock(new int[0], null, 0, batchNum);
+    }
     // Integer blocks we dont need to do any slicing by entities, rather we can
     // pass a page of ints at at time.
 
@@ -172,6 +178,9 @@ public class FastArmorBlockReader {
     if (strValueDictionary == null)
       throw new IllegalStateException("No dictionary was setup for reading string blocks");
     batchNum++;
+    if (numRows == 0) {
+      return new FastArmorBlock(Slices.allocate(0), new int[0], null, 0, batchNum);
+    }
     // Calculate how much memory to allocate
     int allocRowCount = 0;
     int allocSize = 0;
