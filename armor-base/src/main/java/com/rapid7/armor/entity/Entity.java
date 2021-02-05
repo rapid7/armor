@@ -13,35 +13,40 @@ public class Entity {
   private Object entityId;
   private long version;
   private String instanceid;
-
-  public Entity() {
-  }
+  private boolean columnsDefined = false;
+  private boolean rowsAdded = false;
+  public Entity() {}
 
   public Entity(String entityIdColumn, Object entityId, long version, String instanceid, ColumnName... columnNames) {
     this.entityIdColumn = entityIdColumn;
-    this.entityId = entityId;
+    this.entityId = verifyIdType(entityId);
     this.version = version;
     this.columnNames = Arrays.asList(columnNames);
+    this.columnsDefined = true;
     this.instanceid = instanceid;
     checkEntityIdColumn();
   }
 
   public Entity(String entityIdColumn, Object entityId, long version, String instanceid, List<ColumnName> columnNames) {
     this.entityIdColumn = entityIdColumn;
-    this.entityId = entityId;
+    this.entityId = verifyIdType(entityId);
     this.version = version;
     this.columnNames = columnNames;
     this.instanceid = instanceid;
+    this.columnsDefined = true;
 
     checkEntityIdColumn();
   }
 
   public Entity(String entityIdColumn, Object entityId, long version, String instanceid, List<ColumnName> columnNames, List<Row> rows) {
     this.entityIdColumn = entityIdColumn;
-    this.entityId = entityId;
+    this.entityId = verifyIdType(entityId);
     this.version = version;
     this.columnNames = columnNames;
+    this.columnsDefined = true;
+    validateRows(rows);
     this.rows = rows;
+    this.rowsAdded = true;
     this.instanceid = instanceid;
 
     checkEntityIdColumn();
@@ -49,13 +54,27 @@ public class Entity {
 
   public Entity(String entityIdColumn, Object entityId, long version, String instanceid, List<ColumnName> columnNames, Row... rows) {
     this.entityIdColumn = entityIdColumn;
-    this.entityId = entityId;
+    this.entityId = verifyIdType(entityId);
     this.version = version;
     this.columnNames = columnNames;
+    this.columnsDefined = true;
     this.rows = Arrays.asList(rows);
+    validateRows(this.rows);
+    this.rowsAdded = true;
     this.instanceid = instanceid;
     checkEntityIdColumn();
   }
+  
+  private Object verifyIdType(Object entityId) {
+    if (entityId instanceof String)
+      return entityId;
+    if (entityId instanceof Long)
+      return entityId;
+    if (entityId instanceof Integer)
+      return entityId;
+    throw new RuntimeException("Invalid class type for entity");
+  }
+  
 
   public static Entity buildEntity(String entityIdColumn, Object entityId, long version, String instanceId, List<ColumnName> columnNames, Row... rows) {
     return new Entity(entityIdColumn, entityId, version, instanceId, columnNames, rows);
@@ -75,8 +94,10 @@ public class Entity {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o)
+      return true;
+    if (o == null || getClass() != o.getClass())
+      return false;
     Entity entity = (Entity) o;
     return getVersion() == entity.getVersion() && Objects.equals(getRows(), entity.getRows()) && Objects.equals(getColumnNames(), entity.getColumnNames()) && Objects.equals(getEntityIdColumn(), entity.getEntityIdColumn()) && Objects.equals(getEntityId(), entity.getEntityId()) && Objects.equals(instanceid, entity.instanceid);
   }
@@ -88,7 +109,19 @@ public class Entity {
 
   private void checkEntityIdColumn() {
     if (columnNames.stream().anyMatch(c -> c.getName().equalsIgnoreCase(entityIdColumn)))
-      throw new RuntimeException("The entity column id name should be provided in list of column names");
+      throw new RuntimeException("You defined a column with the same name as entityIdColumn, remove the that column definition it is not needed");
+  }
+  
+  private void validateRows(List<Row> rows) {
+    if (!columnsDefined)
+      return;
+    int numColumns = this.columnNames.size();
+    for (Row row : rows) {
+      if (row.numColumns() != numColumns) {
+        throw new RuntimeException("The row has " + row + " has " + row.numColumns() + " columns when definition is " + columnNames);
+      }
+      // TODO: Verify input matches schema
+    }
   }
 
   public List<Row> getRows() {
@@ -96,24 +129,35 @@ public class Entity {
   }
 
   public void setRows(List<Row> rows) {
+    validateRows(rows);
     this.rows = rows;
+    this.rowsAdded = true;
   }
 
   public void addRow(Row row) {
+    validateRows(Arrays.asList(row));
     rows.add(row);
+    this.rowsAdded = true;
   }
 
   public void addRows(List<Row> rows) {
+    validateRows(rows);
     this.rows.addAll(rows);
+    this.rowsAdded = true;
   }
 
   public void addRow(Object... values) {
     Row row = Row.buildRow(values);
+    validateRows(Arrays.asList(row));
     rows.add(row);
+    this.rowsAdded = true;
   }
 
   public void addRows(Object... values) {
-    rows.addAll(Row.buildRows(columnNames.size(), values));
+    List<Row> rowsInput = Row.buildRows(columnNames.size(), values);
+    validateRows(rowsInput);
+    rows.addAll(rowsInput);
+    this.rowsAdded = true;
   }
 
   public Column getColumn(int columnNum) {
@@ -143,6 +187,9 @@ public class Entity {
 
   public void setColumnNames(List<ColumnName> columnNames) {
     this.columnNames = columnNames;
+    this.columnsDefined = true;
+    if (rowsAdded)
+      validateRows(rows);
   }
 
   public String getEntityIdColumn() {

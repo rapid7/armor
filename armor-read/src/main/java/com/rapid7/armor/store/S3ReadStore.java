@@ -1,8 +1,8 @@
 package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
-import com.rapid7.armor.read.SlowArmorShard;
-import com.rapid7.armor.read.FastArmorShard;
+import com.rapid7.armor.read.fast.FastArmorShardColumn;
+import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ShardId;
 import com.amazonaws.services.s3.AmazonS3;
@@ -100,17 +100,17 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public SlowArmorShard getArmorShard(ShardId shardId, String columnName) {
+  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnName) {
     List<ColumnName> columnNames = getColumNames(shardId);
     Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columnName)).findFirst();
     ColumnName cn = option.get();
     String shardIdPath = resolveCurrentPath(shardId.getOrg(), shardId.getTable(), shardId.getShardNum()) + "/" + cn.fullName();
     if (!doesObjectExist(bucket, shardIdPath)) {
-      return new SlowArmorShard();
+      return new SlowArmorShardColumn();
     } else {
       S3Object s3Object = s3Client.getObject(bucket, shardIdPath);
       try {
-        return new SlowArmorShard(new DataInputStream(s3Object.getObjectContent()));
+        return new SlowArmorShardColumn(new DataInputStream(s3Object.getObjectContent()));
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -118,7 +118,7 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public FastArmorShard getFastArmorShard(ShardId shardId, String columName) {
+  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columName) {
     List<ColumnName> columnNames = getColumNames(shardId);
     Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columName)).findFirst();
     ColumnName cn = option.get();
@@ -128,7 +128,7 @@ public class S3ReadStore implements ReadStore {
     } else {
       S3Object s3Object = s3Client.getObject(bucket, shardIdPath);
       try {
-        return new FastArmorShard(new DataInputStream(s3Object.getObjectContent()));
+        return new FastArmorShardColumn(new DataInputStream(s3Object.getObjectContent()));
       } catch (IOException ioe) {
         LOGGER.error("Unable load the shard at {}", shardIdPath, ioe);
         throw new RuntimeException(ioe);

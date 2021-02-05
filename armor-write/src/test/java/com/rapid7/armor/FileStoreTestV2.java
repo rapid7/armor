@@ -4,11 +4,11 @@ import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.Row;
 import com.rapid7.armor.meta.ColumnMetadata;
-import com.rapid7.armor.read.FastArmorBlock;
-import com.rapid7.armor.read.SlowArmorReader;
-import com.rapid7.armor.read.FastArmorColumnReader;
-import com.rapid7.armor.read.FastArmorReader;
-import com.rapid7.armor.read.FastArmorShard;
+import com.rapid7.armor.read.fast.FastArmorBlock;
+import com.rapid7.armor.read.fast.FastArmorBlockReader;
+import com.rapid7.armor.read.fast.FastArmorReader;
+import com.rapid7.armor.read.fast.FastArmorShardColumn;
+import com.rapid7.armor.read.slow.SlowArmorReader;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ModShardStrategy;
@@ -24,19 +24,31 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import tech.tablesaw.api.IntColumn;
+import tech.tablesaw.api.LongColumn;
+import tech.tablesaw.api.StringColumn;
+import tech.tablesaw.api.Table;
+
 import tech.tablesaw.columns.Column;
+import tech.tablesaw.filtering.*;
 import org.junit.jupiter.api.Test;
 
 public class FileStoreTestV2 {
@@ -90,22 +102,73 @@ public class FileStoreTestV2 {
       .forEach(File::delete);
   }
   
+  private Table entityToTableSawRow(Entity entity) {
+    Table smallTable = Table.create("");
+    for (com.rapid7.armor.entity.Column column : entity.columns()) {
+      ColumnName columnName = column.getColumnName();
+      if (DataType.STRING == columnName.dataType()) {
+        List<String> strValues = column.getValues().stream().map(v -> v == null ? null : v.toString()).collect(Collectors.toList());
+        smallTable.addColumns(StringColumn.create(columnName.getName(), strValues));
+      } else if (DataType.INTEGER == columnName.dataType()) {
+        int[] intValues = new int[column.size()];
+        List<Object> values = column.getValues();
+        for (int i = 0; i < column.size(); i++) {
+          if (values.get(i) == null) {
+            intValues[i] = Integer.MIN_VALUE;
+          } else {
+            intValues[i] = (Integer) values.get(i);
+          }
+        }
+        smallTable.addColumns(IntColumn.create(columnName.getName(), intValues));
+      } else if (DataType.LONG == columnName.dataType()) {
+        long[] longValues = new long[column.size()];
+        List<Object> values = column.getValues();
+        for (int i = 0; i < column.size(); i++) {
+          if (values.get(i) == null) {
+            longValues[i] = Long.MIN_VALUE;
+          } else {
+            longValues[i] = (Long) values.get(i);
+          }
+        }
+        smallTable.addColumns(LongColumn.create(columnName.getName(), longValues));
+      }
+    }
+    int rowCount = smallTable.rowCount();
+    if (entity.getEntityId() instanceof String) {
+      List<String> values = IntStream.range(0, rowCount).mapToObj(i -> entity.getEntityId().toString()).collect(Collectors.toList());
+      smallTable.addColumns(StringColumn.create(entity.getEntityIdColumn(), values));
+    } else if (entity.getEntityId() instanceof Integer) {
+      int[] array = new int[rowCount];
+      Arrays.fill(array, (Integer) entity.getEntityId());
+      smallTable.addColumns(IntColumn.create(entity.getEntityIdColumn(), array));
+    } else if (entity.getEntityId() instanceof Long) {
+      long[] array = new long[rowCount];
+      Arrays.fill(array, (Long) entity.getEntityId());
+      smallTable.addColumns(LongColumn.create(entity.getEntityIdColumn(), array));
+    }
+    return smallTable;
+  }
+
+  private void assertTableEquals(Table a, Table b) {
+    assertEquals(a.rowCount(), b.rowCount());
+    assertEquals(a.columnCount(), b.columnCount());
+    for (int i = 0; i < a.rowCount(); i++) {
+      tech.tablesaw.api.Row aRow = a.row(i);
+      tech.tablesaw.api.Row bRow = b.row(i);
+      for (int ii = 0; ii < aRow.columnCount(); ii++) {
+        assertEquals(aRow.getObject(ii), bRow.getObject(ii));
+      }
+    }
+  }
   
-//  private void verifyEntityReaderPOV(Entity entity, Path path) {
-//    FileReadStore readStore = new FileReadStore(path);
-//    Entity testEntity = Entity.buildEntity(entity.getEntityIdColumn(), entity, entity.getVersion(), TEST_UUID);
-//    for (ShardId shardId : readStore.findShardIds(TENANT, TABLE)) {
-//      for (ColumnName columnName : COLUMNS) {
-//        
-//        // FAS doesn't load the entity dictionary if it existed, so we need to load Column
-//        FastArmorShard fas = readStore.getFastArmorShard(shardId, columnName.getName());
-//        fas.getValuesForRecord(testEntity.getEntityId());
-//        
-//        
-//      }
-//    }
-//    
-//    
+  private void verifyEntityReaderPOV(Entity entity, Path path) {
+    FileReadStore readStore = new FileReadStore(path);
+    Table checkEntity = entityToTableSawRow(entity);
+    SlowArmorReader reader = new SlowArmorReader(readStore);
+    Table entityTable = reader.getEntity(TENANT, TABLE, entity.getEntityId());
+    entityTable = entityTable.sortAscendingOn("vuln").select("assetId", "vuln", "time", "status");
+    checkEntity = checkEntity.sortAscendingOn("vuln").select("assetId", "vuln", "time", "status");
+    assertTableEquals(checkEntity, entityTable);
 //    int totalRows = 0;
 //    for (ShardId shardId : shardIds) {
 //      Integer shardRows = null;
@@ -135,11 +198,11 @@ public class FileStoreTestV2 {
 //      totalRows += shardRows;
 //    }
 //    assertEquals(expectedNumberRows, totalRows);
-//    
-//    // Check schema against store
-//    
-//    //
-//  }
+    
+    // Check schema against store
+    
+    //
+  }
   
   private void verifyTableReaderPOV(int expectedNumberRows, Path path, int numShards) {
     FileReadStore readStore = new FileReadStore(path);
@@ -149,8 +212,8 @@ public class FileStoreTestV2 {
     for (ShardId shardId : shardIds) {
       Integer shardRows = null;
       for (ColumnName columnName : COLUMNS) {
-        FastArmorShard fas = readStore.getFastArmorShard(shardId, columnName.getName());
-        FastArmorColumnReader far = fas.getFastArmorColumnReader();
+        FastArmorShardColumn fas = readStore.getFastArmorShard(shardId, columnName.getName());
+        FastArmorBlockReader far = fas.getFastArmorColumnReader();
         DataType dt = fas.getDataType();
         FastArmorBlock fab = null;
         switch (dt) {
@@ -163,6 +226,8 @@ public class FileStoreTestV2 {
         case STRING:
           fab = far.getStringBlock(5000);
           break;
+          default:
+            throw new RuntimeException("Unsupported");
         }
         
         if (shardRows == null) {
@@ -206,7 +271,7 @@ public class FileStoreTestV2 {
       
       verifyTableReaderPOV(numEntities*2, testDirectory, numShards);
       int random = RANDOM.nextInt(999);
-      //verifyEntityReaderPov(entities.get(random));
+      verifyEntityReaderPOV(entities.get(random), testDirectory);
       
       
       

@@ -1,8 +1,8 @@
 package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
-import com.rapid7.armor.read.SlowArmorShard;
-import com.rapid7.armor.read.FastArmorShard;
+import com.rapid7.armor.read.fast.FastArmorShardColumn;
+import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ShardId;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -86,7 +86,7 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public SlowArmorShard getArmorShard(ShardId shardId, String columnName) {
+  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnName) {
     List<ColumnName> columnNames = getColumNames(shardId);
     Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columnName)).findFirst();
     ColumnName cn = option.get();
@@ -94,9 +94,9 @@ public class FileReadStore implements ReadStore {
     try {
       if (!Files.exists(shardIdPath)) {
         Files.createDirectories(shardIdPath.getParent());
-        return new SlowArmorShard();
+        return new SlowArmorShardColumn();
       } else {
-        return new SlowArmorShard(
+        return new SlowArmorShardColumn(
             new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)));
       }
     } catch (IOException ioe) {
@@ -122,7 +122,7 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public FastArmorShard getFastArmorShard(ShardId shardId, String columName) {
+  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columName) {
     List<ColumnName> columnNames = getColumNames(shardId);
     Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columName)).findFirst();
     ColumnName cn = option.get();
@@ -131,7 +131,7 @@ public class FileReadStore implements ReadStore {
       return null;
     } else {
       try {
-        return new FastArmorShard(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)));
+        return new FastArmorShardColumn(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)));
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }

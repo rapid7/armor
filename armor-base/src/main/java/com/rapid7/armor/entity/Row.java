@@ -58,6 +58,12 @@ public class Row {
     return Objects.hash(getColumns());
   }
 
+  @Override
+  public String toString() {
+    return "Row{" +
+        "columns=" + columns + '}';
+  }
+
   public int numColumns() {
     return columns.size();
   }

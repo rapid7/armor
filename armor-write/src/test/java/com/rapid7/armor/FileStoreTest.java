@@ -3,10 +3,10 @@ package com.rapid7.armor;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.meta.ColumnMetadata;
-import com.rapid7.armor.read.FastArmorBlock;
-import com.rapid7.armor.read.SlowArmorReader;
-import com.rapid7.armor.read.FastArmorColumnReader;
-import com.rapid7.armor.read.FastArmorReader;
+import com.rapid7.armor.read.fast.FastArmorBlock;
+import com.rapid7.armor.read.fast.FastArmorBlockReader;
+import com.rapid7.armor.read.fast.FastArmorReader;
+import com.rapid7.armor.read.slow.SlowArmorReader;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ModShardStrategy;
@@ -62,7 +62,7 @@ public class FileStoreTest {
     Entity e2 = Entity.buildEntity("asset", 2, 1, instanceId, vuln);
 
     Entity e3 = Entity.buildEntity("asset", 3, 1, instanceId, vuln);
-    e3.addRow(1, 2, 3, 4, 5, 6);
+    e3.addRow(1);
 
     Entity e4 = Entity.buildEntity("asset", 4, 1, instanceId, vuln);
 
@@ -296,7 +296,7 @@ public class FileStoreTest {
       //"1", null, 6
       //"1", null, -1
       //null, null, null
-      FastArmorColumnReader fastReader1 = fastArmorReader.getColumn(myorg, table, "vuln", 0);
+      FastArmorBlockReader fastReader1 = fastArmorReader.getColumn(myorg, table, "vuln", 0);
       FastArmorBlock a1a = fastReader1.getIntegerBlock(1);
       assertTrue(fastReader1.hasNext());
       FastArmorBlock a2a = fastReader1.getIntegerBlock(1);
@@ -314,14 +314,14 @@ public class FileStoreTest {
       FastArmorBlock a8a = fastReader1.getIntegerBlock(1);
       assertFalse(fastReader1.hasNext());
 
-      FastArmorColumnReader fastReader1a = fastArmorReader.getColumn(myorg, table, "vuln", 0);
+      FastArmorBlockReader fastReader1a = fastArmorReader.getColumn(myorg, table, "vuln", 0);
       FastArmorBlock a1aa = fastReader1a.getIntegerBlock(2);
       assertTrue(fastReader1a.hasNext());
       FastArmorBlock a2aa = fastReader1a.getIntegerBlock(10);
       assertFalse(fastReader1a.hasNext());
 
 
-      FastArmorColumnReader fastReader2 = fastArmorReader.getColumn(myorg, table, "name", 0);
+      FastArmorBlockReader fastReader2 = fastArmorReader.getColumn(myorg, table, "name", 0);
       FastArmorBlock a1b = fastReader2.getStringBlock(1);
       assertTrue(fastReader2.hasNext());
       FastArmorBlock a2b = fastReader2.getStringBlock(1);
@@ -339,7 +339,7 @@ public class FileStoreTest {
       FastArmorBlock a8b = fastReader2.getStringBlock(1);
       assertFalse(fastReader2.hasNext());
 
-      FastArmorColumnReader fastReader2aa = fastArmorReader.getColumn(myorg, table, "name", 0);
+      FastArmorBlockReader fastReader2aa = fastArmorReader.getColumn(myorg, table, "name", 0);
       FastArmorBlock a1ba = fastReader2aa.getStringBlock(2);
       assertTrue(fastReader2aa.hasNext());
       FastArmorBlock a2ba = fastReader2aa.getStringBlock(10);

@@ -47,7 +47,11 @@ public class SerDeTest {
   public void entitySerDer() throws IOException {
     ObjectMapper om = new ObjectMapper();
     Entity entity = new Entity();
-    entity.setColumnNames(Collections.singletonList(new ColumnName("a", DataType.STRING.getCode())));
+    entity.setColumnNames(Arrays.asList(
+        new ColumnName("a", DataType.STRING.getCode()),
+        new ColumnName("b", DataType.INTEGER.getCode()),
+        new ColumnName("c", DataType.INTEGER.getCode()),
+        new ColumnName("d", DataType.INTEGER.getCode())));
     entity.setEntityIdColumn("austin");
     entity.setVersion(33);
     Row row1 = new Row();

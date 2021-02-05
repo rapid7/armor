@@ -1,6 +1,9 @@
-package com.rapid7.armor.read;
+package com.rapid7.armor.read.fast;
 
 import java.nio.ByteBuffer;
+
+import com.rapid7.armor.read.DictionaryReader;
+
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import it.unimi.dsi.fastutil.booleans.BooleanArrayList;
@@ -9,7 +12,7 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
 /**
  * Specialized reader that tracks what is currently read to the entity structure.
  */
-public class FastArmorColumnReader {
+public class FastArmorBlockReader {
   private final ByteBuffer columnValues;
   private boolean hasNext = true;
   private final int numRows;
@@ -22,7 +25,7 @@ public class FastArmorColumnReader {
   private final IntArrayList rowIsNull;
   private int batchNum = 0;
 
-  public FastArmorColumnReader(
+  public FastArmorBlockReader(
       ByteBuffer columnValues,
       IntArrayList rowIsNull,
       DictionaryReader strValueDictionary,

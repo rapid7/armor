@@ -29,7 +29,7 @@ public class IOTools {
     return bytesRead;
   }
 
-  public static void skipFully(InputStream in, long len)
+  public static long skipFully(InputStream in, long len)
       throws IOException {
     if (len < 0L)
       throw new IllegalArgumentException("illegal length: " + len);
@@ -46,6 +46,7 @@ public class IOTools {
       bytesSkipped += skipped;
       bytesRemaining -= skipped;
     }
+    return bytesSkipped;
   }
 
   public static long copy(InputStream from, OutputStream to) throws IOException {

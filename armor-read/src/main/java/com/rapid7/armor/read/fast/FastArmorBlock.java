@@ -1,4 +1,4 @@
-package com.rapid7.armor.read;
+package com.rapid7.armor.read.fast;
 
 
 import io.airlift.slice.Slice;

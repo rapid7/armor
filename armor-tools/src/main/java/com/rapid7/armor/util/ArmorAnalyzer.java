@@ -20,7 +20,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rapid7.armor.read.SlowArmorShard;
+import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
@@ -109,7 +109,7 @@ public class ArmorAnalyzer {
       Table table = Table.create("table-result");
       for (Path columnFile : listFiles(path)) {
         try {
-          SlowArmorShard armorReader = new SlowArmorShard(Files.newInputStream(columnFile, StandardOpenOption.READ));
+          SlowArmorShardColumn armorReader = new SlowArmorShardColumn(Files.newInputStream(columnFile, StandardOpenOption.READ));
           table.addColumns(armorReader.getColumn());
         } catch (Exception e) {
           continue;

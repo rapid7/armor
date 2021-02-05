@@ -3,6 +3,7 @@ package com.rapid7.armor.read;
 import java.io.IOException;
 
 import com.rapid7.armor.meta.ColumnMetadata;
+import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.ReadStore;
 
@@ -17,7 +18,9 @@ public class BaseArmorReader {
     ShardId shardId = store.findShardId(org, table, shardNum);
     if (shardId == null)
       return null;
-    SlowArmorShard armorShard = store.getArmorShard(shardId, columnName);
+    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);
+    if (armorShard == null)
+      return null;
     return armorShard.getMetadata();
   }
 }

@@ -5,6 +5,9 @@ import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ColumnShardId;
+
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+
 import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
@@ -22,7 +25,6 @@ import java.util.function.Consumer;
 import org.roaringbitmap.RoaringBitmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import it.unimi.dsi.fastutil.ints.IntArrayList;
 
 /**
  * RowGroupWriter that writes directly to underlying channel.

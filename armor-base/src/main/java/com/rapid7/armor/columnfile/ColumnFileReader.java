@@ -31,12 +31,11 @@ public class ColumnFileReader {
     // Load entity dictionary
     int entityDictCompressed = dataInputStream.readInt();
     int entityDictOriginal = dataInputStream.readInt();
-    listener.columnFileSection(ArmorSection.ENTITY_DICTIONARY, dataInputStream, entityDictCompressed, entityDictOriginal);
+    int readBytes = listener.columnFileSection(ArmorSection.ENTITY_DICTIONARY, dataInputStream, entityDictCompressed, entityDictOriginal);
     
     int valueDictCompressed = dataInputStream.readInt();
     int valueDictOriginal = dataInputStream.readInt();
     listener.columnFileSection(ArmorSection.VALUE_DICTIONARY, dataInputStream, valueDictCompressed, valueDictOriginal);
- 
 
     int eiCompressed = dataInputStream.readInt();
     int eiOriginal = dataInputStream.readInt();

@@ -23,7 +23,7 @@ import org.roaringbitmap.RoaringBitmap;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rapid7.armor.entity.EntityRecord;
-import com.rapid7.armor.read.FastArmorShard;
+import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
@@ -117,7 +117,7 @@ public class ArmorEntityAnalyzer {
                     targetPath.resolve(columnName.getName() + "-" + entityName + "-writeValues.json"),
                     StandardCopyOption.REPLACE_EXISTING);
                 // If it exists here, then lets pull from the read side, for now just to the Fast.
-                FastArmorShard fas = new FastArmorShard(Files.newInputStream(c, StandardOpenOption.READ));
+                FastArmorShardColumn fas = new FastArmorShardColumn(Files.newInputStream(c, StandardOpenOption.READ));
                 List<Object> readValues = fas.getValuesForRecord(writeRecord.getEntityId());
                 ObjectMapper objectMapper = new ObjectMapper();
                 Files.copy(
@@ -152,7 +152,7 @@ public class ArmorEntityAnalyzer {
                   targetPath.resolve(columnName.getName() + "-" + entityName + "-writeValues.json"),
                   StandardCopyOption.REPLACE_EXISTING);
               // If it exists here, then lets pull from the read side, for now just to the Fast.
-              FastArmorShard fas = new FastArmorShard(Files.newInputStream(c, StandardOpenOption.READ));
+              FastArmorShardColumn fas = new FastArmorShardColumn(Files.newInputStream(c, StandardOpenOption.READ));
               List<Object> readValues = fas.getValuesForRecord(writeRecord.getEntityId());
               ObjectMapper objectMapper = new ObjectMapper();
               Files.copy(

@@ -1,4 +1,4 @@
-package com.rapid7.armor.read;
+package com.rapid7.armor.read.fast;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -16,6 +16,7 @@ import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.io.IOTools;
 import com.rapid7.armor.meta.ColumnMetadata;
+import com.rapid7.armor.read.BaseArmorShardColumn;
 import com.rapid7.armor.schema.DataType;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -27,14 +28,14 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
  * 2) Avoid unnecssary alloc/dealloc
  * 3) Avoid unnessary looping
  */
-public class FastArmorShard extends BaseArmorShard {
-  private static final Logger LOGGER = LoggerFactory.getLogger(FastArmorShard.class);
+public class FastArmorShardColumn extends BaseArmorShardColumn {
+  private static final Logger LOGGER = LoggerFactory.getLogger(FastArmorShardColumn.class);
   private ByteBuffer columnValues;
   private int[] entityNumRows;
   private int[] entityDecodedLength;
   private IntArrayList rowsIsNull; // Row number that is null (NOTE: NOT zero-indexed)
 
-  public FastArmorShard(InputStream inputStream) throws IOException {
+  public FastArmorShardColumn(InputStream inputStream) throws IOException {
     try {
       load(new DataInputStream(inputStream));
     } finally {
@@ -54,8 +55,8 @@ public class FastArmorShard extends BaseArmorShard {
     return metadata.getColumnName();
   }
 
-  public FastArmorColumnReader getFastArmorColumnReader() {
-    return new FastArmorColumnReader(
+  public FastArmorBlockReader getFastArmorColumnReader() {
+    return new FastArmorBlockReader(
         columnValues,
         rowsIsNull,
         strValueDictionary,
@@ -103,14 +104,15 @@ public class FastArmorShard extends BaseArmorShard {
     cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
       try {
         if (section == ArmorSection.ENTITY_DICTIONARY) {
-          readEntityDictionary(is, compressed, uncompressed);
+          return readEntityDictionary(is, compressed, uncompressed);
         } else if (section == ArmorSection.VALUE_DICTIONARY) {
-          readValueDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
+          return readValueDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
         } else if (section == ArmorSection.ENTITY_INDEX) {
-          readEntityIndex(is, compressed, uncompressed);
+          return readEntityIndex(is, compressed, uncompressed);
         } else if (section == ArmorSection.ROWGROUP) {
-          readRowGroup(is, compressed, uncompressed, cfr.getColumnMetadata());
-        }
+          return readRowGroup(is, compressed, uncompressed, cfr.getColumnMetadata());
+        } else
+          return 0;
       } catch (IOException ioe) {
         LOGGER.error("Detected an error in reading section {}", section, ioe);
         throw new RuntimeException(ioe);
@@ -121,7 +123,6 @@ public class FastArmorShard extends BaseArmorShard {
 
   
   private int loadToByteBuffer(List<EntityRecord> indexRecords, InputStream inputStream, ColumnMetadata metadata) throws IOException {
-    
     columnValues = ByteBuffer.allocate(metadata.getDataType().determineByteLength(metadata.getNumRows()));
     entityNumRows = new int[metadata.getNumEntities()];
     entityDecodedLength = new int[metadata.getNumEntities()];
@@ -180,28 +181,31 @@ public class FastArmorShard extends BaseArmorShard {
   }
   
   @Override
-  protected void readValueDictionary(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
-    super.readValueDictionary(inputStream, compressed, uncompressed, metadata);
+  protected int readValueDictionary(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
+    int read = super.readValueDictionary(inputStream, compressed, uncompressed, metadata);
     if (strValueDictionary == null)
       rowsIsNull = new IntArrayList(metadata.getNumRows());
+    return read;
   }
   
   @Override
-  protected void readEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+  protected int readEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
     if (compressed > 0) {
-      IOTools.skipFully(inputStream, compressed);
+      return (int) IOTools.skipFully(inputStream, compressed);
     } else if (uncompressed > 0) {
-      IOTools.skipFully(inputStream, uncompressed);
+      return (int) IOTools.skipFully(inputStream, uncompressed);
     }
+    return 0;
   }
   
-  protected void readRowGroup(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
+  @Override
+  protected int readRowGroup(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
     // Next row group
     if (compressed > 0) {
       ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
-      loadToByteBuffer(entityRecords, zstdInputStream, metadata);
+      return loadToByteBuffer(entityRecords, zstdInputStream, metadata);
     } else {
-      loadToByteBuffer(entityRecords, inputStream, metadata);
+      return loadToByteBuffer(entityRecords, inputStream, metadata);
     }
   }
 }

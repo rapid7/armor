@@ -148,64 +148,69 @@ public class ColumnWriter implements AutoCloseable {
     return columnShardId.getColumnName();
   }
   
-  private void loadEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+  private int loadEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
     // Load entity dictionary
+    int read = 0;
     if (compressed > 0) {
       byte[] compressedDict = new byte[compressed];
-      IOTools.readFully(inputStream, compressedDict, 0, compressed);
+      read = IOTools.readFully(inputStream, compressedDict, 0, compressed);
       byte[] decompressed = Zstd.decompress(compressedDict, uncompressed);
       entityDictionary = new DictionaryWriter(decompressed, true);
-      decompressed = null;
     } else if (uncompressed > 0) {
       byte[] uncompressedDict = new byte[uncompressed];
-      IOTools.readFully(inputStream, uncompressedDict, 0, uncompressed);
+      read = IOTools.readFully(inputStream, uncompressedDict, 0, uncompressed);
       entityDictionary = new DictionaryWriter(uncompressedDict, true);
     }
+    return read;
   }
   
-  private void loadValueDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+  private int loadValueDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
     // Load str value dictionary
+    int read = 0;
     if (compressed > 0) {
       byte[] compressedDict = new byte[compressed];
-      IOTools.readFully(inputStream, compressedDict, 0, compressed);
+      read = IOTools.readFully(inputStream, compressedDict, 0, compressed);
       byte[] decompressed = Zstd.decompress(compressedDict, uncompressed);
       strValueDictionary = new DictionaryWriter(decompressed, false);
-      decompressed = null;
     } else if (uncompressed > 0) {
       byte[] uncompressedDict = new byte[uncompressed];
-      IOTools.readFully(inputStream, uncompressedDict, 0, uncompressed);
+      read = IOTools.readFully(inputStream, uncompressedDict, 0, uncompressed);
       strValueDictionary = new DictionaryWriter(uncompressedDict, false);
     }
+    return read;
   }
   
-  private Path loadEntityIndex(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+  private int loadEntityIndex(DataInputStream inputStream, int compressed, int uncompressed, List<Path> temps) throws IOException {
     String tempName = columnShardId.alternateString() + "-";
     Path entityIndexTemp = Files.createTempFile("entityindex_" + tempName, ".armor");
+    temps.add(entityIndexTemp);
+    int read = 0;
     if (compressed > 0) {
       byte[] compressedIndex = new byte[compressed];
-      IOTools.readFully(inputStream, compressedIndex, 0, compressed);
+      read = IOTools.readFully(inputStream, compressedIndex, 0, compressed);
       byte[] decompressed = Zstd.decompress(compressedIndex, uncompressed);
       try (ByteArrayInputStream bais = new ByteArrayInputStream(decompressed)) {
         Files.copy(bais, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
       }
-      decompressed = null;
       entityRecordWriter = new EntityRecordWriter(entityIndexTemp, columnShardId);
     } else {
       byte[] uncompressedIndex = new byte[uncompressed];
-      IOTools.readFully(inputStream, uncompressedIndex, 0, uncompressed);
+      read = IOTools.readFully(inputStream, uncompressedIndex, 0, uncompressed);
       try (ByteArrayInputStream bais = new ByteArrayInputStream(uncompressedIndex)) {
         Files.copy(bais, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
       }
       entityRecordWriter = new EntityRecordWriter(entityIndexTemp, columnShardId);
     }
-    return entityIndexTemp;
+    return read;
   }
   
-  private Path loadRowGroup(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+  private int loadRowGroup(DataInputStream inputStream, int compressed, int uncompressed, List<Path> temps) throws IOException {
     Path rgGroupTemp = Files.createTempFile("rowgroupstore_" + columnShardId.alternateString() + "-", ".armor");
+    temps.add(rgGroupTemp);
+    int read = 0;
     if (compressed > 0) {
       byte[] compressedRg = new byte[compressed];
-      IOTools.readFully(inputStream, compressedRg, 0, compressed);
+      read = IOTools.readFully(inputStream, compressedRg, 0, compressed);
       byte[] decompressed = Zstd.decompress(compressedRg, uncompressed);
       try (ByteArrayInputStream bais = new ByteArrayInputStream(decompressed)) {
         Files.copy(bais, rgGroupTemp, StandardCopyOption.REPLACE_EXISTING);
@@ -215,14 +220,14 @@ public class ColumnWriter implements AutoCloseable {
       rowGroupWriter.position(rowGroupWriter.getCurrentSize());
     } else {
       byte[] uncompressedRg = new byte[uncompressed];
-      IOTools.readFully(inputStream, uncompressedRg, 0, uncompressed);
+      read = IOTools.readFully(inputStream, uncompressedRg, 0, uncompressed);
       try (ByteArrayInputStream bais = new ByteArrayInputStream(uncompressedRg)) {
         Files.copy(bais, rgGroupTemp, StandardCopyOption.REPLACE_EXISTING);
       }
       rowGroupWriter = new RowGroupWriter(rgGroupTemp, columnShardId, strValueDictionary);
       rowGroupWriter.position(rowGroupWriter.getCurrentSize());
     }
-    return rgGroupTemp;
+    return read;
   }
 
   // Read from the input streams to setup the writer.
@@ -234,14 +239,15 @@ public class ColumnWriter implements AutoCloseable {
       cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
         try {
           if (section == ArmorSection.ENTITY_DICTIONARY) {
-            loadEntityDictionary(is, compressed, uncompressed);
+            return loadEntityDictionary(is, compressed, uncompressed);
           } else if (section == ArmorSection.VALUE_DICTIONARY) {
-            loadValueDictionary(is, compressed, uncompressed);
+            return loadValueDictionary(is, compressed, uncompressed);
           } else if (section == ArmorSection.ENTITY_INDEX) {
-            tempPaths.add(loadEntityIndex(is, compressed, uncompressed));
+            return loadEntityIndex(is, compressed, uncompressed, tempPaths);
           } else if (section == ArmorSection.ROWGROUP) {
-            tempPaths.add(loadRowGroup(inputStream, compressed, uncompressed));
-          }
+            return loadRowGroup(inputStream, compressed, uncompressed, tempPaths);
+          } else
+            return 0;
         } catch (IOException ioe) {
           LOGGER.error("Detected an error in reading section {}", section, ioe);
           throw new RuntimeException(ioe);

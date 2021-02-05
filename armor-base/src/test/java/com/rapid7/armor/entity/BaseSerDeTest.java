@@ -9,7 +9,7 @@ import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class SerDeTest {
+public class BaseSerDeTest {
 
   @Test
   public void columnNameSerDer() throws IOException {
@@ -44,10 +44,14 @@ public class SerDeTest {
   }
 
   @Test
-  public void entitySerDer() throws IOException {
+  public void entityBaseSerDer() throws IOException {
     ObjectMapper om = new ObjectMapper();
     Entity entity = new Entity();
-    entity.setColumnNames(Collections.singletonList(new ColumnName("a", DataType.STRING.getCode())));
+    entity.setColumnNames(Arrays.asList(
+        new ColumnName("a", DataType.STRING.getCode()),
+        new ColumnName("b", DataType.INTEGER.getCode()),
+        new ColumnName("c", DataType.INTEGER.getCode()),
+        new ColumnName("e", DataType.INTEGER.getCode())));
     entity.setEntityIdColumn("austin");
     entity.setVersion(33);
     Row row1 = new Row();

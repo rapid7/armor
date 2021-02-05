@@ -1,4 +1,4 @@
-package com.rapid7.armor.read;
+package com.rapid7.armor.read.slow;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -20,6 +20,7 @@ import com.rapid7.armor.ArmorSection;
 import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.meta.ColumnMetadata;
+import com.rapid7.armor.read.BaseArmorShardColumn;
 import com.rapid7.armor.schema.DataType;
 
 import tech.tablesaw.api.BooleanColumn;
@@ -35,15 +36,15 @@ import tech.tablesaw.columns.Column;
  * Use this version if speed is not the main concern. The shard is embedded with TableSaw which are good
  * for visualization. For production use with presto use FastArmorShard.
  */
-public class SlowArmorShard extends BaseArmorShard {
-  private static final Logger LOGGER = LoggerFactory.getLogger(SlowArmorShard.class);
+public class SlowArmorShardColumn extends BaseArmorShardColumn {
+  private static final Logger LOGGER = LoggerFactory.getLogger(SlowArmorShardColumn.class);
   private final Map<Object, List<Integer>> entityToRowNumbers = new HashMap<>();
   private Column<?> column;
   private final IntColumn entityIndexColumn = IntColumn.create("id");
 
-  public SlowArmorShard() {}
+  public SlowArmorShardColumn() {}
 
-  public SlowArmorShard(InputStream inputStream) throws IOException {
+  public SlowArmorShardColumn(InputStream inputStream) throws IOException {
     try {
       load(new DataInputStream(inputStream));
     } finally {
@@ -71,17 +72,17 @@ public class SlowArmorShard extends BaseArmorShard {
     return entityIndexColumn;
   }
 
-  public Column<?> getColumn(Object entity) {
+  public Column<?> getColumnByEntityId(Object entityId) {
     switch (metadata.getDataType()) {
       case STRING:
-        return getStrings(entity);
+        return getStringsByEntity(entityId);
       case BOOLEAN:
         // return getBooleans(entity);
       case INTEGER:
-        return getIntegers(entity);
+        return getIntegersByEntity(entityId);
       case DATETIME:
       case LONG:
-        // return getLongs(entity);
+        return getLongsByEntity(entityId);
       case DOUBLE:
         //return getDoubles(entity);
       default:
@@ -129,20 +130,40 @@ public class SlowArmorShard extends BaseArmorShard {
     return (StringColumn) column;
   }
 
-  public StringColumn getStrings(Object entityid) {
+  public StringColumn getStringsByEntity(Object entityid) {
     validateValueCall(DataType.STRING);
-    ArrayList<Integer> results = new ArrayList<>();
+    ArrayList<String> results = new ArrayList<>();
     List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
     if (rowNumbers == null)
       return StringColumn.create(metadata.getColumnName());
 
     for (Integer rowNum : rowNumbers) {
-      results.add((Integer) column.get(rowNum));
+      results.add((String) column.get(rowNum));
     }
     return StringColumn.create(metadata.getColumnName(), results.toArray(new String[results.size()]));
   }
+  
+  public LongColumn getLongsByEntity(Object entityid) {
+    validateValueCall(DataType.LONG);
+    ArrayList<Long> results = new ArrayList<>();
+    List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
+    if (rowNumbers == null)
+      return LongColumn.create(metadata.getColumnName());
 
-  public IntColumn getIntegers(Object entityid) {
+    for (Integer rowNum : rowNumbers) {
+      results.add((Long) column.get(rowNum));
+    }
+    long[] finalResults = new long[results.size()];
+    for (int i = 0; i < results.size(); i++) {
+      if (results.get(i) == null)
+        finalResults[i] = Long.MIN_VALUE;
+      else
+        finalResults[i] = results.get(i);   
+    }
+    return LongColumn.create(metadata.getColumnName(), finalResults);
+  }
+
+  public IntColumn getIntegersByEntity(Object entityid) {
     validateValueCall(DataType.INTEGER);
     ArrayList<Integer> results = new ArrayList<>();
     List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
@@ -190,14 +211,15 @@ public class SlowArmorShard extends BaseArmorShard {
     cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
       try {
         if (section == ArmorSection.ENTITY_DICTIONARY) {
-          readEntityDictionary(is, compressed, uncompressed);
+          return readEntityDictionary(is, compressed, uncompressed);
         } else if (section == ArmorSection.VALUE_DICTIONARY) {
-          readValueDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
+          return readValueDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
         } else if (section == ArmorSection.ENTITY_INDEX) {
-          readEntityIndex(is, compressed, uncompressed);
+          return readEntityIndex(is, compressed, uncompressed);
         } else if (section == ArmorSection.ROWGROUP) {
-          readRowGroup(is, compressed, uncompressed, cfr.getColumnMetadata());
-        }
+          return readRowGroup(is, compressed, uncompressed, cfr.getColumnMetadata());
+        } else
+          return 0;
       } catch (IOException ioe) {
         LOGGER.error("Detected an error in reading section {}", section, ioe);
         throw new RuntimeException(ioe);
@@ -280,12 +302,12 @@ public class SlowArmorShard extends BaseArmorShard {
   }
 
   @Override
-  protected void readRowGroup(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
+  protected int readRowGroup(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
     if (compressed > 0) {
       ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
-      readToTable(entityRecords, zstdInputStream, metadata);
+      return readToTable(entityRecords, zstdInputStream, metadata);
     } else {
-      readToTable(entityRecords, inputStream, metadata);
+      return readToTable(entityRecords, inputStream, metadata);
     }
   }
 }

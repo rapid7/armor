@@ -10,11 +10,14 @@ public class Column {
   private ColumnName columnName;
   private List<Object> values = new ArrayList<>();
 
-  public Column() {
-  }
+  public Column() {}
 
   public Column(ColumnName columnName) {
     this.columnName = columnName;
+  }
+  
+  public int size() {
+    return values.size();
   }
 
   @Override
