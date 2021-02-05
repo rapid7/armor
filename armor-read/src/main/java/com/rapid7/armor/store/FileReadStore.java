@@ -131,8 +131,7 @@ public class FileReadStore implements ReadStore {
       return null;
     } else {
       try {
-        return new FastArmorShard(
-            new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)));
+        return new FastArmorShard(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)));
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }

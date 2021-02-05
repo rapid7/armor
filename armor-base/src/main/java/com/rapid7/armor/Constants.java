@@ -41,8 +41,4 @@ public final class Constants {
 
   public final static String TABLE_METADATA = "table-metadata";
   public final static String SHARD_METADATA = "shard-metadata";
-
-  // Denotes end, useful to smash columns together into 1 file.
-  //public final static short MAGIC_FOOTER = (short) 0xA7EE;
-
 }

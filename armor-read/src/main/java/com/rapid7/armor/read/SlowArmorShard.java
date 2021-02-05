@@ -1,12 +1,5 @@
 package com.rapid7.armor.read;
 
-import com.rapid7.armor.Constants;
-import com.rapid7.armor.entity.EntityRecord;
-import com.rapid7.armor.meta.ColumnMetadata;
-import com.rapid7.armor.schema.DataType;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.luben.zstd.Zstd;
-import com.github.luben.zstd.ZstdInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -17,9 +10,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.roaringbitmap.RoaringBitmap;
-import static com.rapid7.armor.Constants.MAGIC_HEADER;
-import static com.rapid7.armor.Constants.RECORD_SIZE_BYTES;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.github.luben.zstd.ZstdInputStream;
+import com.rapid7.armor.ArmorSection;
+import com.rapid7.armor.columnfile.ColumnFileReader;
+import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.meta.ColumnMetadata;
+import com.rapid7.armor.schema.DataType;
+
 import tech.tablesaw.api.BooleanColumn;
 import tech.tablesaw.api.DoubleColumn;
 import tech.tablesaw.api.FloatColumn;
@@ -33,16 +35,13 @@ import tech.tablesaw.columns.Column;
  * Use this version if speed is not the main concern. The shard is embedded with TableSaw which are good
  * for visualization. For production use with presto use FastArmorShard.
  */
-public class SlowArmorShard {
-  private ColumnMetadata metadata;
-  private final Map<Object, List<Integer>> index = new HashMap<>();
-  private DictionaryReader strValueDictionaryReader;
-  private DictionaryReader entityDictionaryReader;
+public class SlowArmorShard extends BaseArmorShard {
+  private static final Logger LOGGER = LoggerFactory.getLogger(SlowArmorShard.class);
+  private final Map<Object, List<Integer>> entityToRowNumbers = new HashMap<>();
   private Column<?> column;
   private final IntColumn entityIndexColumn = IntColumn.create("id");
 
-  public SlowArmorShard() {
-  }
+  public SlowArmorShard() {}
 
   public SlowArmorShard(InputStream inputStream) throws IOException {
     try {
@@ -133,7 +132,7 @@ public class SlowArmorShard {
   public StringColumn getStrings(Object entityid) {
     validateValueCall(DataType.STRING);
     ArrayList<Integer> results = new ArrayList<>();
-    List<Integer> rowNumbers = index.get(resolveEntity(entityid));
+    List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
     if (rowNumbers == null)
       return StringColumn.create(metadata.getColumnName());
 
@@ -143,11 +142,10 @@ public class SlowArmorShard {
     return StringColumn.create(metadata.getColumnName(), results.toArray(new String[results.size()]));
   }
 
-
   public IntColumn getIntegers(Object entityid) {
     validateValueCall(DataType.INTEGER);
     ArrayList<Integer> results = new ArrayList<>();
-    List<Integer> rowNumbers = index.get(resolveEntity(entityid));
+    List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
     if (rowNumbers == null)
       return IntColumn.create(metadata.getColumnName());
 
@@ -172,21 +170,15 @@ public class SlowArmorShard {
     return (LongColumn) column;
   }
 
-  private void readForMagicHeader(DataInputStream inputStream) throws IOException {
-    short header = inputStream.readShort();
-    if (header != MAGIC_HEADER)
-      throw new IllegalArgumentException("T" + header + " is not a match");
-  }
-
-  private Column<?> createColumn() {
-    switch (metadata.getDataType()) {
+  private Column<?> createColumn(DataType dataType, String columnName) {
+    switch (dataType) {
       case STRING:
-        return StringColumn.create(metadata.getColumnName());
+        return StringColumn.create(columnName);
       case INTEGER:
-        return IntColumn.create(metadata.getColumnName());
+        return IntColumn.create(columnName);
       case DATETIME:
       case LONG:
-        return LongColumn.create(metadata.getColumnName());
+        return LongColumn.create(columnName);
       default:
         break;
     }
@@ -194,86 +186,42 @@ public class SlowArmorShard {
   }
 
   public void load(DataInputStream inputStream) throws IOException {
-    // Header first
-    readForMagicHeader(inputStream);
-
-    // Next metadata
-    inputStream.readInt(); // Metdata never compressed
-    int metadataLength = inputStream.readInt(); // Metdata uncomprossed
-    byte[] metadataBytes = new byte[metadataLength];
-    inputStream.readFully(metadataBytes);
-    metadata = new ObjectMapper().readValue(metadataBytes, ColumnMetadata.class);
-
-    // Read entity dictionary now
-    int entityDictionaryCompressed = inputStream.readInt();
-    int entityDictionaryOriginal = inputStream.readInt();
-    if (entityDictionaryCompressed > 0) {
-      byte[] compressedIndex = new byte[entityDictionaryCompressed];
-      inputStream.read(compressedIndex);
-      byte[] decomporessedIndex = Zstd.decompress(compressedIndex, entityDictionaryOriginal);
-      entityDictionaryReader = new DictionaryReader(new String(decomporessedIndex), metadata.getNumEntities(), true);
-    } else if (entityDictionaryOriginal > 0) {
-      byte[] decompressed = new byte[entityDictionaryCompressed];
-      inputStream.read(decompressed);
-      entityDictionaryReader = new DictionaryReader(new String(decompressed), metadata.getNumEntities(), true);
-    }
-
-    // Read value dictionary now
-    int dictionaryCompressed = inputStream.readInt();
-    int dictionaryOriginal = inputStream.readInt();
-    if (dictionaryCompressed > 0) {
-      byte[] compressedIndex = new byte[dictionaryCompressed];
-      inputStream.read(compressedIndex);
-      byte[] decomporessedIndex = Zstd.decompress(compressedIndex, dictionaryOriginal);
-      strValueDictionaryReader = new DictionaryReader(new String(decomporessedIndex), metadata.getCardinality(), false);
-    } else if (dictionaryOriginal > 0) {
-      byte[] decompressed = new byte[dictionaryOriginal];
-      inputStream.read(decompressed);
-      strValueDictionaryReader = new DictionaryReader(new String(decompressed), metadata.getCardinality(), false);
-    }
-
-    // Read entity
-    int entityIndexCompressed = inputStream.readInt();
-    int entityIndexOriginal = inputStream.readInt();
-    List<EntityRecord> entityRecords;
-    if (entityIndexCompressed > 0) {
-      byte[] compressedIndex = new byte[entityIndexCompressed];
-      inputStream.read(compressedIndex);
-      byte[] decomporessedIndex = Zstd.decompress(compressedIndex, entityIndexOriginal);
-      try (DataInputStream uncompressedInputStream = new DataInputStream(new ByteArrayInputStream(decomporessedIndex))) {
-        entityRecords = readAllIndexRecords(uncompressedInputStream, entityIndexOriginal);
+    ColumnFileReader cfr = new ColumnFileReader();
+    cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
+      try {
+        if (section == ArmorSection.ENTITY_DICTIONARY) {
+          readEntityDictionary(is, compressed, uncompressed);
+        } else if (section == ArmorSection.VALUE_DICTIONARY) {
+          readValueDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
+        } else if (section == ArmorSection.ENTITY_INDEX) {
+          readEntityIndex(is, compressed, uncompressed);
+        } else if (section == ArmorSection.ROWGROUP) {
+          readRowGroup(is, compressed, uncompressed, cfr.getColumnMetadata());
+        }
+      } catch (IOException ioe) {
+        LOGGER.error("Detected an error in reading section {}", section, ioe);
       }
-    } else {
-      entityRecords = readAllIndexRecords(inputStream, entityIndexOriginal);
-    }
-    entityRecords = EntityRecord.sortActiveRecordsByOffset(entityRecords);
-    // Next row group
-    int rgCompressed = inputStream.readInt();
-    int rgOriginal = inputStream.readInt();
-    int readBytes = 0;
-    if (rgCompressed > 0) {
-      ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
-      readBytes = readToTable(entityRecords, zstdInputStream);
-    } else {
-      readBytes = readToTable(entityRecords, inputStream);
-    }
+    });
+    metadata = cfr.getColumnMetadata();
+    
+    
   }
 
-  private int readToTable(List<EntityRecord> indexRecords, InputStream inputStream) throws IOException {
+  private int readToTable(List<EntityRecord> indexRecords, InputStream inputStream, ColumnMetadata metadata) throws IOException {
     int readBytes = 0;
     final AtomicInteger rowCounter = new AtomicInteger(1);
     DataType dt = metadata.getDataType();
 
-    column = createColumn();
+    column = createColumn(dt, metadata.getColumnName());
 
     for (EntityRecord eir : indexRecords) {
       int entity = eir.getEntityId();
       final List<Integer> rowNumbers;
-      if (!index.containsKey(entity)) {
+      if (!entityToRowNumbers.containsKey(entity)) {
         rowNumbers = new ArrayList<>();
-        index.put(entity, rowNumbers);
+        entityToRowNumbers.put(entity, rowNumbers);
       } else {
-        rowNumbers = index.get(entity);
+        rowNumbers = entityToRowNumbers.get(entity);
       }
 
       int previousRowSize = column.size();
@@ -291,7 +239,7 @@ public class SlowArmorShard {
         rowNumbers.add(rowCounter.get() - 1);
         // Strings are surrogate ids, so get the string value for the surrogate.
         if (dt == DataType.STRING)
-          column.appendObj(strValueDictionaryReader.getValueAsString((int) r));
+          column.appendObj(strValueDictionary.getValueAsString((int) r));
         else
           column.appendObj(r);
         rowCounter.incrementAndGet();
@@ -320,15 +268,6 @@ public class SlowArmorShard {
     return readBytes;
   }
 
-  private List<EntityRecord> readAllIndexRecords(DataInputStream inputStream, int originalLength) throws IOException {
-    List<EntityRecord> records = new ArrayList<>();
-    for (int i = 0; i < originalLength; i += RECORD_SIZE_BYTES) {
-      EntityRecord eir = readIndexRecords(inputStream);
-      records.add(eir);
-    }
-    return records;
-  }
-
   private Integer resolveEntity(Object entityid) {
     if (entityid instanceof String) {
       return entityDictionaryReader.getSurrogate((String) entityid);
@@ -336,21 +275,18 @@ public class SlowArmorShard {
     return (Integer) entityid;
   }
 
-  private EntityRecord readIndexRecords(DataInputStream inputStream) throws IOException {
-    int entityUuid = inputStream.readInt();
-    int rowGroupOffset = inputStream.readInt();
-    int length = inputStream.readInt();
-    long version = inputStream.readLong();
-    byte deleted = inputStream.readByte();
-    int nullLength = inputStream.readInt();
-    int decodedLength = inputStream.readInt();
-    byte[] instanceId = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
-    inputStream.read(instanceId, 0, Constants.INSTANCE_ID_BYTE_LENGTH);
-    return new EntityRecord(entityUuid, rowGroupOffset, length, version, deleted, nullLength, decodedLength, instanceId);
-  }
-
   private void validateValueCall(DataType dataType) {
     if (metadata.getDataType() != dataType)
       throw new IllegalArgumentException("The data type " + dataType + " doesn't match the defined column data type of " + metadata.getDataType());
+  }
+
+  @Override
+  protected void readRowGroup(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
+    if (compressed > 0) {
+      ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
+      readToTable(entityRecords, zstdInputStream, metadata);
+    } else {
+      readToTable(entityRecords, inputStream, metadata);
+    }
   }
 }

@@ -8,31 +8,27 @@ import java.util.Map;
 public class DictionaryReader {
   private final Map<Integer, byte[]> intToBytes;
   private Map<String, Integer> strToInt;
-  private int valueLength;
-  private final boolean bidirectional = false;
+  private boolean bidirectional = false;
 
-  public DictionaryReader(String json, int initialCapacity, boolean bidirectional) throws IOException {
+  public DictionaryReader(byte[] json, int capacity, boolean bidirectional) throws IOException {
+    this.bidirectional = bidirectional;
     @SuppressWarnings("unchecked")
-    Map<String, String> map = new ObjectMapper().readValue(json.getBytes(), Map.class);
+    Map<String, String> map = new ObjectMapper().readValue(json, Map.class);
     // Since integers are stored as string, convert them to real ints.
-    intToBytes = new HashMap<>(initialCapacity);
+    intToBytes = new HashMap<>(capacity);
     for (Map.Entry<String, String> e : map.entrySet()) {
       int surrogate = Integer.parseInt(e.getKey());
       if (intToBytes.containsKey(surrogate))
         throw new RuntimeException();
       intToBytes.put(surrogate, e.getValue().getBytes());
       if (bidirectional) {
-        strToInt = new HashMap<>(initialCapacity);
+        strToInt = new HashMap<>(capacity);
         if (strToInt.containsKey(e.getValue()))
           throw new RuntimeException();
         strToInt.put(e.getValue(), surrogate);
       }
     }
     intToBytes.put(0, "".getBytes());
-  }
-
-  public int test() {
-    return valueLength;
   }
 
   public Integer getSurrogate(String value) {

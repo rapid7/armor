@@ -1,25 +1,23 @@
 package com.rapid7.armor.read;
 
-import com.rapid7.armor.Constants;
-import com.rapid7.armor.entity.EntityRecord;
-import com.rapid7.armor.io.IOTools;
-import com.rapid7.armor.meta.ColumnMetadata;
-import com.rapid7.armor.schema.DataType;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.luben.zstd.Zstd;
-import com.github.luben.zstd.ZstdInputStream;
-import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.List;
+
 import org.roaringbitmap.RoaringBitmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static com.rapid7.armor.Constants.MAGIC_HEADER;
-import static com.rapid7.armor.Constants.RECORD_SIZE_BYTES;
+
+import com.github.luben.zstd.ZstdInputStream;
+import com.rapid7.armor.ArmorSection;
+import com.rapid7.armor.columnfile.ColumnFileReader;
+import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.io.IOTools;
+import com.rapid7.armor.meta.ColumnMetadata;
+import com.rapid7.armor.schema.DataType;
+
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 
 /**
@@ -29,11 +27,8 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
  * 2) Avoid unnecssary alloc/dealloc
  * 3) Avoid unnessary looping
  */
-public class FastArmorShard {
+public class FastArmorShard extends BaseArmorShard {
   private static final Logger LOGGER = LoggerFactory.getLogger(FastArmorShard.class);
-  private ColumnMetadata metadata;
-  private DictionaryReader strValueDictionary;
-  private List<EntityRecord> entityRecords;
   private ByteBuffer columnValues;
   private int[] entityNumRows;
   private int[] entityDecodedLength;
@@ -103,93 +98,39 @@ public class FastArmorShard {
     return null;
   }
 
-  private void readForMagicHeader(DataInputStream inputStream) throws IOException {
-    short header = inputStream.readShort();
-    if (header != MAGIC_HEADER)
-      throw new IllegalArgumentException("T" + header + " is not a match");
+  public void load(DataInputStream inputStream) throws IOException {    
+    ColumnFileReader cfr = new ColumnFileReader();
+    cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
+      try {
+        if (section == ArmorSection.ENTITY_DICTIONARY) {
+          readEntityDictionary(is, compressed, uncompressed);
+        } else if (section == ArmorSection.VALUE_DICTIONARY) {
+          readValueDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
+        } else if (section == ArmorSection.ENTITY_INDEX) {
+          readEntityIndex(is, compressed, uncompressed);
+        } else if (section == ArmorSection.ROWGROUP) {
+          readRowGroup(is, compressed, uncompressed, cfr.getColumnMetadata());
+        }
+      } catch (IOException ioe) {
+        LOGGER.error("Detected an error in reading section {}", section, ioe);
+      }
+    });
+    metadata = cfr.getColumnMetadata();
   }
 
-  public void load(DataInputStream inputStream) throws IOException {
-    // Header first
-    readForMagicHeader(inputStream);
-
-    // Next metadata
-    inputStream.readInt(); // Metdata never compressed
-    int metadataLength = inputStream.readInt(); // Metdata uncomprossed
-    byte[] metadataBytes = new byte[metadataLength];
-    inputStream.readFully(metadataBytes);
-    metadata = new ObjectMapper().readValue(metadataBytes, ColumnMetadata.class);
-
-
-    // 2) Initialize what we need.
+  
+  private int loadToByteBuffer(List<EntityRecord> indexRecords, InputStream inputStream, ColumnMetadata metadata) throws IOException {
+    
     columnValues = ByteBuffer.allocate(metadata.getDataType().determineByteLength(metadata.getNumRows()));
     entityNumRows = new int[metadata.getNumEntities()];
     entityDecodedLength = new int[metadata.getNumEntities()];
-
-    // Skip here, the entity id column should hold this info.
-    int entityDictionaryCompressed = inputStream.readInt();
-    int entityDictionaryOriginal = inputStream.readInt();
-    if (entityDictionaryCompressed > 0) {
-      IOTools.skipFully(inputStream, entityDictionaryCompressed);
-    } else if (entityDictionaryOriginal > 0) {
-      IOTools.skipFully(inputStream, entityDictionaryOriginal);
-    }
-
-    // Read string value dictionary (if required)
-    int dictionaryCompressed = inputStream.readInt();
-    int dictionaryOriginal = inputStream.readInt();
-    if (dictionaryCompressed > 0) {
-      byte[] compressedIndex = new byte[dictionaryCompressed];
-      IOTools.readFully(inputStream, compressedIndex, 0, dictionaryCompressed);
-      byte[] decomporessedIndex = Zstd.decompress(compressedIndex, dictionaryOriginal);
-      strValueDictionary = new DictionaryReader(new String(decomporessedIndex), metadata.getCardinality(), false);
-    } else if (dictionaryOriginal > 0) {
-      byte[] decompressed = new byte[dictionaryOriginal];
-      IOTools.readFully(inputStream, decompressed, 0, dictionaryOriginal);
-      strValueDictionary = new DictionaryReader(new String(decompressed), metadata.getCardinality(), false);
-    }
-
-    if (strValueDictionary == null)
-      rowsIsNull = new IntArrayList(metadata.getNumRows());
-
-    // Read entity
-    int entityIndexCompressed = inputStream.readInt();
-    int entityIndexOriginal = inputStream.readInt();
-    if (entityIndexCompressed > 0) {
-      byte[] compressedIndex = new byte[entityIndexCompressed];
-      IOTools.readFully(inputStream, compressedIndex, 0, entityIndexCompressed);
-      byte[] decompressedIndex = Zstd.decompress(compressedIndex, entityIndexOriginal);
-      try (DataInputStream uncompressedInputStream = new DataInputStream(new ByteArrayInputStream(decompressedIndex))) {
-        entityRecords = readAllIndexRecords(uncompressedInputStream, entityIndexOriginal);
-      }
-    } else {
-      byte[] entityIndexBytes = new byte[entityIndexOriginal];
-      IOTools.readFully(inputStream, entityIndexBytes, 0, entityIndexOriginal);
-      try (DataInputStream uncompressedInputStream = new DataInputStream(new ByteArrayInputStream(entityIndexBytes))) {
-        entityRecords = readAllIndexRecords(uncompressedInputStream, entityIndexOriginal);
-      }
-    }
-    entityRecords = EntityRecord.sortActiveRecordsByOffset(entityRecords);
-
-    // Next row group
-    int rgCompressed = inputStream.readInt();
-    int rgUncompressed = inputStream.readInt();
-    if (rgCompressed > 0) {
-      ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
-      loadToByteBuffer(entityRecords, zstdInputStream);
-    } else {
-      loadToByteBuffer(entityRecords, inputStream);
-    }
-  }
-
-  private int loadToByteBuffer(List<EntityRecord> indexRecords, InputStream inputStream) throws IOException {
+    DataType dataType = metadata.getDataType();
     int bytesRead = 0;
     int entityCounter = 0;
 
     byte[] nullBuffer = new byte[4096];
     int columnValuesArrayOffset = 0;
     int rowCounter = 0;
-    DataType dataType = metadata.getDataType();
     byte[] columnValuesArray = columnValues.array();
     for (EntityRecord eir : indexRecords) {
       entityDecodedLength[entityCounter] = eir.getDecodedLength();
@@ -236,27 +177,30 @@ public class FastArmorShard {
     }
     return bytesRead;
   }
-
-  private List<EntityRecord> readAllIndexRecords(DataInputStream inputStream, int originalLength) throws IOException {
-    List<EntityRecord> records = new ArrayList<>();
-    for (int i = 0; i < originalLength; i += RECORD_SIZE_BYTES) {
-      EntityRecord eir = readIndexRecords(inputStream);
-      if (eir.getDeleted() == 0)
-        records.add(eir);
-    }
-    return records;
+  
+  @Override
+  protected void readValueDictionary(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
+    super.readValueDictionary(inputStream, compressed, uncompressed, metadata);
+    if (strValueDictionary == null)
+      rowsIsNull = new IntArrayList(metadata.getNumRows());
   }
-
-  private EntityRecord readIndexRecords(DataInputStream inputStream) throws IOException {
-    int entityUuid = inputStream.readInt();
-    int rowGroupOffset = inputStream.readInt();
-    int length = inputStream.readInt();
-    long version = inputStream.readLong();
-    byte deleted = inputStream.readByte();
-    int nullLength = inputStream.readInt();
-    int decodedLength = inputStream.readInt();
-    byte[] instanceId = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
-    inputStream.read(instanceId, 0, Constants.INSTANCE_ID_BYTE_LENGTH);
-    return new EntityRecord(entityUuid, rowGroupOffset, length, version, deleted, nullLength, decodedLength, instanceId);
+  
+  @Override
+  protected void readEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+    if (compressed > 0) {
+      IOTools.skipFully(inputStream, compressed);
+    } else if (uncompressed > 0) {
+      IOTools.skipFully(inputStream, uncompressed);
+    }
+  }
+  
+  protected void readRowGroup(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
+    // Next row group
+    if (compressed > 0) {
+      ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
+      loadToByteBuffer(entityRecords, zstdInputStream, metadata);
+    } else {
+      loadToByteBuffer(entityRecords, inputStream, metadata);
+    }
   }
 }

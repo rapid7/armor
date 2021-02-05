@@ -29,6 +29,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -59,7 +60,8 @@ public class FileStoreTestV2 {
   private static final String TABLE = "state_vulns";
   private static String TEST_UUID = UUID.randomUUID().toString();
   private static final String ASSET_ID = "assetId";
-
+  private static final Random RANDOM = new Random();
+  
   private void checkEntityIndexRecord(EntityRecord eir, int rowGroupOffset, int valueLength, int nullLength, byte deleted) {
     assertEquals(valueLength, eir.getValueLength());
     assertEquals(rowGroupOffset, eir.getRowGroupOffset());
@@ -89,33 +91,77 @@ public class FileStoreTestV2 {
   }
   
   
+//  private void verifyEntityReaderPOV(Entity entity, Path path) {
+//    FileReadStore readStore = new FileReadStore(path);
+//    Entity testEntity = Entity.buildEntity(entity.getEntityIdColumn(), entity, entity.getVersion(), TEST_UUID);
+//    for (ShardId shardId : readStore.findShardIds(TENANT, TABLE)) {
+//      for (ColumnName columnName : COLUMNS) {
+//        
+//        // FAS doesn't load the entity dictionary if it existed, so we need to load Column
+//        FastArmorShard fas = readStore.getFastArmorShard(shardId, columnName.getName());
+//        fas.getValuesForRecord(testEntity.getEntityId());
+//        
+//        
+//      }
+//    }
+//    
+//    
+//    int totalRows = 0;
+//    for (ShardId shardId : shardIds) {
+//      Integer shardRows = null;
+//      for (ColumnName columnName : COLUMNS) {
+//        FastArmorShard fas = readStore.getFastArmorShard(shardId, columnName.getName());
+//        FastArmorColumnReader far = fas.getFastArmorColumnReader();
+//        DataType dt = fas.getDataType();
+//        FastArmorBlock fab = null;
+//        switch (dt) {
+//        case INTEGER:
+//          fab = far.getIntegerBlock(5000);
+//          break;
+//        case LONG:
+//          fab = far.getLongBlock(5000);
+//          break;
+//        case STRING:
+//          fab = far.getStringBlock(5000);
+//          break;
+//        }
+//        
+//        if (shardRows == null) {
+//          shardRows = fab.getNumRows();
+//        } else if (shardRows != fab.getNumRows()) {
+//          throw new RuntimeException("Within a shard the two column row counts do not match");
+//        }
+//      }
+//      totalRows += shardRows;
+//    }
+//    assertEquals(expectedNumberRows, totalRows);
+//    
+//    // Check schema against store
+//    
+//    //
+//  }
+  
   private void verifyTableReaderPOV(int expectedNumberRows, Path path, int numShards) {
     FileReadStore readStore = new FileReadStore(path);
     List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE);
-    if (shardIds.size() != numShards) {
-      System.out.println("");
-      List<ShardId> shardIds1 = readStore.findShardIds(TENANT, TABLE);
-      System.out.println("");
-
-    }
     assertEquals(numShards, shardIds.size());
     int totalRows = 0;
-    for (ColumnName columnName : COLUMNS) {
+    for (ShardId shardId : shardIds) {
       Integer shardRows = null;
-      for (ShardId shardId : shardIds) {
+      for (ColumnName columnName : COLUMNS) {
         FastArmorShard fas = readStore.getFastArmorShard(shardId, columnName.getName());
         FastArmorColumnReader far = fas.getFastArmorColumnReader();
         DataType dt = fas.getDataType();
         FastArmorBlock fab = null;
         switch (dt) {
         case INTEGER:
-          fab = far.getIntegerBlock(Integer.MAX_VALUE-1);
+          fab = far.getIntegerBlock(5000);
           break;
         case LONG:
-          fab = far.getLongBlock(Integer.MAX_VALUE-1);
+          fab = far.getLongBlock(5000);
           break;
         case STRING:
-          fab = far.getStringBlock(Integer.MAX_VALUE-1);
+          fab = far.getStringBlock(5000);
           break;
         }
         
@@ -128,10 +174,6 @@ public class FileStoreTestV2 {
       totalRows += shardRows;
     }
     assertEquals(expectedNumberRows, totalRows);
-    
-    // Check schema against store
-    
-    //
   }
   
   @Test
@@ -163,7 +205,8 @@ public class FileStoreTestV2 {
       writer.close();
       
       verifyTableReaderPOV(numEntities*2, testDirectory, numShards);
-      
+      int random = RANDOM.nextInt(999);
+      //verifyEntityReaderPov(entities.get(random));
       
       
       
