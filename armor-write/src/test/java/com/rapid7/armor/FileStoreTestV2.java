@@ -161,6 +161,13 @@ public class FileStoreTestV2 {
     }
   }
   
+  private void verifyEntityDeletedReaderPOV(Entity entity, Path path) {
+    FileReadStore readStore = new FileReadStore(path);
+    SlowArmorReader reader = new SlowArmorReader(readStore);
+    Table entityTable = reader.getEntity(TENANT, TABLE, entity.getEntityId());
+    assertEquals(0, entityTable.rowCount());
+  }
+  
   private void verifyEntityReaderPOV(Entity entity, Path path) {
     FileReadStore readStore = new FileReadStore(path);
     Table checkEntity = entityToTableSawRow(entity);
@@ -250,9 +257,64 @@ public class FileStoreTestV2 {
       writer.close();
       
       verifyTableReaderPOV(0, testDirectory, numShards);
+      verifyEntityDeletedReaderPOV(entities.get(random), testDirectory);
+      
+      // Add it back
+      writer = new ArmorWriter("aw1", store, true, numShards, null, null);
+      xact = writer.startTransaction();      
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities));
+      writer.save(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(numEntities*2, testDirectory, numShards);
+      random = RANDOM.nextInt(999);
+      verifyEntityReaderPOV(entities.get(random), testDirectory);
+      
+      // NOTE: Notice we didn't close the writer yet! Add another 1K.
+      List<Entity> entities1 = new ArrayList<>();
+      for (int i = 1000; i < 2000; i++) {
+        Entity random1 = generateEntity(i, 1, rows);
+        entities1.add(random1);
+      }
 
+      xact = writer.startTransaction();
+      // Attempt to also try and double count it shouldn't double count.
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities1));
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities1));
+
+      writer.save(xact, TENANT, TABLE);
       
+      verifyTableReaderPOV((2*numEntities)*2, testDirectory, numShards);
+      random = RANDOM.nextInt(999);
+      verifyEntityReaderPOV(entities.get(random), testDirectory);
+      verifyEntityReaderPOV(entities1.get(random), testDirectory);
+      writer.close();
       
+      // Finally lets add more entites to the table in 2 valid batch before we save and finish this test.
+      writer = new ArmorWriter("aw1", store, true, numShards, null, null);
+      xact = writer.startTransaction();      
+      List<Entity> entities2 = new ArrayList<>();
+      for (int i = 2000; i < 3000; i++) {
+        Entity random2 = generateEntity(i, 1, rows);
+        entities2.add(random2);
+      }
+
+      List<Entity> entities3 = new ArrayList<>();
+      for (int i = 3000; i < 4000; i++) {
+        Entity random3 = generateEntity(i, 1, rows);
+        entities3.add(random3);
+      }
+      
+      // Make it out of order with respect to the enityIds.
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities3));
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities2));
+      writer.save(xact, TENANT, TABLE);
+      verifyTableReaderPOV((4*numEntities)*2, testDirectory, numShards);
+      random = RANDOM.nextInt(999);
+      verifyEntityReaderPOV(entities.get(random), testDirectory);
+      verifyEntityReaderPOV(entities1.get(random), testDirectory);
+      verifyEntityReaderPOV(entities2.get(random), testDirectory);
+      verifyEntityReaderPOV(entities3.get(random), testDirectory);
+      writer.close();
       
     } finally {
       removeDirectory(testDirectory);
