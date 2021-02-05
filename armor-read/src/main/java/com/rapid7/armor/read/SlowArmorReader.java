@@ -1,22 +1,23 @@
 package com.rapid7.armor.read;
 
-import com.rapid7.armor.meta.ColumnMetadata;
-import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.store.ReadStore;
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.rapid7.armor.shard.ShardId;
+import com.rapid7.armor.store.ReadStore;
+
 import tech.tablesaw.columns.Column;
 
-public class SlowArmorReader {
+public class SlowArmorReader extends BaseArmorReader {
   private static final Logger LOGGER = LoggerFactory.getLogger(SlowArmorReader.class);
-  private final ReadStore store;
 
   public SlowArmorReader(ReadStore store) {
-    this.store = store;
+    super(store);
   }
 
   public Column<?> getColumn(String org, String table, String columnName, int shardNum) throws IOException {
@@ -48,13 +49,5 @@ public class SlowArmorReader {
         column.append((Column) armorShard.getColumn());
     }
     return column;
-  }
-
-  public ColumnMetadata getColumnMetadata(String org, String table, String columnName, int shardNum) throws IOException {
-    ShardId shardId = store.findShardId(org, table, shardNum);
-    if (shardId == null)
-      return null;
-    SlowArmorShard armorShard = store.getArmorShard(shardId, columnName);
-    return armorShard.getMetadata();
   }
 }
