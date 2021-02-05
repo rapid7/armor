@@ -200,11 +200,10 @@ public class SlowArmorShard extends BaseArmorShard {
         }
       } catch (IOException ioe) {
         LOGGER.error("Detected an error in reading section {}", section, ioe);
+        throw new RuntimeException(ioe);
       }
     });
     metadata = cfr.getColumnMetadata();
-    
-    
   }
 
   private int readToTable(List<EntityRecord> indexRecords, InputStream inputStream, ColumnMetadata metadata) throws IOException {

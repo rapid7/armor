@@ -1,6 +1,8 @@
 package com.rapid7.armor.write;
 
+import com.rapid7.armor.ArmorSection;
 import com.rapid7.armor.Constants;
+import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.io.AutoDeleteFileInputStream;
@@ -145,106 +147,107 @@ public class ColumnWriter implements AutoCloseable {
   public ColumnName getColumnName() {
     return columnShardId.getColumnName();
   }
-
-  // Read from the input streams to setup the writer.
-  private void load(DataInputStream dataInputStream) throws IOException {
-    // Header first
-    readForMagicHeader(dataInputStream);
-
-    // Metadata
-    dataInputStream.readInt(); // Skip compressed, always uncompressed for meta
-    int metadataLength = dataInputStream.readInt(); // Skip compressed, always uncompressed for meta
-    byte[] metadataBytes = new byte[metadataLength];
-    dataInputStream.readFully(metadataBytes);
-    metadata = om.readValue(metadataBytes, ColumnMetadata.class);
+  
+  private void loadEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
     // Load entity dictionary
-    int entityDictCompressed = dataInputStream.readInt();
-    int entityDictOriginal = dataInputStream.readInt();
-    if (entityDictCompressed > 0) {
-      byte[] compressed = new byte[entityDictCompressed];
-      IOTools.readFully(dataInputStream, compressed, 0, entityDictCompressed);
-      byte[] decompressed = Zstd.decompress(compressed, entityDictOriginal);
-      compressed = null;
+    if (compressed > 0) {
+      byte[] compressedDict = new byte[compressed];
+      IOTools.readFully(inputStream, compressedDict, 0, compressed);
+      byte[] decompressed = Zstd.decompress(compressedDict, uncompressed);
       entityDictionary = new DictionaryWriter(decompressed, true);
       decompressed = null;
-    } else if (entityDictOriginal > 0) {
-      byte[] uncompressed = new byte[entityDictOriginal];
-      IOTools.readFully(dataInputStream, uncompressed, 0, entityDictOriginal);
-      entityDictionary = new DictionaryWriter(uncompressed, true);
-      uncompressed = null;
+    } else if (uncompressed > 0) {
+      byte[] uncompressedDict = new byte[uncompressed];
+      IOTools.readFully(inputStream, uncompressedDict, 0, uncompressed);
+      entityDictionary = new DictionaryWriter(uncompressedDict, true);
     }
-
+  }
+  
+  private void loadValueDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
     // Load str value dictionary
-    int valueDictCompressed = dataInputStream.readInt();
-    int valueDictOriginal = dataInputStream.readInt();
-    if (valueDictCompressed > 0) {
-      byte[] compressed = new byte[valueDictCompressed];
-      IOTools.readFully(dataInputStream, compressed, 0, valueDictCompressed);
-      byte[] decompressed = Zstd.decompress(compressed, valueDictOriginal);
-      compressed = null;
+    if (compressed > 0) {
+      byte[] compressedDict = new byte[compressed];
+      IOTools.readFully(inputStream, compressedDict, 0, compressed);
+      byte[] decompressed = Zstd.decompress(compressedDict, uncompressed);
       strValueDictionary = new DictionaryWriter(decompressed, false);
       decompressed = null;
-    } else if (valueDictOriginal > 0) {
-      byte[] uncompressed = new byte[valueDictOriginal];
-      IOTools.readFully(dataInputStream, uncompressed, 0, valueDictOriginal);
-      strValueDictionary = new DictionaryWriter(uncompressed, false);
-      uncompressed = null;
+    } else if (uncompressed > 0) {
+      byte[] uncompressedDict = new byte[uncompressed];
+      IOTools.readFully(inputStream, uncompressedDict, 0, uncompressed);
+      strValueDictionary = new DictionaryWriter(uncompressedDict, false);
     }
+  }
+  
+  private Path loadEntityIndex(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+    String tempName = columnShardId.alternateString() + "-";
+    Path entityIndexTemp = Files.createTempFile("entityindex_" + tempName, ".armor");
+    if (compressed > 0) {
+      byte[] compressedIndex = new byte[compressed];
+      IOTools.readFully(inputStream, compressedIndex, 0, compressed);
+      byte[] decompressed = Zstd.decompress(compressedIndex, uncompressed);
+      try (ByteArrayInputStream bais = new ByteArrayInputStream(decompressed)) {
+        Files.copy(bais, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
+      }
+      decompressed = null;
+      entityRecordWriter = new EntityRecordWriter(entityIndexTemp, columnShardId);
+    } else {
+      byte[] uncompressedIndex = new byte[uncompressed];
+      IOTools.readFully(inputStream, uncompressedIndex, 0, uncompressed);
+      try (ByteArrayInputStream bais = new ByteArrayInputStream(uncompressedIndex)) {
+        Files.copy(bais, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
+      }
+      entityRecordWriter = new EntityRecordWriter(entityIndexTemp, columnShardId);
+    }
+    return entityIndexTemp;
+  }
+  
+  private Path loadRowGroup(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+    Path rgGroupTemp = Files.createTempFile("rowgroupstore_" + columnShardId.alternateString() + "-", ".armor");
+    if (compressed > 0) {
+      byte[] compressedRg = new byte[compressed];
+      IOTools.readFully(inputStream, compressedRg, 0, compressed);
+      byte[] decompressed = Zstd.decompress(compressedRg, uncompressed);
+      try (ByteArrayInputStream bais = new ByteArrayInputStream(decompressed)) {
+        Files.copy(bais, rgGroupTemp, StandardCopyOption.REPLACE_EXISTING);
+      }
+      decompressed = null;
+      rowGroupWriter = new RowGroupWriter(rgGroupTemp, columnShardId, strValueDictionary);
+      rowGroupWriter.position(rowGroupWriter.getCurrentSize());
+    } else {
+      byte[] uncompressedRg = new byte[uncompressed];
+      IOTools.readFully(inputStream, uncompressedRg, 0, uncompressed);
+      try (ByteArrayInputStream bais = new ByteArrayInputStream(uncompressedRg)) {
+        Files.copy(bais, rgGroupTemp, StandardCopyOption.REPLACE_EXISTING);
+      }
+      rowGroupWriter = new RowGroupWriter(rgGroupTemp, columnShardId, strValueDictionary);
+      rowGroupWriter.position(rowGroupWriter.getCurrentSize());
+    }
+    return rgGroupTemp;
+  }
 
-    int eiCompressed = dataInputStream.readInt();
-    int eiOriginal = dataInputStream.readInt();
+  // Read from the input streams to setup the writer.
+  private void load(DataInputStream inputStream) throws IOException {
+    ColumnFileReader cfr = new ColumnFileReader();
     List<Path> tempPaths = new ArrayList<>();
     boolean success = false;
     try {
-      String tempName = columnShardId.alternateString() + "-";
-      Path entityIndexTemp = Files.createTempFile("entityindex_" + tempName, ".armor");
-      tempPaths.add(entityIndexTemp);
-      if (eiCompressed > 0) {
-        byte[] compressed = new byte[eiCompressed];
-        IOTools.readFully(dataInputStream, compressed, 0, eiCompressed);
-        byte[] decompressed = Zstd.decompress(compressed, eiOriginal);
-        compressed = null;
-        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(decompressed)) {
-          Files.copy(inputStream, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
+      cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
+        try {
+          if (section == ArmorSection.ENTITY_DICTIONARY) {
+            loadEntityDictionary(is, compressed, uncompressed);
+          } else if (section == ArmorSection.VALUE_DICTIONARY) {
+            loadValueDictionary(is, compressed, uncompressed);
+          } else if (section == ArmorSection.ENTITY_INDEX) {
+            tempPaths.add(loadEntityIndex(is, compressed, uncompressed));
+          } else if (section == ArmorSection.ROWGROUP) {
+            tempPaths.add(loadRowGroup(inputStream, compressed, uncompressed));
+          }
+        } catch (IOException ioe) {
+          LOGGER.error("Detected an error in reading section {}", section, ioe);
+          throw new RuntimeException(ioe);
         }
-        decompressed = null;
-        entityRecordWriter = new EntityRecordWriter(entityIndexTemp, columnShardId);
-      } else {
-        byte[] uncompressed = new byte[eiOriginal];
-        IOTools.readFully(dataInputStream, uncompressed, 0, eiOriginal);
-        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(uncompressed)) {
-          Files.copy(inputStream, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
-        }
-        uncompressed = null;
-        entityRecordWriter = new EntityRecordWriter(entityIndexTemp, columnShardId);
-      }
-
-      // Next row group
-      int rgCompressed = dataInputStream.readInt();
-      int rgOriginal = dataInputStream.readInt();
-      Path rgGroupTemp = Files.createTempFile("rowgroupstore_" + columnShardId.alternateString() + "-", ".armor");
-      tempPaths.add(rgGroupTemp);
-      if (rgCompressed > 0) {
-        byte[] compressed = new byte[rgCompressed];
-        IOTools.readFully(dataInputStream, compressed, 0, rgCompressed);
-        byte[] decompressed = Zstd.decompress(compressed, rgOriginal);
-        compressed = null;
-        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(decompressed)) {
-          Files.copy(inputStream, rgGroupTemp, StandardCopyOption.REPLACE_EXISTING);
-        }
-        decompressed = null;
-        rowGroupWriter = new RowGroupWriter(rgGroupTemp, columnShardId, strValueDictionary);
-        rowGroupWriter.position(rowGroupWriter.getCurrentSize());
-      } else {
-        byte[] uncompressed = new byte[rgOriginal];
-        IOTools.readFully(dataInputStream, uncompressed, 0, rgOriginal);
-        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(uncompressed)) {
-          Files.copy(inputStream, rgGroupTemp, StandardCopyOption.REPLACE_EXISTING);
-        }
-        uncompressed = null;
-        rowGroupWriter = new RowGroupWriter(rgGroupTemp, columnShardId, strValueDictionary);
-        rowGroupWriter.position(rowGroupWriter.getCurrentSize());
-      }
+      });
+      metadata = cfr.getColumnMetadata();
       metadata.setLastUpdate(new Date().toString());
       success = true;
     } finally {
@@ -253,7 +256,6 @@ public class ColumnWriter implements AutoCloseable {
           Files.deleteIfExists(path);
         }
       }
-
     }
   }
 

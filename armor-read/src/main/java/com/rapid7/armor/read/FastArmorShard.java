@@ -113,6 +113,7 @@ public class FastArmorShard extends BaseArmorShard {
         }
       } catch (IOException ioe) {
         LOGGER.error("Detected an error in reading section {}", section, ioe);
+        throw new RuntimeException(ioe);
       }
     });
     metadata = cfr.getColumnMetadata();
