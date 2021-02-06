@@ -157,7 +157,7 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public List<ColumnWriter> loadColumnShardIds(String org, String table, int shardNum) {
+  public List<ColumnWriter> loadColumnWriters(String org, String table, int shardNum) {
     String currentPath = resolveCurrentPath(org, table, shardNum);
     ShardId shardId = buildShardId(org, table, shardNum);
     List<ColumnName> columNames = getColumNames(buildShardId(org, table, shardNum));

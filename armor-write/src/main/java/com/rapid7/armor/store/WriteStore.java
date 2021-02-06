@@ -14,7 +14,7 @@ import java.util.Map;
 
 public interface WriteStore {
   // Loading from store
-  List<ColumnWriter> loadColumnShardIds(String org, String table, int shardNum);
+  List<ColumnWriter> loadColumnWriters(String org, String table, int shardNum);
 
   ColumnWriter loadColumnWriter(ColumnShardId columnShard);
 

@@ -311,8 +311,8 @@ public class ArmorWriter implements Closeable {
               offsetExceptions.add(e1);
               throw e1;
             } catch (Exception e) {
-              LOGGER.error("Detected an error on shard {} table {} in org {}",
-                  shardWriter.getShardId(), tableDefinition.getTableName(), tableDefinition.getOrg(), e);
+              LOGGER.error("Detected an error on shard {} table {} in tenant {}", 
+                shardWriter.getShardId(), tableDefinition.getTableName(), tableDefinition.getOrg(), e);
               throw e;
             } finally {
               Thread.currentThread().setName(originalName);

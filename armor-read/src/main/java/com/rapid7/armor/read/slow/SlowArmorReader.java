@@ -1,7 +1,6 @@
 package com.rapid7.armor.read.slow;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -11,16 +10,13 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.read.BaseArmorReader;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.ReadStore;
 
-import tech.tablesaw.api.Row;
 import tech.tablesaw.api.Table;
 import tech.tablesaw.columns.Column;
-import tech.tablesaw.io.TableBuildingUtils;
 
 /**
  * Slow armor reader is a slower version of the reader. Use this explore the data if running locally and you need

@@ -59,7 +59,7 @@ public class ShardWriter {
       this.defragTrigger = defragTriggerSupplier;
     this.captureWrite = captureWrite;
     // Load all columns
-    List<ColumnWriter> columnWriters = store.loadColumnShardIds(tableWriter.getOrg(), tableWriter.getTableName(), shardId.getShardNum());
+    List<ColumnWriter> columnWriters = store.loadColumnWriters(tableWriter.getOrg(), tableWriter.getTableName(), shardId.getShardNum());
     writers = columnWriters.stream().collect(Collectors.toMap(ColumnWriter::getColumnShardId, w -> w));
   }
 
@@ -103,7 +103,6 @@ public class ShardWriter {
     boolean committed = false;
     try {
       ColumnMetadata entityColumnMetadata = consistencyCheck(transaction);
-
       for (Map.Entry<ColumnShardId, ColumnWriter> entry : writers.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
         try (InputStream inputStream = streamProduct.getInputStream()) {

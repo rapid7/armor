@@ -144,7 +144,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public List<ColumnWriter> loadColumnShardIds(String org, String table, int shardNum) {
+  public List<ColumnWriter> loadColumnWriters(String org, String table, int shardNum) {
     ShardId shardId = buildShardId(org, table, shardNum);
     List<ColumnName> columNames = getColumNames(buildShardId(org, table, shardNum));
     List<ColumnWriter> writers = new ArrayList<>();
@@ -233,7 +233,7 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void saveShardMetadata(String transactionId, String org, String table, int shardNum, ShardMetadata shardMetadata) {
     String shardIdPath = org + "/" + table + "/" + shardNum + "/" + transactionId + "/" + Constants.SHARD_METADATA + ".armor";
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 10; i++) {
       try {
         ObjectMapper om = new ObjectMapper();
         String payload = om.writeValueAsString(shardMetadata);
