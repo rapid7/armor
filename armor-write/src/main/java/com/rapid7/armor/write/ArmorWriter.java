@@ -10,6 +10,8 @@ import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
+import com.rapid7.armor.store.WriteTranscationError;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
@@ -329,10 +331,15 @@ public class ArmorWriter implements Closeable {
       try {
         shardMetaDatas.add(std.take().get());
       } catch (InterruptedException | ExecutionException e) {
+        // Throw specialized handlers up verses wrapped runtime exceptions
         if (!offsetExceptions.isEmpty()) {
-          EntityOffsetException test = offsetExceptions.get(0);
+          EntityOffsetException offsetException = offsetExceptions.get(0);
           LOGGER.error("!!!Detected an error on table {} in org {}", tableDefinition.getTableName(), tableDefinition.getOrg(), e);
-          LOGGER.error(test.getMessage());
+          LOGGER.error(offsetException.getMessage());
+          throw offsetException;
+        }
+        if (e.getCause() instanceof WriteTranscationError) {
+          throw (WriteTranscationError) e.getCause();
         }
         throw new RuntimeException(e);
       }

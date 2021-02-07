@@ -15,11 +15,13 @@ import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.FileReadStore;
 import com.rapid7.armor.store.FileWriteStore;
+import com.rapid7.armor.store.WriteTranscationError;
 import com.rapid7.armor.write.ArmorWriter;
 import com.google.common.collect.Sets;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -49,6 +51,8 @@ import tech.tablesaw.api.Table;
 
 import tech.tablesaw.columns.Column;
 import tech.tablesaw.filtering.*;
+
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 public class FileStoreTestV2 {
@@ -67,6 +71,8 @@ public class FileStoreTestV2 {
   private static Row nevadaVuln = new Row(5, 105l, "nevada");
   private static Row oregonVuln = new Row(6, 106l, "oregon");
   private static Row utahVuln = new Row(7, 107l, "utah");
+
+  private static Row[] STATE_ROWS = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln, nevadaVuln, oregonVuln, utahVuln};
 
   private static final String TENANT = "united_states";
   private static final String TABLE = "state_vulns";
@@ -91,6 +97,24 @@ public class FileStoreTestV2 {
   
   private Entity randomEntity(long version, Row... rows) {
     return Entity.buildEntity(ASSET_ID, UUID.randomUUID().toString(), version, TEST_UUID, COLUMNS, rows);
+  }
+  
+  private Row generateRandomRow() {
+    int randomInt = RANDOM.nextInt();
+    long randomLong = RANDOM.nextLong();
+    byte[] array = new byte[7]; 
+    RANDOM.nextBytes(array);
+    String generatedString = new String(array, Charset.forName("UTF-8"));
+    return new Row(randomInt, randomLong, generatedString);
+  }
+  
+  private List<Row> generateRandomRowsFromSet() {
+    int grab = RANDOM.nextInt(7);
+    List<Row> rows = new ArrayList<>();
+    for (int i = 0; i < grab; i++) {
+      rows.add(STATE_ROWS[RANDOM.nextInt(7)]);
+    }
+    return rows;
   }
 
   private void removeDirectory(Path removeDirectory) throws IOException {
@@ -216,8 +240,42 @@ public class FileStoreTestV2 {
   }
   
   @Test
-  public void verifySameXactError() {
+  public void entitesRowContentsChange() {
     
+  }
+  
+  @Test
+  public void deleteOnly() throws IOException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 1, null, null)) {
+      String xact = writer.startTransaction();
+      for (int i = 0; i < 1000; i++) {
+        writer.delete(xact, TENANT, TABLE, i);
+      }
+      writer.save(xact, TENANT, TABLE);
+      verifyTableReaderPOV(0, testDirectory, 0);
+    }
+  }
+  
+  @Test
+  public void verifySameXactError() throws IOException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    Assertions.assertThrows(WriteTranscationError.class, () -> {
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 1, null, null)) {
+        List<Entity> entities = new ArrayList<>();
+        Entity random = generateEntity("same", 1, null);
+        entities.add(random);
+        String xact = writer.startTransaction();
+        writer.write(xact, TENANT, TABLE, entities);
+        writer.save(xact, TENANT, TABLE);
+        writer.write(xact, TENANT, TABLE, entities);
+        writer.save(xact, TENANT, TABLE);
+      } finally {
+        removeDirectory(testDirectory);
+      }
+    });
   }
   
   @Test

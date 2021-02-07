@@ -256,7 +256,7 @@ public class FileWriteStore implements WriteStore {
     } else
       oldPrevious = null;
     if (oldCurrent != null && oldCurrent.equalsIgnoreCase(transaction))
-      throw new RuntimeException("Create another transaction");
+      throw new WriteTranscationError("Create another transaction", transaction);
     saveCurrentValues(org, table, shardNum, transaction, oldCurrent);
     try {
       Runnable runnable = () -> {

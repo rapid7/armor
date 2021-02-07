@@ -58,7 +58,10 @@ public class Entity {
     this.version = version;
     this.columnNames = columnNames;
     this.columnsDefined = true;
-    this.rows = Arrays.asList(rows);
+    if (rows == null || rows.length == 0)
+      this.rows = new ArrayList<>();
+    else
+      this.rows = Arrays.asList(rows);
     validateRows(this.rows);
     this.rowsAdded = true;
     this.instanceid = instanceid;
