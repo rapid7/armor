@@ -58,7 +58,8 @@ public abstract class BaseArmorShardColumn {
     return read;
   }
 
-  protected int readEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException { 
+  protected int readEntityDictionary(
+    DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException { 
     int read = 0;
     if (compressed > 0) {
       byte[] compressedIndex = new byte[compressed];

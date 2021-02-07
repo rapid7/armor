@@ -104,7 +104,7 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
     cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
       try {
         if (section == ArmorSection.ENTITY_DICTIONARY) {
-          return readEntityDictionary(is, compressed, uncompressed);
+          return readEntityDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
         } else if (section == ArmorSection.VALUE_DICTIONARY) {
           return readValueDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
         } else if (section == ArmorSection.ENTITY_INDEX) {
@@ -189,7 +189,8 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
   }
   
   @Override
-  protected int readEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+  protected int readEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata)
+    throws IOException {
     if (compressed > 0) {
       return (int) IOTools.skipFully(inputStream, compressed);
     } else if (uncompressed > 0) {

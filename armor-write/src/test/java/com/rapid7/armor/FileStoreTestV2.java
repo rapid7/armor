@@ -240,8 +240,28 @@ public class FileStoreTestV2 {
   }
   
   @Test
-  public void entitesRowContentsChange() {
-    
+  public void entitesRowContentsChange() throws IOException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    Row[] rows2 = new Row[] {texasVuln, caliVuln};
+    Row[] rows4 = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln};
+    Row[] rows6 = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln, nevadaVuln, oregonVuln};
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    int numEntities = 1000;
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 1, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      for (int i = 0; i < 1000; i++) {
+        Entity random = generateEntity(Integer.toString(i), 1, rows4);
+        entities.add(random);
+      }
+      
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities));
+      writer.save(xact, TENANT, TABLE);
+      verifyTableReaderPOV(numEntities*4, testDirectory, 10);
+      int random = RANDOM.nextInt(999);
+      verifyEntityReaderPOV(entities.get(random), testDirectory);
+    }
+
   }
   
   @Test

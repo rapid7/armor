@@ -18,13 +18,15 @@ public class DictionaryReader {
     intToBytes = new HashMap<>(capacity);
     for (Map.Entry<String, String> e : map.entrySet()) {
       int surrogate = Integer.parseInt(e.getKey());
-      if (intToBytes.containsKey(surrogate))
-        throw new RuntimeException();
+      if (intToBytes.containsKey(surrogate)) {
+        throw new RuntimeException("The surrogate " + surrogate + " already contains value " + new String(intToBytes.get(surrogate)) + " cannot add " + e.getValue());
+      }
       intToBytes.put(surrogate, e.getValue().getBytes());
       if (bidirectional) {
-        strToInt = new HashMap<>(capacity);
+        if (strToInt == null)
+          strToInt = new HashMap<>(capacity);
         if (strToInt.containsKey(e.getValue()))
-          throw new RuntimeException();
+          throw new RuntimeException("The value " + e.getValue() + " already contains a surrogate " + strToInt.get(e.getValue()) + " cannot add " + e.getValue());
         strToInt.put(e.getValue(), surrogate);
       }
     }

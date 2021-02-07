@@ -133,7 +133,8 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
   public StringColumn getStringsByEntity(Object entityid) {
     validateValueCall(DataType.STRING);
     ArrayList<String> results = new ArrayList<>();
-    List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
+    Integer surrogate = resolveEntity(entityid);
+    List<Integer> rowNumbers = entityToRowNumbers.get(surrogate);
     if (rowNumbers == null)
       return StringColumn.create(metadata.getColumnName());
 
@@ -211,7 +212,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
       try {
         if (section == ArmorSection.ENTITY_DICTIONARY) {
-          return readEntityDictionary(is, compressed, uncompressed);
+          return readEntityDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
         } else if (section == ArmorSection.VALUE_DICTIONARY) {
           return readValueDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
         } else if (section == ArmorSection.ENTITY_INDEX) {
