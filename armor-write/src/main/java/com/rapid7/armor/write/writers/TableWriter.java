@@ -53,7 +53,7 @@ public class TableWriter implements Closeable {
     return entityColumnId;
   }
 
-  public DataType getDataType() {
+  public DataType getEntityColumnDataType() {
     return entityColumnType;
   }
 

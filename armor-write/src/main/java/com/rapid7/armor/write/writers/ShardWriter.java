@@ -6,6 +6,7 @@ import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
@@ -37,24 +38,27 @@ public class ShardWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShardWriter.class);
 
   private Map<ColumnShardId, ColumnFileWriter> writers = new HashMap<>();
+  private String entityIdColumn;
+  private DataType entityIdColumnDataType;
   private final WriteStore store;
   private final ShardId shardId;
-  private final TableWriter tableWriter;
   private final BiPredicate<ShardId, String> captureWrite;
   private final Supplier<Integer> defragTrigger;
   private boolean compress = true;
-
+  
   public ShardWriter(
-      TableWriter tableWriter,
+      String entityIdColumn,
+      DataType entityColumnDataType,
       ShardId shardId,
       WriteStore store,
       boolean compress,
       Supplier<Integer> defragTriggerSupplier,
       BiPredicate<ShardId, String> captureWrite
   ) {
+    this.entityIdColumn = entityIdColumn;
+    this.entityIdColumnDataType = entityColumnDataType;
     this.shardId = shardId;
     this.store = store;
-    this.tableWriter = tableWriter;
     this.compress = compress;
     if (defragTriggerSupplier == null)
       this.defragTrigger = () -> 90;
@@ -62,7 +66,7 @@ public class ShardWriter {
       this.defragTrigger = defragTriggerSupplier;
     this.captureWrite = captureWrite;
     // Load all columns
-    List<ColumnFileWriter> columnWriters = store.loadColumnWriters(tableWriter.getTenant(), tableWriter.getTableName(), shardId.getShardNum());
+    List<ColumnFileWriter> columnWriters = store.loadColumnWriters(shardId.getTenant(), shardId.getTable(), shardId.getShardNum());
     writers = columnWriters.stream().collect(Collectors.toMap(ColumnFileWriter::getColumnShardId, w -> w));
   }
 
@@ -118,13 +122,13 @@ public class ShardWriter {
       columnMetadata.add(entityColumnMetadata);
       ShardMetadata smd = new ShardMetadata();
       smd.setColumnMetadata(columnMetadata);
-      store.saveShardMetadata(transaction, tableWriter.getTenant(), tableWriter.getTableName(), shardId.getShardNum(), smd);
-      store.commit(transaction, tableWriter.getTenant(), tableWriter.getTableName(), shardId.getShardNum());
+      store.saveShardMetadata(transaction, shardId.getTenant(), shardId.getTable(), shardId.getShardNum(), smd);
+      store.commit(transaction, shardId.getTenant(), shardId.getTable(), shardId.getShardNum());
       committed = true;
       return smd;
     } finally {
       if (!committed)
-        store.rollback(transaction, tableWriter.getTenant(), tableWriter.getTableName(), shardId.getShardNum());
+        store.rollback(transaction, shardId.getTenant(), shardId.getTable(), shardId.getShardNum());
     }
   }
 
@@ -245,7 +249,7 @@ public class ShardWriter {
       }
     }
 
-    ColumnName cn = new ColumnName(tableWriter.getEntityColumnId(), tableWriter.getDataType().getCode());
+    ColumnName cn = new ColumnName(entityIdColumn, entityIdColumnDataType.getCode());
     String randomId = UUID.randomUUID().toString();
     try (ColumnFileWriter cw = new ColumnFileWriter(new ColumnShardId(shardId, cn))) {
       List<WriteRequest> putRequests = new ArrayList<>();
@@ -268,7 +272,7 @@ public class ShardWriter {
         }
         return cw.getMetadata();
       } catch (Exception e) {
-        LOGGER.error("Detected an issue building and saving entity column on table {} in tenant {}", tableWriter.getTableName(), tableWriter.getTenant(), e);
+        LOGGER.error("Detected an issue building and saving entity column on table {} in tenant {}", shardId.getTable(), shardId.getTenant(), e);
         throw e;
       }
     }
@@ -349,6 +353,6 @@ public class ShardWriter {
       }
     }
 
-    throw new RuntimeException("The entity summaries do not match the baseline entity summaries on " + tableWriter.getTableName() + " " + shardId);
+    throw new RuntimeException("The entity summaries do not match the baseline entity summaries on " + shardId.getTable() + " " + shardId);
   }
 }
