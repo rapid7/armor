@@ -5,7 +5,7 @@ import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.ColumnFileWriter;
 import com.rapid7.armor.write.WriteRequest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,7 +29,7 @@ public class ColumnWriteFromJson {
     String writeRequestPath = "/home/alee/下載/writeRequests.txt"; //args[1];
     String columnType = "S"; //args[3];
     //FileWriteStore fws = new FileWriteStore(Paths.get("/home/alee/test"), new ModShardStrategy(1));
-    ColumnWriter writer1 = new ColumnWriter(new DataInputStream(Files.newInputStream(Paths.get(column1), StandardOpenOption.READ)),
+    ColumnFileWriter writer1 = new ColumnFileWriter(new DataInputStream(Files.newInputStream(Paths.get(column1), StandardOpenOption.READ)),
         new ColumnShardId(new ShardId(1, "dummy", "dummy"), new ColumnName("product", columnType)));
     List<EntityRecordSummary> summaries1 = writer1.getEntityRecordSummaries();
     Integer test = writer1.getEntityDictionary().getSurrogate("97039950-049c-4589-9ab4-53d8d5cc9558-default-asset-2286607");

@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.ColumnFileWriter;
 
 /**
  * Splits a given column into separated parts, whiich can be used for further analysis.
@@ -53,8 +53,8 @@ public class ArmorSplitter {
         continue;
       }
       ObjectMapper om = new ObjectMapper();
-      try (ColumnWriter writer = 
-          new ColumnWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
+      try (ColumnFileWriter writer = 
+          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
         writer.getRowGroupWriter();
         writer.getMetadata();
         writer.getEntityRecordWriter();

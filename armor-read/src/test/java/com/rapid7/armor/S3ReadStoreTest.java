@@ -81,7 +81,7 @@ public class S3ReadStoreTest {
     client.putObject(TEST_BUCKET, "org2/table1/1/" + Constants.CURRENT, mapper.writeValueAsString(currentValue2));
 
     S3ReadStore readStore = new S3ReadStore(client, TEST_BUCKET);
-    assertEquals(Sets.newHashSet("org1", "org2"), Sets.newHashSet(readStore.getOrgs()));
+    assertEquals(Sets.newHashSet("org1", "org2"), Sets.newHashSet(readStore.getTenants()));
     readStore.getTables("org2");
   }
 }

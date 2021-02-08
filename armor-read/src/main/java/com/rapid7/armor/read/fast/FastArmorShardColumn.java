@@ -101,16 +101,16 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
 
   public void load(DataInputStream inputStream) throws IOException {    
     ColumnFileReader cfr = new ColumnFileReader();
-    cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
+    cfr.read(inputStream, (section, metadata, is, compressed, uncompressed) -> {
       try {
         if (section == ArmorSection.ENTITY_DICTIONARY) {
-          return readEntityDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
+          return readEntityDictionary(is, compressed, uncompressed, metadata);
         } else if (section == ArmorSection.VALUE_DICTIONARY) {
-          return readValueDictionary(is, compressed, uncompressed, cfr.getColumnMetadata());
+          return readValueDictionary(is, compressed, uncompressed, metadata);
         } else if (section == ArmorSection.ENTITY_INDEX) {
           return readEntityIndex(is, compressed, uncompressed);
         } else if (section == ArmorSection.ROWGROUP) {
-          return readRowGroup(is, compressed, uncompressed, cfr.getColumnMetadata());
+          return readRowGroup(is, compressed, uncompressed, metadata);
         } else
           return 0;
       } catch (IOException ioe) {

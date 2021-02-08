@@ -24,7 +24,7 @@ import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.ColumnFileWriter;
 import com.rapid7.armor.write.component.DictionaryWriter;
 
 import tech.tablesaw.api.Table;
@@ -63,7 +63,7 @@ public class ArmorAnalyzer {
           continue;
           // Just skip
         }
-        try (ColumnWriter writer = new ColumnWriter(new DataInputStream(Files.newInputStream(columnFile, StandardOpenOption.READ)),
+        try (ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(Files.newInputStream(columnFile, StandardOpenOption.READ)),
             new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
           ObjectMapper objectMapper = new ObjectMapper();
           Files.copy(

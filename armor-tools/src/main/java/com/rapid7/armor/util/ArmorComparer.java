@@ -37,7 +37,7 @@ import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.ColumnFileWriter;
 import com.rapid7.armor.write.component.DictionaryWriter;
 
 /**
@@ -86,8 +86,8 @@ public class ArmorComparer {
         // No valid so just skip.
         continue;
       }
-      try (ColumnWriter writer = 
-          new ColumnWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
+      try (ColumnFileWriter writer = 
+          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
          // Its valid, extract the date
         String lastUpdate = writer.getMetadata().getLastUpdate();
         SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
@@ -122,8 +122,8 @@ public class ArmorComparer {
       Path maxPath = columnMinMax.maxPath;
       Path minPath = columnMinMax.minPath;
       ColumnShardId dummyShard = new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnMinMax.columnName);
-      try (ColumnWriter maxWriter = new ColumnWriter(new DataInputStream(Files.newInputStream(maxPath, StandardOpenOption.READ)), dummyShard);
-           ColumnWriter minWriter = new ColumnWriter(new DataInputStream(Files.newInputStream(minPath, StandardOpenOption.READ)), dummyShard)) {
+      try (ColumnFileWriter maxWriter = new ColumnFileWriter(new DataInputStream(Files.newInputStream(maxPath, StandardOpenOption.READ)), dummyShard);
+           ColumnFileWriter minWriter = new ColumnFileWriter(new DataInputStream(Files.newInputStream(minPath, StandardOpenOption.READ)), dummyShard)) {
         Map<Integer, EntityRecord> minRecords = minWriter.getEntites();
         Map<Integer, EntityRecord> maxRecords = maxWriter.getEntites();
         Set<Integer> minRecordsInt = minRecords.keySet();

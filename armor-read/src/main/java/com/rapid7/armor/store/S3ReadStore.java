@@ -200,7 +200,7 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public List<String> getOrgs() {
+  public List<String> getTenants() {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);

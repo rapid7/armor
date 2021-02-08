@@ -5,7 +5,7 @@ import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.ColumnFileWriter;
 import com.rapid7.armor.write.component.DictionaryWriter;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -28,9 +28,9 @@ public class ColumnWriterComparison {
     String column1 = "/home/alee/下載/family_S_T"; // args[0];
     String column2 = "/home/alee/下載/family_S_T"; //args[1];
     String columnType = "S"; //args[3];
-    ColumnWriter writer1 = new ColumnWriter(new DataInputStream(Files.newInputStream(Paths.get(column1), StandardOpenOption.READ)),
+    ColumnFileWriter writer1 = new ColumnFileWriter(new DataInputStream(Files.newInputStream(Paths.get(column1), StandardOpenOption.READ)),
         new ColumnShardId(new ShardId(1, "dummy", "dummy"), new ColumnName("1", columnType)));
-    ColumnWriter writer2 = new ColumnWriter(new DataInputStream(Files.newInputStream(Paths.get(column2), StandardOpenOption.READ)),
+    ColumnFileWriter writer2 = new ColumnFileWriter(new DataInputStream(Files.newInputStream(Paths.get(column2), StandardOpenOption.READ)),
         new ColumnShardId(new ShardId(1, "dummy", "dummy"), new ColumnName("2", columnType)));
 
     List<EntityRecordSummary> summaries1 = writer1.getEntityRecordSummaries();

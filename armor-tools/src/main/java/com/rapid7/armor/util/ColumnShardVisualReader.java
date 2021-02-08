@@ -9,7 +9,7 @@ import org.roaringbitmap.RoaringBitmap;
 
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.schema.ColumnName;
-import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.ColumnFileWriter;
 
 /**
  * Prints out the column shard contents into a visually more intuitive format. The format does not
@@ -28,7 +28,7 @@ public class ColumnShardVisualReader {
     this.target = target.resolve(columnName.getName() + "-column-data");
   }
 
-  public void process(ColumnWriter columnWriter) throws IOException {
+  public void process(ColumnFileWriter columnWriter) throws IOException {
     List<EntityRecord> allRecords = columnWriter.allEntityRecords();
     final FileOutputStream faos; 
     if (target != null) {

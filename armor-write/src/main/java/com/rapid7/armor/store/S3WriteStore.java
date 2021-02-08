@@ -8,7 +8,7 @@ import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.shard.ShardStrategy;
-import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.ColumnFileWriter;
 import com.rapid7.armor.write.WriteRequest;
 import com.amazonaws.ResetException;
 import com.amazonaws.SdkClientException;
@@ -76,15 +76,15 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public ColumnWriter loadColumnWriter(ColumnShardId columnShardId) {
+  public ColumnFileWriter loadColumnWriter(ColumnShardId columnShardId) {
     String shardIdPath = resolveCurrentPath(columnShardId.getOrg(), columnShardId.getTable(), columnShardId.getShardNum()) + "/" + columnShardId.getColumnName().fullName();
     try {
       if (!s3Client.doesObjectExist(bucket, shardIdPath)) {
-        return new ColumnWriter(columnShardId);
+        return new ColumnFileWriter(columnShardId);
       } else {
         try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputSTream = s3Object.getObjectContent()) {
           try {
-            return new ColumnWriter(new DataInputStream(s3Object.getObjectContent()), columnShardId);
+            return new ColumnFileWriter(new DataInputStream(s3Object.getObjectContent()), columnShardId);
           } finally {
             com.amazonaws.util.IOUtils.drainInputStream(s3ObjectInputSTream);
           }
@@ -144,10 +144,10 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public List<ColumnWriter> loadColumnWriters(String org, String table, int shardNum) {
+  public List<ColumnFileWriter> loadColumnWriters(String org, String table, int shardNum) {
     ShardId shardId = buildShardId(org, table, shardNum);
     List<ColumnName> columNames = getColumNames(buildShardId(org, table, shardNum));
-    List<ColumnWriter> writers = new ArrayList<>();
+    List<ColumnFileWriter> writers = new ArrayList<>();
     TableMetadata tableMetadata = this.loadTableMetadata(org, table);
     for (ColumnName columnName : columNames) {
       if (tableMetadata.getEntityColumnId().equals(columnName.getName()))
@@ -155,11 +155,11 @@ public class S3WriteStore implements WriteStore {
       String shardIdPath = resolveCurrentPath(org, table, shardId.getShardNum()) + "/" + columnName.fullName();
       try {
         if (!doesObjectExist(bucket, shardIdPath)) {
-          writers.add(new ColumnWriter(new ColumnShardId(shardId, columnName)));
+          writers.add(new ColumnFileWriter(new ColumnShardId(shardId, columnName)));
         } else {
           try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
             try {
-              ColumnWriter writer = new ColumnWriter(new DataInputStream(s3InputStream), new ColumnShardId(shardId, columnName));
+              ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(s3InputStream), new ColumnShardId(shardId, columnName));
               writers.add(writer);
             } catch (Exception e) {
               LOGGER.error("Detected an issue loading shard at {}, this investigate", shardIdPath, e);

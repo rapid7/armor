@@ -42,8 +42,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import static com.rapid7.armor.Constants.MAGIC_HEADER;
 
-public class ColumnWriter implements AutoCloseable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ColumnWriter.class);
+public class ColumnFileWriter implements AutoCloseable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ColumnFileWriter.class);
   private static final ObjectMapper om = new ObjectMapper();
   private EntityRecordWriter entityRecordWriter;
   private RowGroupWriter rowGroupWriter;
@@ -52,7 +52,7 @@ public class ColumnWriter implements AutoCloseable {
   private DictionaryWriter entityDictionary;
   private final ColumnShardId columnShardId;
 
-  public ColumnWriter(ColumnShardId columnShardId) throws IOException {
+  public ColumnFileWriter(ColumnShardId columnShardId) throws IOException {
     metadata = new ColumnMetadata();
     DataType dataType = columnShardId.getColumnName().dataType();
     this.columnShardId = columnShardId;
@@ -68,7 +68,7 @@ public class ColumnWriter implements AutoCloseable {
     entityRecordWriter = new EntityRecordWriter(Files.createTempFile("entityindexstore_" + name + "-", ".armor"), columnShardId);
   }
 
-  public ColumnWriter(DataInputStream dataInputStream, ColumnShardId columnShardId) {
+  public ColumnFileWriter(DataInputStream dataInputStream, ColumnShardId columnShardId) {
     try {
       DataType dt = columnShardId.getColumnName().dataType();
       int avail = dataInputStream.available();
@@ -236,7 +236,7 @@ public class ColumnWriter implements AutoCloseable {
     List<Path> tempPaths = new ArrayList<>();
     boolean success = false;
     try {
-      cfr.read(inputStream, (section, is, compressed, uncompressed) -> {
+      cfr.read(inputStream, (section, metadata, is, compressed, uncompressed) -> {
         try {
           if (section == ArmorSection.ENTITY_DICTIONARY) {
             return loadEntityDictionary(is, compressed, uncompressed);

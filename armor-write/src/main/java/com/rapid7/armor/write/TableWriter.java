@@ -14,8 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class TableWrite implements Closeable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(TableWrite.class);
+public class TableWriter implements Closeable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(TableWriter.class);
 
   private final String tableName;
   private final String org;
@@ -25,7 +25,7 @@ public class TableWrite implements Closeable {
   // Must be have some synchronization to prevent lost shards.
   private final Map<ShardId, ShardWriter> shards = new ConcurrentHashMap<>();
 
-  public TableWrite(String org, String table, String entityColumnId, DataType dataType, WriteStore store) {
+  public TableWriter(String org, String table, String entityColumnId, DataType dataType, WriteStore store) {
     this.store = store;
     this.org = org;
     this.tableName = table;

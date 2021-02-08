@@ -6,7 +6,7 @@ import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.ColumnFileWriter;
 import com.rapid7.armor.write.WriteRequest;
 import java.io.InputStream;
 import java.util.List;
@@ -14,9 +14,9 @@ import java.util.Map;
 
 public interface WriteStore {
   // Loading from store
-  List<ColumnWriter> loadColumnWriters(String org, String table, int shardNum);
+  List<ColumnFileWriter> loadColumnWriters(String org, String table, int shardNum);
 
-  ColumnWriter loadColumnWriter(ColumnShardId columnShard);
+  ColumnFileWriter loadColumnWriter(ColumnShardId columnShard);
 
   ShardMetadata loadShardMetadata(String org, String table, int shardNum);
 

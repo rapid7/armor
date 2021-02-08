@@ -33,16 +33,16 @@ import org.slf4j.LoggerFactory;
 public class ShardWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShardWriter.class);
 
-  private Map<ColumnShardId, ColumnWriter> writers = new HashMap<>();
+  private Map<ColumnShardId, ColumnFileWriter> writers = new HashMap<>();
   private final WriteStore store;
   private final ShardId shardId;
-  private final TableWrite tableWriter;
+  private final TableWriter tableWriter;
   private final BiPredicate<ShardId, String> captureWrite;
   private final Supplier<Integer> defragTrigger;
   private boolean compress = true;
 
   public ShardWriter(
-      TableWrite tableWriter,
+      TableWriter tableWriter,
       ShardId shardId,
       WriteStore store,
       boolean compress,
@@ -59,12 +59,12 @@ public class ShardWriter {
       this.defragTrigger = defragTriggerSupplier;
     this.captureWrite = captureWrite;
     // Load all columns
-    List<ColumnWriter> columnWriters = store.loadColumnWriters(tableWriter.getOrg(), tableWriter.getTableName(), shardId.getShardNum());
-    writers = columnWriters.stream().collect(Collectors.toMap(ColumnWriter::getColumnShardId, w -> w));
+    List<ColumnFileWriter> columnWriters = store.loadColumnWriters(tableWriter.getOrg(), tableWriter.getTableName(), shardId.getShardNum());
+    writers = columnWriters.stream().collect(Collectors.toMap(ColumnFileWriter::getColumnShardId, w -> w));
   }
 
   public void close() {
-    for (ColumnWriter writer : writers.values()) {
+    for (ColumnFileWriter writer : writers.values()) {
       try {
         writer.close();
       } catch (Exception e) {
@@ -77,8 +77,8 @@ public class ShardWriter {
     return shardId;
   }
 
-  private ColumnWriter getWriterByColumnName(String columName) {
-    for (ColumnWriter writer : writers.values()) {
+  private ColumnFileWriter getWriterByColumnName(String columName) {
+    for (ColumnFileWriter writer : writers.values()) {
       if (writer.getColumnName().getName().equals(columName))
         return writer;
     }
@@ -86,14 +86,14 @@ public class ShardWriter {
   }
 
   public Map<Integer, EntityRecord> getEntities(String columnName) {
-    ColumnWriter csw = getWriterByColumnName(columnName);
+    ColumnFileWriter csw = getWriterByColumnName(columnName);
     if (csw != null)
       return csw.getEntites();
     return null;
   }
 
   public ColumnMetadata getMetadata(String columnName) {
-    ColumnWriter csw = getWriterByColumnName(columnName);
+    ColumnFileWriter csw = getWriterByColumnName(columnName);
     if (csw != null)
       return csw.getMetadata();
     return null;
@@ -103,7 +103,7 @@ public class ShardWriter {
     boolean committed = false;
     try {
       ColumnMetadata entityColumnMetadata = consistencyCheck(transaction);
-      for (Map.Entry<ColumnShardId, ColumnWriter> entry : writers.entrySet()) {
+      for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : writers.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
         try (InputStream inputStream = streamProduct.getInputStream()) {
           store.saveColumn(transaction, entry.getKey(), streamProduct.getByteSize(), inputStream);
@@ -111,7 +111,7 @@ public class ShardWriter {
       }
 
       // Do this after the save, to ensure metadata is updated.
-      List<ColumnMetadata> columnMetadata = writers.values().stream().map(ColumnWriter::getMetadata).collect(Collectors.toList());
+      List<ColumnMetadata> columnMetadata = writers.values().stream().map(ColumnFileWriter::getMetadata).collect(Collectors.toList());
       columnMetadata.add(entityColumnMetadata);
       ShardMetadata smd = new ShardMetadata();
       smd.setColumnMetadata(columnMetadata);
@@ -129,7 +129,7 @@ public class ShardWriter {
     // Remove from list
     if (captureWrite != null && captureWrite.test(shardId, ShardWriter.class.getSimpleName()))
       store.captureWrites(transaction, shardId, null, null, entity);
-    for (ColumnWriter writer : writers.values())
+    for (ColumnFileWriter writer : writers.values())
       writer.delete(transaction, entity);
 
   }
@@ -138,8 +138,8 @@ public class ShardWriter {
     if (captureWrite != null && captureWrite.test(shardId, ShardWriter.class.getSimpleName()))
       store.captureWrites(transaction, shardId, null, writeRequests, null);
 
-    Optional<ColumnWriter> opt = writers.values().stream().filter(w -> w.getColumnName().equals(columnName)).findFirst();
-    ColumnWriter writer;
+    Optional<ColumnFileWriter> opt = writers.values().stream().filter(w -> w.getColumnName().equals(columnName)).findFirst();
+    ColumnFileWriter writer;
     ColumnShardId columnShardId = null;
     if (!opt.isPresent()) {
       // The column name is not present for this shard, so lets create a new column shard by create a writer.
@@ -159,8 +159,8 @@ public class ShardWriter {
    */
   private ColumnMetadata consistencyCheck(String transaction) throws IOException {
     // First for all columns do check a do a defrag before continuing.
-    for (Map.Entry<ColumnShardId, ColumnWriter> entry : writers.entrySet()) {
-      ColumnWriter cw = writers.get(entry.getKey());
+    for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : writers.entrySet()) {
+      ColumnFileWriter cw = writers.get(entry.getKey());
       ColumnMetadata md = cw.getMetadata();
       if (md.getFragmentationLevel() > defragTrigger.get()) {
         Instant mark = Instant.now();
@@ -176,8 +176,8 @@ public class ShardWriter {
     ColumnShardId baselineColumn = null;
     int maxEntities = 0;
     Map<ColumnShardId, List<EntityRecordSummary>> otherEntitiesList = new HashMap<>();
-    for (Map.Entry<ColumnShardId, ColumnWriter> entry : writers.entrySet()) {
-      ColumnWriter cw = entry.getValue();
+    for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : writers.entrySet()) {
+      ColumnFileWriter cw = entry.getValue();
       List<EntityRecordSummary> currentSummaries = cw.getEntityRecordSummaries();
       if (currentSummaries.size() > maxEntities) {
         baselineSummaries = currentSummaries;
@@ -224,13 +224,13 @@ public class ShardWriter {
     // Remaining entries need to be resynced, meaning additional rows need to be added.
     for (ColumnShardId column : otherEntitiesList.keySet()) {
       LOGGER.info("The column {} needs to be resync according to the baseline, this may be expected if its a new column", column);
-      ColumnWriter cw = writers.get(column);
+      ColumnFileWriter cw = writers.get(column);
       cw.defrag(baselineSummaries == null ? new ArrayList<>() : baselineSummaries);
     }
 
     // To be extra careful, do another check with these left over columns
     for (ColumnShardId column : otherEntitiesList.keySet()) {
-      ColumnWriter cw = writers.get(column);
+      ColumnFileWriter cw = writers.get(column);
       List<EntityRecordSummary> testSummaries = cw.getEntityRecordSummaries();
       if (baselineSummaries == null) {
         if (testSummaries.size() > 0)
@@ -244,7 +244,7 @@ public class ShardWriter {
 
     ColumnName cn = new ColumnName(tableWriter.getEntityColumnId(), tableWriter.getDataType().getCode());
     String randomId = UUID.randomUUID().toString();
-    try (ColumnWriter cw = new ColumnWriter(new ColumnShardId(shardId, cn))) {
+    try (ColumnFileWriter cw = new ColumnFileWriter(new ColumnShardId(shardId, cn))) {
       List<WriteRequest> putRequests = new ArrayList<>();
       if (baselineSummaries != null) {
         for (EntityRecordSummary summary : baselineSummaries) {
@@ -278,7 +278,7 @@ public class ShardWriter {
     List<EntityRecordSummary> baselineSummaries,
     List<EntityRecordSummary> testSummaries) throws IOException {
     
-    ColumnWriter baselineCw = null;
+    ColumnFileWriter baselineCw = null;
     if (baselineColumn != null)
       baselineCw = writers.get(baselineColumn);
     Set<Object> baselineSummariesIds;
@@ -328,15 +328,15 @@ public class ShardWriter {
         store.saveError(transaction, baselineCw.getColumnShardId(), baselineStream.getByteSize(), is, "Entity mismatch baseline column");
       }
     }
-    ColumnWriter testWriter = writers.get(testColumn);
+    ColumnFileWriter testWriter = writers.get(testColumn);
     StreamProduct testColumnStreamProduct = testWriter.buildInputStream(compress);
     try (InputStream is = testColumnStreamProduct.getInputStream()) {
       store.saveError(transaction, testWriter.getColumnShardId(), testColumnStreamProduct.getByteSize(), is, "Entity mismatch test column");
     }
 
     // Save other columns for analysis
-    for (Map.Entry<ColumnShardId, ColumnWriter> e1 : writers.entrySet()) {
-      ColumnWriter cw = e1.getValue();
+    for (Map.Entry<ColumnShardId, ColumnFileWriter> e1 : writers.entrySet()) {
+      ColumnFileWriter cw = e1.getValue();
       if (cw.getColumnName().equals(baselineColumn == null ? "none" : baselineColumn.getColumnName()) || cw.getColumnName().equals(testColumn.getColumnName())) {
         continue;
       }

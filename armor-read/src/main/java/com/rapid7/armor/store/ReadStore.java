@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public interface ReadStore {
-  List<String> getOrgs();
+  List<String> getTenants();
 
   ShardId findShardId(String tenant, String table, int shardNum);
 

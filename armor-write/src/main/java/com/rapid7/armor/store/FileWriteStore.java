@@ -8,7 +8,7 @@ import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.shard.ShardStrategy;
-import com.rapid7.armor.write.ColumnWriter;
+import com.rapid7.armor.write.ColumnFileWriter;
 import com.rapid7.armor.write.WriteRequest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -107,11 +107,11 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public ColumnWriter loadColumnWriter(ColumnShardId columnShardId) {
+  public ColumnFileWriter loadColumnWriter(ColumnShardId columnShardId) {
     String currentPath = resolveCurrentPath(columnShardId.getOrg(), columnShardId.getTable(), columnShardId.getShardNum());
     if (currentPath == null) {
       try {
-        return new ColumnWriter(columnShardId);
+        return new ColumnFileWriter(columnShardId);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -120,9 +120,9 @@ public class FileWriteStore implements WriteStore {
     try {
       if (!Files.exists(shardIdPath)) {
         Files.createDirectories(shardIdPath.getParent());
-        return new ColumnWriter(columnShardId);
+        return new ColumnFileWriter(columnShardId);
       } else {
-        return new ColumnWriter(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)), columnShardId);
+        return new ColumnFileWriter(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)), columnShardId);
       }
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -157,11 +157,11 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public List<ColumnWriter> loadColumnWriters(String org, String table, int shardNum) {
+  public List<ColumnFileWriter> loadColumnWriters(String org, String table, int shardNum) {
     String currentPath = resolveCurrentPath(org, table, shardNum);
     ShardId shardId = buildShardId(org, table, shardNum);
     List<ColumnName> columNames = getColumNames(buildShardId(org, table, shardNum));
-    List<ColumnWriter> writers = new ArrayList<>();
+    List<ColumnFileWriter> writers = new ArrayList<>();
     TableMetadata tableMetadata = this.loadTableMetadata(org, table);
     for (ColumnName columnName : columNames) {
       if (tableMetadata.getEntityColumnId().equals(columnName.getName()))
@@ -170,9 +170,9 @@ public class FileWriteStore implements WriteStore {
       try {
         if (!Files.exists(shardIdPath)) {
           Files.createDirectories(shardIdPath.getParent());
-          writers.add(new ColumnWriter(new ColumnShardId(shardId, columnName)));
+          writers.add(new ColumnFileWriter(new ColumnShardId(shardId, columnName)));
         } else {
-          ColumnWriter writer = new ColumnWriter(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)), new ColumnShardId(shardId, columnName));
+          ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)), new ColumnShardId(shardId, columnName));
           writers.add(writer);
         }
       } catch (IOException ioe) {
