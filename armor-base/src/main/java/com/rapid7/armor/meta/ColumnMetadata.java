@@ -98,6 +98,11 @@ public class ColumnMetadata {
   public void setColumnId(String columnId) {
     this.columnId = columnId;
   }
+  
+  // TODO: Remove this when its all done, for now backwards compliant
+  public void setColumnName(String columnId) {
+    this.columnId = columnId;
+  }
 
   public String getCompressionAlgorithm() {
     return compressionAlgo;
