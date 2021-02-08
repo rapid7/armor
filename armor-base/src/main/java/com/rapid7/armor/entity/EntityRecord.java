@@ -1,6 +1,8 @@
 package com.rapid7.armor.entity;
 
 import com.rapid7.armor.Constants;
+import com.rapid7.armor.dictionary.Dictionary;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;

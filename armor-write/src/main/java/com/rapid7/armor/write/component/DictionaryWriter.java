@@ -1,7 +1,8 @@
 package com.rapid7.armor.write.component;
 
-import com.rapid7.armor.entity.Dictionary;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rapid7.armor.dictionary.Dictionary;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;

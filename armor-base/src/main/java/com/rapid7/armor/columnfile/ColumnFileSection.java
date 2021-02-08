@@ -1,6 +1,6 @@
-package com.rapid7.armor;
+package com.rapid7.armor.columnfile;
 
-public enum ArmorSection {
+public enum ColumnFileSection {
   HEADER,
   METADATA,
   ENTITY_DICTIONARY,

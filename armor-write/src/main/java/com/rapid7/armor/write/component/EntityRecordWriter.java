@@ -5,6 +5,10 @@ import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.write.EntityOffsetException;
+
+import static com.rapid7.armor.Constants.BEGIN_DELETE_OFFSET;
+import static com.rapid7.armor.Constants.RECORD_SIZE_BYTES;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -16,8 +20,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import static com.rapid7.armor.Constants.BEGIN_DELETE_OFFSET;
-import static com.rapid7.armor.Constants.RECORD_SIZE_BYTES;
 
 /**
  * Writer for entity indexes. Write calls are written into memory (heap or direct) first and can be flushed to target upon

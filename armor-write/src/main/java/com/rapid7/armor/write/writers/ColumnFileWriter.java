@@ -1,7 +1,7 @@
 package com.rapid7.armor.write.writers;
 
-import com.rapid7.armor.ArmorSection;
 import com.rapid7.armor.Constants;
+import com.rapid7.armor.columnfile.ColumnFileSection;
 import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.EntityRecordSummary;
@@ -21,6 +21,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.luben.zstd.RecyclingBufferPool;
 import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdOutputStream;
+
+import static com.rapid7.armor.Constants.MAGIC_HEADER;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -42,7 +45,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static com.rapid7.armor.Constants.MAGIC_HEADER;
 
 public class ColumnFileWriter implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ColumnFileWriter.class);
@@ -240,13 +242,13 @@ public class ColumnFileWriter implements AutoCloseable {
     try {
       cfr.read(inputStream, (section, metadata, is, compressed, uncompressed) -> {
         try {
-          if (section == ArmorSection.ENTITY_DICTIONARY) {
+          if (section == ColumnFileSection.ENTITY_DICTIONARY) {
             return loadEntityDictionary(is, compressed, uncompressed);
-          } else if (section == ArmorSection.VALUE_DICTIONARY) {
+          } else if (section == ColumnFileSection.VALUE_DICTIONARY) {
             return loadValueDictionary(is, compressed, uncompressed);
-          } else if (section == ArmorSection.ENTITY_INDEX) {
+          } else if (section == ColumnFileSection.ENTITY_INDEX) {
             return loadEntityIndex(is, compressed, uncompressed, tempPaths);
-          } else if (section == ArmorSection.ROWGROUP) {
+          } else if (section == ColumnFileSection.ROWGROUP) {
             return loadRowGroup(inputStream, compressed, uncompressed, tempPaths);
           } else
             return 0;

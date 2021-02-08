@@ -16,7 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.luben.zstd.ZstdInputStream;
-import com.rapid7.armor.ArmorSection;
+import com.rapid7.armor.columnfile.ColumnFileSection;
 import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.meta.ColumnMetadata;
@@ -211,13 +211,13 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     ColumnFileReader cfr = new ColumnFileReader();
     cfr.read(inputStream, (section, metadata, is, compressed, uncompressed) -> {
       try {
-        if (section == ArmorSection.ENTITY_DICTIONARY) {
+        if (section == ColumnFileSection.ENTITY_DICTIONARY) {
           return readEntityDictionary(is, compressed, uncompressed, metadata);
-        } else if (section == ArmorSection.VALUE_DICTIONARY) {
+        } else if (section == ColumnFileSection.VALUE_DICTIONARY) {
           return readValueDictionary(is, compressed, uncompressed, metadata);
-        } else if (section == ArmorSection.ENTITY_INDEX) {
+        } else if (section == ColumnFileSection.ENTITY_INDEX) {
           return readEntityIndex(is, compressed, uncompressed);
-        } else if (section == ArmorSection.ROWGROUP) {
+        } else if (section == ColumnFileSection.ROWGROUP) {
           return readRowGroup(is, compressed, uncompressed, metadata);
         } else
           return 0;
