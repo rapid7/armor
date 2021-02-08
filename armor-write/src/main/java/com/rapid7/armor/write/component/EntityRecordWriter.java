@@ -197,9 +197,11 @@ public class EntityRecordWriter extends FileComponent {
   }
 
   /**
-   * Defrag here is taking a given list of records that should be recorded. Callers should filter out
+   * Defrags here is taking a given list of records that should be recorded. Callers should filter out
    * records that do not need to be recorded (delete). The approach here is to build a temp file and then replace
    * the underlying file as well as in-memory records with new ones.
+   * 
+   * @param entityRecords A list of entity records to defrag.
    */
   public void defrag(List<EntityRecord> entityRecords) throws IOException {
     Map<Integer, EntityRecord> tempEntities = new HashMap<>();

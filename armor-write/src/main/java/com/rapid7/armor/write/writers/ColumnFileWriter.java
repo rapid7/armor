@@ -271,6 +271,8 @@ public class ColumnFileWriter implements AutoCloseable {
 
   /**
    * Returns a list of sorted entity ids, this can be used to verify integrity of columns before sending over.
+   * 
+   * @return A list of entity record summaries.
    */
   public List<EntityRecordSummary> getEntityRecordSummaries() {
     int byteLength = metadata.getDataType().getByteLength();

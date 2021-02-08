@@ -49,8 +49,8 @@ public class RowGroupWriter extends FileComponent {
   /**
    * Given a record, go and extract the values for the given record.
    *
-   * @param record
-   * @param consumer
+   * @param er The entity record to extract values from.
+   * @param consumer The consumer to listen for objects from.
    */
   public void customExtractValus(EntityRecord er, Consumer<List<Object>> consumer) throws IOException {
     long previousPosition = position();
@@ -95,6 +95,9 @@ public class RowGroupWriter extends FileComponent {
   /**
    * Given a list of records traverse through the rowgroup and pass back an array with the ER first, the list of values second
    * and finally the null bit map last.
+   * 
+   * @param records A list of entity records.
+   * @param consumer A consumer to listen for values for each entity.
    */
   public void customTraverseThoughValues(List<EntityRecord> records, Consumer<List<Object>> consumer) throws IOException {
     long previousPosition = position();
@@ -147,7 +150,10 @@ public class RowGroupWriter extends FileComponent {
   }
 
   /**
-   * Do a pass through the row group to update statistics and bitmap
+   * Does a pass through the row group to update statistics and bitmap.
+   * 
+   * @param metadata The metadata of the columnfile.
+   * @param records A list of records to traverse through.
    */
   public void runThoughValues(ColumnMetadata metadata, List<EntityRecord> records) throws IOException {
     long previousPosition = position();
@@ -350,6 +356,8 @@ public class RowGroupWriter extends FileComponent {
    * Compacts the row group given a set of defrag records, this will rebuild the underlying
    * group shifting certain portions of data from one place to another. Compaction is done as a one
    * scan pass where it copies contents from one file to another.
+   * 
+   * @param entityRecords A list of records to defrag against.
    */
   public List<EntityRecord> defrag(List<EntityRecord> entityRecords) throws IOException {
     int totalRequiredBytes = entityRecords.stream().mapToInt(EntityRecord::totalLength).sum();

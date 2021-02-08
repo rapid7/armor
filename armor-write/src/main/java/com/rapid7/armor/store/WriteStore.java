@@ -56,6 +56,12 @@ public interface WriteStore {
   /**
    * Captures write activity either at the entity or write request level. This is useful for debugging issues and replaying
    * the writes activity afterwards for debugging or analysis.
+   * 
+   * @param transaction The transaction id.
+   * @param shardId The shard id.
+   * @param entities A list of entities to capture the write against.
+   * @param writeRequests The list of write requests.
+   * @param deleteRequest The delete request if used can be {@code null}.
    */
   void captureWrites(String transaction, ShardId shardId, List<Entity> entities, List<WriteRequest> writeRequests, Object deleteRequest);
 
