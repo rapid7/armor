@@ -14,8 +14,7 @@ public class TableMetadata {
   private String entityColumnIdType;
   private List<ShardMetadata> shardMetadata = new ArrayList<>();
 
-  public TableMetadata() {
-  }
+  public TableMetadata() {}
 
   public TableMetadata(String entityColumnId, String entityColumnIdType) {
     this.entityColumnId = entityColumnId;
@@ -38,7 +37,7 @@ public class TableMetadata {
     this.entityColumnId = entityColumnId;
   }
 
-  public DataType dataType() {
+  public DataType entityIdColumnType() {
     return DataType.getDataType(entityColumnIdType);
   }
 

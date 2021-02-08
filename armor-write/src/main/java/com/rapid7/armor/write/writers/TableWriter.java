@@ -1,7 +1,5 @@
 package com.rapid7.armor.write.writers;
 
-import com.rapid7.armor.meta.TableMetadata;
-import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
 
@@ -19,22 +17,14 @@ public class TableWriter implements Closeable {
 
   private final String tableName;
   private final String tenant;
-  private final String entityColumnId;
-  private final DataType entityColumnType;
   private final WriteStore store;
   // Must be have some synchronization to prevent lost shards.
   private final Map<ShardId, ShardWriter> shards = new ConcurrentHashMap<>();
 
-  public TableWriter(String tenant, String table, String entityColumnId, DataType dataType, WriteStore store) {
+  public TableWriter(String tenant, String table, WriteStore store) {
     this.store = store;
     this.tenant = tenant;
     this.tableName = table;
-    this.entityColumnId = entityColumnId;
-    this.entityColumnType = dataType;
-  }
-
-  public TableMetadata toTableMetadata() {
-    return new TableMetadata(entityColumnId, entityColumnType.getCode());
   }
 
   public Collection<ShardWriter> getShardWriters() {
@@ -47,14 +37,6 @@ public class TableWriter implements Closeable {
 
   public String getTenant() {
     return this.tenant;
-  }
-
-  public String getEntityColumnId() {
-    return entityColumnId;
-  }
-
-  public DataType getEntityColumnDataType() {
-    return entityColumnType;
   }
 
   @Override

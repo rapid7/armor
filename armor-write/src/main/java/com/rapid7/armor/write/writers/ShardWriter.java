@@ -38,8 +38,6 @@ public class ShardWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShardWriter.class);
 
   private Map<ColumnShardId, ColumnFileWriter> writers = new HashMap<>();
-  private String entityIdColumn;
-  private DataType entityIdColumnDataType;
   private final WriteStore store;
   private final ShardId shardId;
   private final BiPredicate<ShardId, String> captureWrite;
@@ -47,16 +45,11 @@ public class ShardWriter {
   private boolean compress = true;
   
   public ShardWriter(
-      String entityIdColumn,
-      DataType entityColumnDataType,
       ShardId shardId,
       WriteStore store,
       boolean compress,
       Supplier<Integer> defragTriggerSupplier,
-      BiPredicate<ShardId, String> captureWrite
-  ) {
-    this.entityIdColumn = entityIdColumn;
-    this.entityIdColumnDataType = entityColumnDataType;
+      BiPredicate<ShardId, String> captureWrite) {
     this.shardId = shardId;
     this.store = store;
     this.compress = compress;
@@ -106,10 +99,10 @@ public class ShardWriter {
     return null;
   }
 
-  public ShardMetadata save(String transaction) throws IOException {
+  public ShardMetadata commit(String transaction, String entityIdColumn, DataType entityIdType) throws IOException {
     boolean committed = false;
     try {
-      ColumnMetadata entityColumnMetadata = consistencyCheck(transaction);
+      ColumnMetadata entityColumnMetadata = consistencyCheck(transaction, entityIdColumn, entityIdType);
       for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : writers.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
         try (InputStream inputStream = streamProduct.getInputStream()) {
@@ -164,7 +157,7 @@ public class ShardWriter {
    * Verifies the save request is "consistent" across columns with the shard. Part of the the consistency check
    * is to build a "entity id" column derived from the consistency check.
    */
-  private ColumnMetadata consistencyCheck(String transaction) throws IOException {
+  private ColumnMetadata consistencyCheck(String transaction, String entityIdColumn, DataType entityIdType) throws IOException {
     // First for all columns do check a do a defrag before continuing.
     for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : writers.entrySet()) {
       ColumnFileWriter cw = writers.get(entry.getKey());
@@ -174,7 +167,6 @@ public class ShardWriter {
         cw.defrag();
         LOGGER.info("The column fragment level for {} is at {} which is over {}, took {}",
             cw.getColumnShardId().alternateString(), md.getFragmentationLevel(), defragTrigger.get(), Duration.between(mark, Instant.now()));
-
       }
     }
 
@@ -249,7 +241,7 @@ public class ShardWriter {
       }
     }
 
-    ColumnName cn = new ColumnName(entityIdColumn, entityIdColumnDataType.getCode());
+    ColumnName cn = new ColumnName(entityIdColumn, entityIdType.getCode());
     String randomId = UUID.randomUUID().toString();
     try (ColumnFileWriter cw = new ColumnFileWriter(new ColumnShardId(shardId, cn))) {
       List<WriteRequest> putRequests = new ArrayList<>();
