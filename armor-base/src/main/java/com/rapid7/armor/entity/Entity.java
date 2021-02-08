@@ -120,6 +120,8 @@ public class Entity {
       return;
     int numColumns = this.columnNames.size();
     for (Row row : rows) {
+      if (row == null)
+        throw new RuntimeException("You cannot use a null value for row, you must create a row and set null values");
       if (row.numColumns() != numColumns) {
         throw new RuntimeException("The row has " + row + " has " + row.numColumns() + " columns when definition is " + columnNames);
       }

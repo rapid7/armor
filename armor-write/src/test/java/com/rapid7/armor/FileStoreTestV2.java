@@ -72,6 +72,8 @@ public class FileStoreTestV2 {
   private static Row oregonVuln = new Row(6, 106l, "oregon");
   private static Row utahVuln = new Row(7, 107l, "utah");
 
+  private static Row NULL_ROW = new Row(null, null, null);
+
   private static Row[] STATE_ROWS = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln, nevadaVuln, oregonVuln, utahVuln};
 
   private static final String TENANT = "united_states";
@@ -243,6 +245,7 @@ public class FileStoreTestV2 {
   public void entitesRowContentsChange() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
     Row[] rows2 = new Row[] {texasVuln, caliVuln};
+    Row[] rowsNull3 = new Row[] {NULL_ROW, NULL_ROW, NULL_ROW};
     Row[] rows4 = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln};
     Row[] rows6 = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln, nevadaVuln, oregonVuln};
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
@@ -274,6 +277,34 @@ public class FileStoreTestV2 {
       verifyTableReaderPOV(numEntities*6, testDirectory, 10);
       random = RANDOM.nextInt(999);
       verifyEntityReaderPOV(entities6.get(random), testDirectory);
+      
+      // Ok now every entity will see an decrease of rows from 4 to 6
+      List<Entity> entities2 = new ArrayList<>();
+      for (int i = 0; i < 1000; i++) {
+        Entity random2 = generateEntity(Integer.toString(i), 1, rows2);
+        entities2.add(random2);
+      }
+      
+      xact = writer.startTransaction();
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities2));
+      writer.commit(xact, TENANT, TABLE);
+      verifyTableReaderPOV(numEntities*2, testDirectory, 10);
+      random = RANDOM.nextInt(999);
+      verifyEntityReaderPOV(entities2.get(random), testDirectory);
+      
+      // Ok now every entity will see a decrease to all null values
+      List<Entity> entitiesNull3 = new ArrayList<>();
+      for (int i = 0; i < 1000; i++) {
+        Entity randomNull3 = generateEntity(Integer.toString(i), 1, rowsNull3);
+        entitiesNull3.add(randomNull3);
+      }
+      
+      xact = writer.startTransaction();
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entitiesNull3));
+      writer.commit(xact, TENANT, TABLE);
+      verifyTableReaderPOV(numEntities*3, testDirectory, 10);
+      random = RANDOM.nextInt(999);
+      verifyEntityReaderPOV(entitiesNull3.get(random), testDirectory);
       
     }
 
