@@ -13,7 +13,7 @@ public class TableId {
 
   @Override
   public int hashCode() {
-    return Objects.hash(tableName, org);
+    return Objects.hash(tableName, tenant);
   }
 
   @Override
