@@ -15,10 +15,11 @@ import com.rapid7.armor.write.writers.ColumnFileWriter;
  * Prints out the column shard contents into a visually more intuitive format. The format does not
  * filter any values it is supposed to show the information as to how its stored on disk.
  * 
- * 0:[id=1,del=1,instanceid=eeee,version=1][val1, val2, val3][] => [val1, val2, val3]
+ * <pre>
+ * 0:[id=1,del=1,instanceid=eeee,version=1][val1, val2, val3][] -- [val1, val2, val3]
  * 10:199 DEADSPACE
- * 200:[id=2,del=0,instanceid=dddd,version=1][val1, val2, val3][0] => [null, val2, val3]
- * 
+ * 200:[id=2,del=0,instanceid=dddd,version=1][val1, val2, val3][0] -- [null, val2, val3]
+ * </pre>
  * The above first row has no null values. The 2nd row the first entry has a null value.
  */
 public class ColumnShardVisualReader {
