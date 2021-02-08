@@ -20,8 +20,8 @@ public class FastArmorReader extends BaseArmorReader {
     super(store);
   }
 
-  public FastArmorBlockReader getColumn(String org, String table, String columnName, int shardNum) throws IOException {
-    ShardId shardId = store.findShardId(org, table, shardNum);
+  public FastArmorBlockReader getColumn(String tenant, String table, String columnName, int shardNum) throws IOException {
+    ShardId shardId = store.findShardId(tenant, table, shardNum);
     if (shardId == null)
       return null;
     FastArmorShardColumn armorShard = store.getFastArmorShard(shardId, columnName);

@@ -2,13 +2,13 @@ package com.rapid7.armor.write;
 
 import java.util.Objects;
 
-public class TableWriteId {
+public class TableId {
   private final String tableName;
-  private final String org;
+  private final String tenant;
 
-  public TableWriteId(String org, String tableName) {
+  public TableId(String tenant, String tableName) {
     this.tableName = tableName;
-    this.org = org;
+    this.tenant = tenant;
   }
 
   @Override
@@ -20,16 +20,16 @@ public class TableWriteId {
   public boolean equals(Object other) {
     if (other == null)
       return false;
-    if (other instanceof TableWriteId) {
-      TableWriteId otherTableId = (TableWriteId) other;
-      return Objects.equals(tableName, otherTableId.tableName) && Objects.equals(org, otherTableId.org);
+    if (other instanceof TableId) {
+      TableId otherTableId = (TableId) other;
+      return Objects.equals(tableName, otherTableId.tableName) && Objects.equals(tenant, otherTableId.tenant);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return org + ":" + tableName;
+    return tenant + ":" + tableName;
   }
 
 }

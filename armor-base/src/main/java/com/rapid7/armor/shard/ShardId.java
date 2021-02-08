@@ -5,12 +5,12 @@ import java.util.Objects;
 public class ShardId {
 
   private final String table;
-  private final String org;
+  private final String tenant;
   private final int shardNum;
 
-  public ShardId(int shardNum, String org, String table) {
+  public ShardId(int shardNum, String tenant, String table) {
     this.shardNum = shardNum;
-    this.org = org;
+    this.tenant = tenant;
     this.table = table;
   }
 
@@ -18,8 +18,8 @@ public class ShardId {
     return table;
   }
 
-  public String getOrg() {
-    return org;
+  public String getTenant() {
+    return tenant;
   }
 
   public int getShardNum() {
@@ -30,7 +30,7 @@ public class ShardId {
   public String toString() {
     return "ShardId{" +
         "table='" + table + '\'' +
-        ", org='" + org + '\'' +
+        ", tenant='" + tenant + '\'' +
         ", shardNum=" + shardNum +
         '}';
   }
@@ -40,20 +40,20 @@ public class ShardId {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     ShardId shardId = (ShardId) o;
-    return getShardNum() == shardId.getShardNum() && Objects.equals(getTable(), shardId.getTable()) && Objects.equals(getOrg(), shardId.getOrg());
+    return getShardNum() == shardId.getShardNum() && Objects.equals(getTable(), shardId.getTable()) && Objects.equals(getTenant(), shardId.getTenant());
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getTable(), getOrg(), getShardNum());
+    return Objects.hash(getTable(), getTenant(), getShardNum());
   }
 
   public String simpleString() {
-    return org + "_" + table + "_" + shardNum;
+    return tenant + "_" + table + "_" + shardNum;
   }
 
   public String getShardId() {
-    return org + "/" + table + "/" + shardNum;
+    return tenant + "/" + table + "/" + shardNum;
   }
 
 }

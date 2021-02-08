@@ -1,4 +1,4 @@
-package com.rapid7.armor.write;
+package com.rapid7.armor.write.writers;
 
 import com.rapid7.armor.entity.Column;
 import com.rapid7.armor.entity.Entity;
@@ -11,6 +11,9 @@ import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
 import com.rapid7.armor.store.WriteTranscationError;
+import com.rapid7.armor.write.EntityOffsetException;
+import com.rapid7.armor.write.TableId;
+import com.rapid7.armor.write.WriteRequest;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -37,7 +40,7 @@ public class ArmorWriter implements Closeable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ArmorWriter.class);
   private final ExecutorService threadPool;
   private final WriteStore store;
-  private final Map<TableWriteId, TableWriter> tables = new ConcurrentHashMap<>();
+  private final Map<TableId, TableWriter> tables = new ConcurrentHashMap<>();
   private final Supplier<Integer> defragTrigger;
   private boolean selfPool = true;
   private final BiPredicate<ShardId, String> captureWrites;
@@ -88,16 +91,16 @@ public class ArmorWriter implements Closeable {
     return UUID.randomUUID().toString();
   }
 
-  public Map<Integer, EntityRecord> getColumnEntityRecords(String org, String table, String columnName, int shard) {
-    TableWriteId tableId = new TableWriteId(org, table);
+  public Map<Integer, EntityRecord> getColumnEntityRecords(String tenant, String table, String columnName, int shard) {
+    TableId tableId = new TableId(tenant, table);
     TableWriter tableDefinition = tables.get(tableId);
     if (tableDefinition == null) {
       // The table does exist, load it up then
-      TableMetadata tableMeta = store.loadTableMetadata(org, table);
+      TableMetadata tableMeta = store.loadTableMetadata(tenant, table);
       if (tableMeta != null) {
-        tableDefinition = new TableWriter(org, table, tableMeta.getEntityColumnId(), tableMeta.dataType(), store);
+        tableDefinition = new TableWriter(tenant, table, tableMeta.getEntityColumnId(), tableMeta.dataType(), store);
         tables.put(tableId, tableDefinition);
-        ShardId shardId = store.buildShardId(org, table, shard);
+        ShardId shardId = store.buildShardId(tenant, table, shard);
         ShardWriter sw = new ShardWriter(tableDefinition, shardId, store, compress, defragTrigger, captureWrites);
         tableDefinition.addShard(sw);
         return sw.getEntities(columnName);
@@ -107,7 +110,7 @@ public class ArmorWriter implements Closeable {
     } else {
       ShardWriter sw = tableDefinition.getShard(shard);
       if (sw == null) {
-        ShardId shardId = store.buildShardId(org, table, shard);
+        ShardId shardId = store.buildShardId(tenant, table, shard);
         sw = new ShardWriter(tableDefinition, shardId, store, compress, defragTrigger, captureWrites);
         tableDefinition.addShard(sw);
       }
@@ -115,17 +118,17 @@ public class ArmorWriter implements Closeable {
     }
   }
 
-  public ColumnMetadata getColumnMetadata(String org, String table, String columnName, int shard) {
-    TableWriteId tableId = new TableWriteId(org, table);
+  public ColumnMetadata getColumnMetadata(String tenant, String table, String columnName, int shard) {
+    TableId tableId = new TableId(tenant, table);
     TableWriter tableDefinition = tables.get(tableId);
     if (tableDefinition == null) {
-      TableMetadata tableMeta = store.loadTableMetadata(org, table);
+      TableMetadata tableMeta = store.loadTableMetadata(tenant, table);
       if (tableMeta != null) {
         // The table does exist, load it up then
-        tableDefinition = new TableWriter(org, table, tableMeta.getEntityColumnId(), tableMeta.dataType(), store);
+        tableDefinition = new TableWriter(tenant, table, tableMeta.getEntityColumnId(), tableMeta.dataType(), store);
         tables.put(tableId, tableDefinition);
 
-        ShardId shardId = store.buildShardId(org, table, shard);
+        ShardId shardId = store.buildShardId(tenant, table, shard);
         ShardWriter sw = new ShardWriter(tableDefinition, shardId, store, compress, defragTrigger, captureWrites);
         tableDefinition.addShard(sw);
         return sw.getMetadata(columnName);
@@ -134,7 +137,7 @@ public class ArmorWriter implements Closeable {
     } else {
       ShardWriter sw = tableDefinition.getShard(shard);
       if (sw == null) {
-        ShardId shardId = store.buildShardId(org, table, shard);
+        ShardId shardId = store.buildShardId(tenant, table, shard);
         sw = new ShardWriter(tableDefinition, shardId, store, compress, defragTrigger, captureWrites);
         tableDefinition.addShard(sw);
       }
@@ -154,13 +157,13 @@ public class ArmorWriter implements Closeable {
     }
   }
 
-  public void delete(String transaction, String org, String table, Object entityId) {
-    ShardId shardId = store.findShardId(org, table, entityId);
+  public void delete(String transaction, String tenant, String table, Object entityId) {
+    ShardId shardId = store.findShardId(tenant, table, entityId);
     if (shardId.getShardNum() == 8)
       System.out.println("");
     if (captureWrites != null && captureWrites.test(shardId, ArmorWriter.class.getSimpleName()))
       store.captureWrites(transaction, shardId, null, null, entityId);
-    TableWriteId tableId = new TableWriteId(org, table);
+    TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tables.get(tableId);
     if (tableWriter != null) {
       ShardWriter sw = tableWriter.getShard(shardId.getShardNum());
@@ -171,12 +174,12 @@ public class ArmorWriter implements Closeable {
     }
     // If it is null then table doesn't exist yet which means we can just return.
     // If it is not null then table does exist, in that case load it up and attempt a delete.
-    TableMetadata tableMeta = store.loadTableMetadata(org, table);
+    TableMetadata tableMeta = store.loadTableMetadata(tenant, table);
     if (tableMeta == null)
       return;
     if (tableWriter == null) {
       tableWriter = new TableWriter(
-        org,
+        tenant,
         table,
         tableMeta.getEntityColumnId(),
         DataType.getDataType(tableMeta.getEntityColumnIdType()),
@@ -193,24 +196,24 @@ public class ArmorWriter implements Closeable {
   }
 
   private void createTableMetadata(String transaction, TableWriter tableWrite) {
-    store.saveTableMetadata(transaction, tableWrite.getOrg(), tableWrite.getTableName(), tableWrite.toTableMetadata());
+    store.saveTableMetadata(transaction, tableWrite.getTenant(), tableWrite.getTableName(), tableWrite.toTableMetadata());
   }
 
-  public void write(String transaction, String org, String table, List<Entity> entities) {
+  public void write(String transaction, String tenant, String table, List<Entity> entities) {
     if (entities == null || entities.isEmpty())
       return;
-    if (captureWrites != null && captureWrites.test(new ShardId(-1, org, table), ArmorWriter.class.getSimpleName()))
-      store.captureWrites(transaction, new ShardId(-1, org, table), entities, null, null);
+    if (captureWrites != null && captureWrites.test(new ShardId(-1, tenant, table), ArmorWriter.class.getSimpleName()))
+      store.captureWrites(transaction, new ShardId(-1, tenant, table), entities, null, null);
 
 
     HashMap<ShardId, List<Entity>> shardToUpdates = new HashMap<>();
-    TableWriteId tableId = new TableWriteId(org, table);
+    TableId tableId = new TableId(tenant, table);
     final TableWriter tableWrite;
     if (!tables.containsKey(tableId)) {
-      TableMetadata tableMeta = store.loadTableMetadata(org, table);
+      TableMetadata tableMeta = store.loadTableMetadata(tenant, table);
       if (tableMeta != null) {
         // The table does exist, load it up then
-        tableWrite = new TableWriter(org, table, tableMeta.getEntityColumnId(), tableMeta.dataType(), store);
+        tableWrite = new TableWriter(tenant, table, tableMeta.getEntityColumnId(), tableMeta.dataType(), store);
         tables.put(tableId, tableWrite);
       } else {
         Entity entity = entities.get(0);
@@ -220,7 +223,7 @@ public class ArmorWriter implements Closeable {
           dataType = DataType.STRING;
         String entityColumn = entity.getEntityIdColumn();
         // No shard metadata exists, create the first shard metadata for this.
-        tableWrite = new TableWriter(org, table, entityColumn, dataType, store);
+        tableWrite = new TableWriter(tenant, table, entityColumn, dataType, store);
         tables.put(tableId, tableWrite);
         createTableMetadata(transaction, tableWrite);
       }
@@ -228,7 +231,7 @@ public class ArmorWriter implements Closeable {
       tableWrite = tables.get(tableId);
     }
     for (Entity entity : entities) {
-      ShardId shardId = store.findShardId(org, table, entity.getEntityId());
+      ShardId shardId = store.findShardId(tenant, table, entity.getEntityId());
       List<Entity> entityUpdates = shardToUpdates.computeIfAbsent(shardId, k -> new ArrayList<>());
       entityUpdates.add(entity);
     }
@@ -239,7 +242,7 @@ public class ArmorWriter implements Closeable {
           () -> {
             String originalThreadName = Thread.currentThread().getName();
             try {
-              MDC.put("org_id", org);
+              MDC.put("tenant_id", tenant);
               ShardId shardId = entry.getKey();
               ShardWriter shardWriter = tableWrite.getShard(shardId.getShardNum());
               Thread.currentThread().setName(originalThreadName + "(" + shardId.toString() + ")");
@@ -270,7 +273,7 @@ public class ArmorWriter implements Closeable {
               }
               return null;
             } finally {
-              MDC.remove("org_id");
+              MDC.remove("tenant_id");
               Thread.currentThread().setName(originalThreadName);
             }
         }
@@ -285,10 +288,10 @@ public class ArmorWriter implements Closeable {
     }
   }
 
-  public void commit(String transaction, String org, String table) {
+  public void commit(String transaction, String tenant, String table) {
     CompletionService<ShardMetadata> std = new ExecutorCompletionService<>(threadPool);
     int submitted = 0;
-    TableWriteId tableId = new TableWriteId(org, table);
+    TableId tableId = new TableId(tenant, table);
     TableWriter tableDefinition = tables.get(tableId);
     if (tableDefinition == null) {
       LOGGER.warn("There are no changes detected, going to skip save operation for {}", tableId);
@@ -301,7 +304,7 @@ public class ArmorWriter implements Closeable {
             String originalName = Thread.currentThread().getName();
             try {
               Thread.currentThread().setName("shardwriter-" + shardWriter.getShardId());
-              MDC.put("org_id", org);
+              MDC.put("tenant_id", tenant);
               return shardWriter.save(transaction);
             } catch (NoSuchFileException nse) {
               LOGGER.warn("The underlying channels file are missing, most likely closed by another fried due to an issue: {}", nse.getMessage());
@@ -314,11 +317,11 @@ public class ArmorWriter implements Closeable {
               throw e1;
             } catch (Exception e) {
               LOGGER.error("Detected an error on shard {} table {} in tenant {}", 
-                shardWriter.getShardId(), tableDefinition.getTableName(), tableDefinition.getOrg(), e);
+                shardWriter.getShardId(), tableDefinition.getTableName(), tableDefinition.getTenant(), e);
               throw e;
             } finally {
               Thread.currentThread().setName(originalName);
-              MDC.remove("org_id");
+              MDC.remove("tenant_id");
             }
         }
       );
@@ -334,7 +337,7 @@ public class ArmorWriter implements Closeable {
         // Throw specialized handlers up verses wrapped runtime exceptions
         if (!offsetExceptions.isEmpty()) {
           EntityOffsetException offsetException = offsetExceptions.get(0);
-          LOGGER.error("!!!Detected an error on table {} in org {}", tableDefinition.getTableName(), tableDefinition.getOrg(), e);
+          LOGGER.error("!!!Detected an error on table {} in tenant {}", tableDefinition.getTableName(), tableDefinition.getTenant(), e);
           LOGGER.error(offsetException.getMessage());
           throw offsetException;
         }
@@ -344,6 +347,6 @@ public class ArmorWriter implements Closeable {
         throw new RuntimeException(e);
       }
     }
-    store.saveTableMetadata(transaction, org, table, tmd);
+    store.saveTableMetadata(transaction, tenant, table, tmd);
   }
 }

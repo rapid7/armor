@@ -24,7 +24,7 @@ public class ColumnFileReader {
       return uncompressed;
   }
 
-  // Assetis in loading of a calling file by passing by streams to the caller, it is up to the caller to correctly
+  // Assists in loading of a calling file by passing by streams to the caller, it is up to the caller to correctly
   // consume the stream and store the contents how they see it to be fit.
   public void read(DataInputStream dataInputStream, ColumnFileListener listener) throws IOException {
     // Header first

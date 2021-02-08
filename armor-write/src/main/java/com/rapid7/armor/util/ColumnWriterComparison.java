@@ -5,8 +5,9 @@ import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.ColumnFileWriter;
 import com.rapid7.armor.write.component.DictionaryWriter;
+import com.rapid7.armor.write.writers.ColumnFileWriter;
+
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.file.Files;

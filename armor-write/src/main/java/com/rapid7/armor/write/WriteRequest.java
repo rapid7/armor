@@ -9,8 +9,7 @@ public class WriteRequest {
   private String instanceid;
   private Column column;
 
-  public WriteRequest() {
-  }
+  public WriteRequest() {}
 
   public WriteRequest(Object entityId, long version, String instanceid, Column column) {
     this.entityId = entityId;

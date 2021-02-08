@@ -22,8 +22,8 @@ public class ColumnShardId {
     return shardId;
   }
 
-  public String getOrg() {
-    return shardId.getOrg();
+  public String getTenant() {
+    return shardId.getTenant();
   }
 
   public String getTable() {

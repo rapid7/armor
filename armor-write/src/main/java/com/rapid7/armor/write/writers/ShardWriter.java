@@ -1,4 +1,4 @@
-package com.rapid7.armor.write;
+package com.rapid7.armor.write.writers;
 
 import com.rapid7.armor.entity.Column;
 import com.rapid7.armor.entity.EntityRecord;
@@ -9,6 +9,9 @@ import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
+import com.rapid7.armor.write.StreamProduct;
+import com.rapid7.armor.write.WriteRequest;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
@@ -59,7 +62,7 @@ public class ShardWriter {
       this.defragTrigger = defragTriggerSupplier;
     this.captureWrite = captureWrite;
     // Load all columns
-    List<ColumnFileWriter> columnWriters = store.loadColumnWriters(tableWriter.getOrg(), tableWriter.getTableName(), shardId.getShardNum());
+    List<ColumnFileWriter> columnWriters = store.loadColumnWriters(tableWriter.getTenant(), tableWriter.getTableName(), shardId.getShardNum());
     writers = columnWriters.stream().collect(Collectors.toMap(ColumnFileWriter::getColumnShardId, w -> w));
   }
 
@@ -115,13 +118,13 @@ public class ShardWriter {
       columnMetadata.add(entityColumnMetadata);
       ShardMetadata smd = new ShardMetadata();
       smd.setColumnMetadata(columnMetadata);
-      store.saveShardMetadata(transaction, tableWriter.getOrg(), tableWriter.getTableName(), shardId.getShardNum(), smd);
-      store.commit(transaction, tableWriter.getOrg(), tableWriter.getTableName(), shardId.getShardNum());
+      store.saveShardMetadata(transaction, tableWriter.getTenant(), tableWriter.getTableName(), shardId.getShardNum(), smd);
+      store.commit(transaction, tableWriter.getTenant(), tableWriter.getTableName(), shardId.getShardNum());
       committed = true;
       return smd;
     } finally {
       if (!committed)
-        store.rollback(transaction, tableWriter.getOrg(), tableWriter.getTableName(), shardId.getShardNum());
+        store.rollback(transaction, tableWriter.getTenant(), tableWriter.getTableName(), shardId.getShardNum());
     }
   }
 
@@ -265,7 +268,7 @@ public class ShardWriter {
         }
         return cw.getMetadata();
       } catch (Exception e) {
-        LOGGER.error("Detected an issue building and saving entity column on table {} in org {}", tableWriter.getTableName(), tableWriter.getOrg(), e);
+        LOGGER.error("Detected an issue building and saving entity column on table {} in tenant {}", tableWriter.getTableName(), tableWriter.getTenant(), e);
         throw e;
       }
     }

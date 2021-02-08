@@ -1,4 +1,4 @@
-package com.rapid7.armor.write;
+package com.rapid7.armor.write.writers;
 
 import com.rapid7.armor.ArmorSection;
 import com.rapid7.armor.Constants;
@@ -11,6 +11,8 @@ import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ColumnShardId;
+import com.rapid7.armor.write.StreamProduct;
+import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.component.DictionaryWriter;
 import com.rapid7.armor.write.component.EntityRecordWriter;
 import com.rapid7.armor.write.component.RowGroupWriter;

@@ -9,7 +9,7 @@ import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.S3ReadStore;
 import com.rapid7.armor.store.S3WriteStore;
-import com.rapid7.armor.write.ArmorWriter;
+import com.rapid7.armor.write.writers.ArmorWriter;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.AnonymousAWSCredentials;

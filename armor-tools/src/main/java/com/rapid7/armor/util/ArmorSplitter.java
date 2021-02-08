@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.ColumnFileWriter;
+import com.rapid7.armor.write.writers.ColumnFileWriter;
 
 /**
  * Splits a given column into separated parts, whiich can be used for further analysis.

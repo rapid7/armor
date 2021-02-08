@@ -1,4 +1,4 @@
-package com.rapid7.armor.write;
+package com.rapid7.armor.write.writers;
 
 import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.DataType;
@@ -18,16 +18,16 @@ public class TableWriter implements Closeable {
   private static final Logger LOGGER = LoggerFactory.getLogger(TableWriter.class);
 
   private final String tableName;
-  private final String org;
+  private final String tenant;
   private final String entityColumnId;
   private final DataType entityColumnType;
   private final WriteStore store;
   // Must be have some synchronization to prevent lost shards.
   private final Map<ShardId, ShardWriter> shards = new ConcurrentHashMap<>();
 
-  public TableWriter(String org, String table, String entityColumnId, DataType dataType, WriteStore store) {
+  public TableWriter(String tenant, String table, String entityColumnId, DataType dataType, WriteStore store) {
     this.store = store;
-    this.org = org;
+    this.tenant = tenant;
     this.tableName = table;
     this.entityColumnId = entityColumnId;
     this.entityColumnType = dataType;
@@ -45,8 +45,8 @@ public class TableWriter implements Closeable {
     return this.tableName;
   }
 
-  public String getOrg() {
-    return this.org;
+  public String getTenant() {
+    return this.tenant;
   }
 
   public String getEntityColumnId() {
@@ -69,14 +69,14 @@ public class TableWriter implements Closeable {
   }
 
   public void close(int shard) {
-    ShardId shardId = store.buildShardId(org, tableName, shard);
+    ShardId shardId = store.buildShardId(tenant, tableName, shard);
     ShardWriter sw = shards.get(shardId);
     if (sw != null)
       sw.close();
   }
 
   public ShardWriter getShard(int shard) {
-    ShardId shardId = store.buildShardId(org, tableName, shard);
+    ShardId shardId = store.buildShardId(tenant, tableName, shard);
     return shards.get(shardId);
   }
 

@@ -16,7 +16,7 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.FileReadStore;
 import com.rapid7.armor.store.FileWriteStore;
 import com.rapid7.armor.store.WriteTranscationError;
-import com.rapid7.armor.write.ArmorWriter;
+import com.rapid7.armor.write.writers.ArmorWriter;
 import com.google.common.collect.Sets;
 
 import java.io.File;

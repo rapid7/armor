@@ -27,8 +27,8 @@ import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.schema.ColumnName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.ColumnFileWriter;
 import com.rapid7.armor.write.component.DictionaryWriter;
+import com.rapid7.armor.write.writers.ColumnFileWriter;
 
 /**
  * This analyzer will look filter out and only find entities according to how writers and readers

@@ -29,16 +29,16 @@ public class SlowArmorReader extends BaseArmorReader {
     super(store);
   }
 
-  public Column<?> getColumn(String org, String table, String columnName, int shardNum) throws IOException {
-    ShardId shardId = store.findShardId(org, table, shardNum);
+  public Column<?> getColumn(String tenant, String table, String columnName, int shardNum) throws IOException {
+    ShardId shardId = store.findShardId(tenant, table, shardNum);
     if (shardId == null)
       return null;
     SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);
     return armorShard.getColumn();
   }
 
-  public Column<?> getColumn(String org, String table, String columnName, int limit, int shardNum) throws IOException {
-    ShardId shardId = store.findShardId(org, table, shardNum);
+  public Column<?> getColumn(String tenant, String table, String columnName, int limit, int shardNum) throws IOException {
+    ShardId shardId = store.findShardId(tenant, table, shardNum);
     if (shardId == null)
       return null;
     SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);

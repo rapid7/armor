@@ -9,7 +9,7 @@ import org.roaringbitmap.RoaringBitmap;
 
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.schema.ColumnName;
-import com.rapid7.armor.write.ColumnFileWriter;
+import com.rapid7.armor.write.writers.ColumnFileWriter;
 
 /**
  * Prints out the column shard contents into a visually more intuitive format. The format does not

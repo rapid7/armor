@@ -32,19 +32,19 @@ public class FileReadStore implements ReadStore {
     this.basePath = path;
   }
 
-  private ShardId buildShardId(String org, String table, int shardNum) {
-    return new ShardId(shardNum, org, table);
+  private ShardId buildShardId(String tenant, String table, int shardNum) {
+    return new ShardId(shardNum, tenant, table);
   }
 
-  private ShardId buildShardId(String org, String table, String shardNum) {
-    return new ShardId(Integer.parseInt(shardNum), org, table);
+  private ShardId buildShardId(String tenant, String table, String shardNum) {
+    return new ShardId(Integer.parseInt(shardNum), tenant, table);
   }
 
   @Override
-  public List<ShardId> findShardIds(String org, String table, String columnName) {
+  public List<ShardId> findShardIds(String tenant, String table, String columnName) {
     List<ShardId> shardIds = new ArrayList<>();
-    for (ShardId shardId : findShardIds(org, table)) {
-      Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getOrg(), shardId.getTable(), shardId.getShardNum()));
+    for (ShardId shardId : findShardIds(tenant, table)) {
+      Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()));
       try (DirectoryStream<Path> stream = Files.newDirectoryStream(shardIdPath)) {
         for (Path path : stream) {
           if (!Files.isDirectory(path)) {
@@ -60,13 +60,13 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public List<ShardId> findShardIds(String org, String table) {
-    Path searchpath = basePath.resolve(Paths.get(org, table));
+  public List<ShardId> findShardIds(String tenant, String table) {
+    Path searchpath = basePath.resolve(Paths.get(tenant, table));
     Set<ShardId> fileList = new HashSet<>();
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(searchpath)) {
       for (Path path : stream) {
         if (Files.isDirectory(path)) {
-          fileList.add(buildShardId(org, table, path.getFileName().toString()));
+          fileList.add(buildShardId(tenant, table, path.getFileName().toString()));
         }
       }
     } catch (NoSuchFileException nfe) {
@@ -79,8 +79,8 @@ public class FileReadStore implements ReadStore {
 
 
   @Override
-  public ShardId findShardId(String org, String table, int shardNum) {
-    ShardId shardId = buildShardId(org, table, shardNum);
+  public ShardId findShardId(String tenant, String table, int shardNum) {
+    ShardId shardId = buildShardId(tenant, table, shardNum);
     Path shardIdPath = basePath.resolve(Paths.get(shardId.getShardId()));
     if (Files.exists(shardIdPath))
       return shardId;
@@ -93,7 +93,7 @@ public class FileReadStore implements ReadStore {
     List<ColumnName> columnNames = getColumNames(shardId);
     Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columnName)).findFirst();
     ColumnName cn = option.get();
-    Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getOrg(), shardId.getTable(), shardId.getShardNum()), cn.fullName());
+    Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()), cn.fullName());
     try {
       if (!Files.exists(shardIdPath)) {
         Files.createDirectories(shardIdPath.getParent());
@@ -109,7 +109,7 @@ public class FileReadStore implements ReadStore {
 
   @Override
   public List<ColumnName> getColumNames(ShardId shardId) {
-    Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getOrg(), shardId.getTable(), shardId.getShardNum()));
+    Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()));
     List<ColumnName> fileList = new ArrayList<>();
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(shardIdPath)) {
       for (Path path : stream) {
@@ -129,7 +129,7 @@ public class FileReadStore implements ReadStore {
     List<ColumnName> columnNames = getColumNames(shardId);
     Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columName)).findFirst();
     ColumnName cn = option.get();
-    Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getOrg(), shardId.getTable(), shardId.getShardNum()), cn.fullName());
+    Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()), cn.fullName());
     if (!Files.exists(shardIdPath)) {
       return null;
     } else {
@@ -142,10 +142,10 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public List<String> getTables(String org) {
-    Path orgPath = basePath.resolve(Paths.get(org));
+  public List<String> getTables(String tenant) {
+    Path tenantPath = basePath.resolve(Paths.get(tenant));
     List<String> tables = new ArrayList<>();
-    try (DirectoryStream<Path> stream = Files.newDirectoryStream(orgPath)) {
+    try (DirectoryStream<Path> stream = Files.newDirectoryStream(tenantPath)) {
       for (Path path : stream) {
         if (Files.isDirectory(path)) {
           tables.add(path.getFileName().toString());
@@ -158,26 +158,26 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public List<ColumnName> getColumNames(String org, String table) {
-    List<ShardId> shardIds = findShardIds(org, table);
+  public List<ColumnName> getColumNames(String tenant, String table) {
+    List<ShardId> shardIds = findShardIds(tenant, table);
     if (shardIds.isEmpty())
       return new ArrayList<>();
     return getColumNames(shardIds.get(0));
   }
 
   @Override
-  public String resolveCurrentPath(String org, String table, int shardNum) {
-    Map<String, String> values = getCurrentValues(org, table, shardNum);
+  public String resolveCurrentPath(String tenant, String table, int shardNum) {
+    Map<String, String> values = getCurrentValues(tenant, table, shardNum);
     String current = values.get("current");
     if (current == null)
       return null;
-    return basePath.resolve(Paths.get(org, table, Integer.toString(shardNum), current)).toString();
+    return basePath.resolve(Paths.get(tenant, table, Integer.toString(shardNum), current)).toString();
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public Map<String, String> getCurrentValues(String org, String table, int shardNum) {
-    Path searchpath = basePath.resolve(Paths.get(org, table, Integer.toString(shardNum), Constants.CURRENT));
+  public Map<String, String> getCurrentValues(String tenant, String table, int shardNum) {
+    Path searchpath = basePath.resolve(Paths.get(tenant, table, Integer.toString(shardNum), Constants.CURRENT));
     if (!Files.exists(searchpath))
       return new HashMap<>();
     else {

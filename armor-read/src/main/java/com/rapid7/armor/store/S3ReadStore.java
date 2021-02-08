@@ -36,15 +36,15 @@ public class S3ReadStore implements ReadStore {
     this.bucket = bucket;
   }
 
-  private ShardId buildShardId(String org, String table, int shardNum) {
-    return new ShardId(shardNum, org, table);
+  private ShardId buildShardId(String tenant, String table, int shardNum) {
+    return new ShardId(shardNum, tenant, table);
   }
 
   @Override
   public List<ColumnName> getColumNames(ShardId shardId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
-    lor.withPrefix(resolveCurrentPath(shardId.getOrg(), shardId.getTable(), shardId.getShardNum()) + "/");
+    lor.withPrefix(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()) + "/");
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<S3ObjectSummary> summaries = ol.getObjectSummaries();
     return summaries.stream()
@@ -54,46 +54,46 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public List<ShardId> findShardIds(String org, String table) {
+  public List<ShardId> findShardIds(String tenant, String table) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
-    lor.withPrefix(org + "/" + table + "/");
+    lor.withPrefix(tenant + "/" + table + "/");
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<String> commonPrefixes = ol.getCommonPrefixes();
     // Remove trailing /
     List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(Collectors.toList());
-    return rawShardNames.stream().map(s -> toShardId(org, table, s)).collect(Collectors.toList());
+    return rawShardNames.stream().map(s -> toShardId(tenant, table, s)).collect(Collectors.toList());
   }
 
-  private ShardId toShardId(String org, String table, String rawShard) {
+  private ShardId toShardId(String tenant, String table, String rawShard) {
     String shardName = Paths.get(rawShard).getFileName().toString();
     int shardNum = Integer.parseInt(shardName);
-    return buildShardId(org, table, shardNum);
+    return buildShardId(tenant, table, shardNum);
   }
 
   @Override
-  public List<ShardId> findShardIds(String org, String table, String columName) {
+  public List<ShardId> findShardIds(String tenant, String table, String columName) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
-    lor.withPrefix(org + "/" + table + "/");
+    lor.withPrefix(tenant + "/" + table + "/");
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<String> commonPrefixes = ol.getCommonPrefixes();
     // Remove trailing /
     List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(Collectors.toList());
-    return rawShardNames.stream().map(s -> toShardId(org, table, s)).collect(Collectors.toList());
+    return rawShardNames.stream().map(s -> toShardId(tenant, table, s)).collect(Collectors.toList());
   }
 
   @Override
-  public ShardId findShardId(String org, String table, int shardNum) {
-    ShardId shardId = buildShardId(org, table, shardNum);
+  public ShardId findShardId(String tenant, String table, int shardNum) {
+    ShardId shardId = buildShardId(tenant, table, shardNum);
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
-    lor.withPrefix(org + "/" + table + "/");
+    lor.withPrefix(tenant + "/" + table + "/");
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<String> commonPrefixes = ol.getCommonPrefixes();
 
     List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(Collectors.toList());
-    if (rawShardNames.stream().map(s -> toShardId(org, table, s)).anyMatch(s -> s.equals(shardId))) {
+    if (rawShardNames.stream().map(s -> toShardId(tenant, table, s)).anyMatch(s -> s.equals(shardId))) {
       return shardId;
     } else
       return null;
@@ -104,7 +104,7 @@ public class S3ReadStore implements ReadStore {
     List<ColumnName> columnNames = getColumNames(shardId);
     Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columnName)).findFirst();
     ColumnName cn = option.get();
-    String shardIdPath = resolveCurrentPath(shardId.getOrg(), shardId.getTable(), shardId.getShardNum()) + "/" + cn.fullName();
+    String shardIdPath = resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()) + "/" + cn.fullName();
     if (!doesObjectExist(bucket, shardIdPath)) {
       return new SlowArmorShardColumn();
     } else {
@@ -122,7 +122,7 @@ public class S3ReadStore implements ReadStore {
     List<ColumnName> columnNames = getColumNames(shardId);
     Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columName)).findFirst();
     ColumnName cn = option.get();
-    String shardIdPath = resolveCurrentPath(shardId.getOrg(), shardId.getTable(), shardId.getShardNum()) + "/" + cn.fullName();
+    String shardIdPath = resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()) + "/" + cn.fullName();
     if (!doesObjectExist(bucket, shardIdPath)) {
       return null;
     } else {
@@ -137,35 +137,35 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public List<ColumnName> getColumNames(String org, String table) {
-    List<ShardId> shardIds = findShardIds(org, table);
+  public List<ColumnName> getColumNames(String tenant, String table) {
+    List<ShardId> shardIds = findShardIds(tenant, table);
     if (shardIds.isEmpty())
       return new ArrayList<>();
     return getColumNames(shardIds.get(0));
   }
 
   @Override
-  public List<String> getTables(String org) {
+  public List<String> getTables(String tenant) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
-    lor.withPrefix(org + "/");
+    lor.withPrefix(tenant + "/");
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<String> commonPrefixes = ol.getCommonPrefixes();
-    return commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).map(cp -> cp.replace(org + "/", "")).collect(Collectors.toList());
+    return commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).map(cp -> cp.replace(tenant + "/", "")).collect(Collectors.toList());
   }
 
   @Override
-  public String resolveCurrentPath(String org, String table, int shardNum) {
-    Map<String, String> values = getCurrentValues(org, table, shardNum);
+  public String resolveCurrentPath(String tenant, String table, int shardNum) {
+    Map<String, String> values = getCurrentValues(tenant, table, shardNum);
     String current = values.get("current");
     if (current == null)
       return null;
-    return org + "/" + table + "/" + shardNum + "/" + current;
+    return tenant + "/" + table + "/" + shardNum + "/" + current;
   }
 
   @Override
-  public Map<String, String> getCurrentValues(String org, String table, int shardNum) {
-    String key = org + "/" + table + "/" + shardNum + "/" + Constants.CURRENT;
+  public Map<String, String> getCurrentValues(String tenant, String table, int shardNum) {
+    String key = tenant + "/" + table + "/" + shardNum + "/" + Constants.CURRENT;
     if (!doesObjectExist(this.bucket, key))
       return new HashMap<>();
     else {
