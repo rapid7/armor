@@ -41,7 +41,7 @@ public class ArmorWriter implements Closeable {
   private final ExecutorService threadPool;
   private final WriteStore store;
   private final Map<TableId, TableWriter> tableWriters = new ConcurrentHashMap<>();
-  private final Map<TableId, TableMetadata> tableMetadatas = new ConcurrentHashMap<>();
+  private final Map<TableId, ColumnId> tableEntityColumnIds = new ConcurrentHashMap<>();
 
   private final Supplier<Integer> defragTrigger;
   private boolean selfPool = true;
@@ -103,7 +103,7 @@ public class ArmorWriter implements Closeable {
         // Metadata file exists, meaning the table exists, use the metadata to determine.
         tableWriter = new TableWriter(tenant, table, store);
         tableWriters.put(tableId, tableWriter);
-        tableMetadatas.put(tableId, tableMeta);
+        tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
         ShardId shardId = store.buildShardId(tenant, table, shard);
         ShardWriter sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
         tableWriter.addShard(sw);
@@ -132,7 +132,7 @@ public class ArmorWriter implements Closeable {
         // The table does exist, load it up then
         tableWriter = new TableWriter(tenant, table, store);
         tableWriters.put(tableId, tableWriter);
-        tableMetadatas.put(tableId, tableMeta);
+        tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
 
         ShardId shardId = store.buildShardId(tenant, table, shard);
         ShardWriter sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
@@ -191,7 +191,7 @@ public class ArmorWriter implements Closeable {
         store);
     }
     tableWriters.put(tableId, tableWriter);
-    tableMetadatas.put(tableId, tableMeta);
+    tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
 
     ShardWriter sw = tableWriter.getShard(shardId.getShardNum());
     if (sw == null) {
@@ -204,13 +204,19 @@ public class ArmorWriter implements Closeable {
   /**
    * Builds an initial tablemetadata that defines the table's intended id and type from an Entity object.
    */
-  private TableMetadata buildInitialTablemetadata(Entity entity) {
+  private ColumnId buildEntityColumnId(Entity entity) {
     Object entityId = entity.getEntityId();
     DataType entityIdType = DataType.INTEGER;
     if (entityId instanceof String)
       entityIdType = DataType.STRING;
     String entityIdColumn = entity.getEntityIdColumn();
-    return new TableMetadata(entityIdColumn, entityIdType.getCode());
+    return new ColumnId(entityIdColumn, entityIdType.getCode());
+  }
+  
+  private ColumnId toColumnId(TableMetadata tableMetadata) {
+    if (tableMetadata == null)
+      return null;
+    return new ColumnId(tableMetadata.getEntityColumnId(), tableMetadata.getEntityColumnIdType());
   }
 
   public void write(String transaction, String tenant, String table, List<Entity> entities) {
@@ -229,14 +235,13 @@ public class ArmorWriter implements Closeable {
         // The table exists, load it up then
         tableWriter = new TableWriter(tenant, table, store);
         tableWriters.put(tableId, tableWriter);
-        tableMetadatas.put(tableId, tableMeta);
+        tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
       } else {
         Entity entity = entities.get(0);
-        tableMeta = buildInitialTablemetadata(entity);
         // No shard metadata exists, create the first shard metadata for this.
         tableWriter = new TableWriter(tenant, table, store);
         tableWriters.put(tableId, tableWriter);
-        tableMetadatas.put(tableId, tableMeta);
+        tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
       }
     } else {
       tableWriter = tableWriters.get(tableId);
@@ -308,14 +313,15 @@ public class ArmorWriter implements Closeable {
       LOGGER.warn("There are no changes detected, going to skip save operation for {}", tableId);
       return;
     }
-    TableMetadata tableMetadata = tableMetadatas.get(tableId);
-    if (tableMetadata == null) {
-      tableMetadata = this.store.loadTableMetadata(tenant, table);
+    ColumnId entityColumnId = tableEntityColumnIds.get(tableId);
+    if (entityColumnId == null) {
+      TableMetadata tableMetadata = this.store.loadTableMetadata(tenant, table);
       if (tableMetadata == null) {
         throw new RuntimeException("Unable to determine the entityid column name and type, cannot commit");
       }
+      entityColumnId = toColumnId(tableMetadata);
     }
-    final TableMetadata tmetadata = tableMetadata;
+    final ColumnId finalEntityColumnId = entityColumnId;
     List<EntityOffsetException> offsetExceptions = new ArrayList<>();
     for (ShardWriter shardWriter : tableWriter.getShardWriters()) {
       std.submit(
@@ -324,7 +330,7 @@ public class ArmorWriter implements Closeable {
             try {
               Thread.currentThread().setName("shardwriter-" + shardWriter.getShardId());
               MDC.put("tenant_id", tenant);
-              return shardWriter.commit(transaction, tmetadata.getEntityColumnId(), tmetadata.entityIdColumnType());
+              return shardWriter.commit(transaction, finalEntityColumnId);
             } catch (NoSuchFileException nse) {
               LOGGER.warn("The underlying channels file are missing, most likely closed by another fried due to an issue: {}", nse.getMessage());
               return null;
@@ -347,6 +353,7 @@ public class ArmorWriter implements Closeable {
       submitted++;
     }
     List<ShardMetadata> shardMetaDatas = new ArrayList<>();
+    TableMetadata tableMetadata = new TableMetadata(entityColumnId.getName(), entityColumnId.getType());
     tableMetadata.setShardMetadata(shardMetaDatas);
     for (int i = 0; i < submitted; ++i) {
       try {
