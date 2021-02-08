@@ -7,7 +7,7 @@ import com.rapid7.armor.read.fast.FastArmorBlock;
 import com.rapid7.armor.read.fast.FastArmorBlockReader;
 import com.rapid7.armor.read.fast.FastArmorReader;
 import com.rapid7.armor.read.slow.SlowArmorReader;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
@@ -56,7 +56,7 @@ public class FileStoreTest {
     String instanceId = UUID.randomUUID().toString();
     Path testDirectory = Files.createTempDirectory("filestore");
     FileWriteStore fileStore = new FileWriteStore(testDirectory, new ModShardStrategy(1));
-    ColumnName vuln = new ColumnName("vuln", DataType.INTEGER.getCode());
+    ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
     Entity e1 = Entity.buildEntity("asset", 1, 1, instanceId, vuln);
 
     Entity e2 = Entity.buildEntity("asset", 2, 1, instanceId, vuln);
@@ -98,11 +98,11 @@ public class FileStoreTest {
     FileReadStore fileReadStore = new FileReadStore(testDirectory);
     String myorg = "myorg";
     String table = "vulntable";
-    ColumnName name = new ColumnName("name", DataType.STRING.getCode());
-    ColumnName time = new ColumnName("time", DataType.LONG.getCode());
-    ColumnName vuln = new ColumnName("vuln", DataType.INTEGER.getCode());
-    ColumnName asset = new ColumnName("asset", DataType.INTEGER.getCode());
-    List<ColumnName> columns = Arrays.asList(name, time, vuln);
+    ColumnId name = new ColumnId("name", DataType.STRING.getCode());
+    ColumnId time = new ColumnId("time", DataType.LONG.getCode());
+    ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
+    ColumnId asset = new ColumnId("asset", DataType.INTEGER.getCode());
+    List<ColumnId> columns = Arrays.asList(name, time, vuln);
     String instanceId = UUID.randomUUID().toString();
     try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, false, 10, () -> 1, null)) {
       Entity e11 = Entity.buildEntity("asset", 1, 1, instanceId, name, time, vuln);
@@ -151,7 +151,7 @@ public class FileStoreTest {
       List<ShardId> shardIds = fileStore.findShardIds(myorg, table, "vuln");
       assertFalse(shardIds.isEmpty());
       ShardId shardId = shardIds.get(0);
-      assertEquals(Sets.newHashSet(name, asset, vuln, time), Sets.newHashSet(fileStore.getColumNames(shardId)));
+      assertEquals(Sets.newHashSet(name, asset, vuln, time), Sets.newHashSet(fileStore.getColumnIds(shardId)));
 
       // 12 rows, 2 entities 1 and 2, freebytes 0
       Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);

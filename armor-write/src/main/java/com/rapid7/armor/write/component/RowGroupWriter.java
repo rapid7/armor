@@ -39,7 +39,7 @@ public class RowGroupWriter extends FileComponent {
     super(path);
     this.dictionaryWriter = dictionary;
     this.columnShardId = columnShardId;
-    this.dataType = columnShardId.getColumnName().dataType();
+    this.dataType = columnShardId.getColumnId().dataType();
   }
   
   public DictionaryWriter getDictionaryWriter() {

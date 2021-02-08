@@ -17,7 +17,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
@@ -45,16 +45,16 @@ public class ArmorSplitter {
     String entityArg = cmd.getOptionValue("e");
     
     for (Path p : findAllFiles(path)) {
-      ColumnName columnName = null;
+      ColumnId columnId = null;
       try {
-        columnName = new ColumnName(p.getFileName().toString());
+        columnId = new ColumnId(p.getFileName().toString());
       } catch (Exception e) {
         // No valid so just skip.
         continue;
       }
       ObjectMapper om = new ObjectMapper();
       try (ColumnFileWriter writer = 
-          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
+          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnId))) {
         writer.getRowGroupWriter();
         writer.getMetadata();
         writer.getEntityRecordWriter();

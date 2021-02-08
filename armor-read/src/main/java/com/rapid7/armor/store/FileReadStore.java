@@ -3,7 +3,7 @@ package com.rapid7.armor.store;
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ShardId;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.DataInputStream;
@@ -41,14 +41,14 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, String columnName) {
+  public List<ShardId> findShardIds(String tenant, String table, String columnId) {
     List<ShardId> shardIds = new ArrayList<>();
     for (ShardId shardId : findShardIds(tenant, table)) {
       Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()));
       try (DirectoryStream<Path> stream = Files.newDirectoryStream(shardIdPath)) {
         for (Path path : stream) {
           if (!Files.isDirectory(path)) {
-            if (path.getFileName().toString().startsWith(columnName))
+            if (path.getFileName().toString().startsWith(columnId))
               shardIds.add(shardId);
           }
         }
@@ -89,10 +89,10 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnName) {
-    List<ColumnName> columnNames = getColumNames(shardId);
-    Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columnName)).findFirst();
-    ColumnName cn = option.get();
+  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnId) {
+    List<ColumnId> columnIds = getColumnIds(shardId);
+    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
+    ColumnId cn = option.get();
     Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()), cn.fullName());
     try {
       if (!Files.exists(shardIdPath)) {
@@ -108,13 +108,13 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public List<ColumnName> getColumNames(ShardId shardId) {
+  public List<ColumnId> getColumnIds(ShardId shardId) {
     Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()));
-    List<ColumnName> fileList = new ArrayList<>();
+    List<ColumnId> fileList = new ArrayList<>();
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(shardIdPath)) {
       for (Path path : stream) {
         if (!Files.isDirectory(path) && !path.getFileName().toString().contains(Constants.SHARD_METADATA)) {
-          fileList.add(new ColumnName(path.getFileName().toString()));
+          fileList.add(new ColumnId(path.getFileName().toString()));
         }
       }
     } catch (IOException ioe) {
@@ -125,10 +125,10 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columName) {
-    List<ColumnName> columnNames = getColumNames(shardId);
-    Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columName)).findFirst();
-    ColumnName cn = option.get();
+  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnId) {
+    List<ColumnId> columnIds = getColumnIds(shardId);
+    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
+    ColumnId cn = option.get();
     Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()), cn.fullName());
     if (!Files.exists(shardIdPath)) {
       return null;
@@ -158,11 +158,11 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public List<ColumnName> getColumNames(String tenant, String table) {
+  public List<ColumnId> getColumnIds(String tenant, String table) {
     List<ShardId> shardIds = findShardIds(tenant, table);
     if (shardIds.isEmpty())
       return new ArrayList<>();
-    return getColumNames(shardIds.get(0));
+    return getColumnIds(shardIds.get(0));
   }
 
   @Override

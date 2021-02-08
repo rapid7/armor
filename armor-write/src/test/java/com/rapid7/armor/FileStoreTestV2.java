@@ -9,7 +9,7 @@ import com.rapid7.armor.read.fast.FastArmorBlockReader;
 import com.rapid7.armor.read.fast.FastArmorReader;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorReader;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
@@ -58,10 +58,10 @@ import org.junit.jupiter.api.Test;
 public class FileStoreTestV2 {
 
   // The table schema we will be working with
-  private static List<ColumnName> COLUMNS = Arrays.asList(
-    new ColumnName("status", DataType.INTEGER.getCode()),
-    new ColumnName("time", DataType.LONG.getCode()),
-    new ColumnName("vuln", DataType.STRING.getCode()));
+  private static List<ColumnId> COLUMNS = Arrays.asList(
+    new ColumnId("status", DataType.INTEGER.getCode()),
+    new ColumnId("time", DataType.LONG.getCode()),
+    new ColumnId("vuln", DataType.STRING.getCode()));
   
   // List of vuln we will be working with by states
   private static Row texasVuln = new Row(1, 101l, "texas");
@@ -131,11 +131,11 @@ public class FileStoreTestV2 {
   private Table entityToTableSawRow(Entity entity) {
     Table smallTable = Table.create("");
     for (com.rapid7.armor.entity.Column column : entity.columns()) {
-      ColumnName columnName = column.getColumnName();
-      if (DataType.STRING == columnName.dataType()) {
+      ColumnId columnId = column.getColumnId();
+      if (DataType.STRING == columnId.dataType()) {
         List<String> strValues = column.getValues().stream().map(v -> v == null ? null : v.toString()).collect(Collectors.toList());
-        smallTable.addColumns(StringColumn.create(columnName.getName(), strValues));
-      } else if (DataType.INTEGER == columnName.dataType()) {
+        smallTable.addColumns(StringColumn.create(columnId.getName(), strValues));
+      } else if (DataType.INTEGER == columnId.dataType()) {
         int[] intValues = new int[column.size()];
         List<Object> values = column.getValues();
         for (int i = 0; i < column.size(); i++) {
@@ -145,8 +145,8 @@ public class FileStoreTestV2 {
             intValues[i] = (Integer) values.get(i);
           }
         }
-        smallTable.addColumns(IntColumn.create(columnName.getName(), intValues));
-      } else if (DataType.LONG == columnName.dataType()) {
+        smallTable.addColumns(IntColumn.create(columnId.getName(), intValues));
+      } else if (DataType.LONG == columnId.dataType()) {
         long[] longValues = new long[column.size()];
         List<Object> values = column.getValues();
         for (int i = 0; i < column.size(); i++) {
@@ -156,7 +156,7 @@ public class FileStoreTestV2 {
             longValues[i] = (Long) values.get(i);
           }
         }
-        smallTable.addColumns(LongColumn.create(columnName.getName(), longValues));
+        smallTable.addColumns(LongColumn.create(columnId.getName(), longValues));
       }
     }
     int rowCount = smallTable.rowCount();
@@ -211,8 +211,8 @@ public class FileStoreTestV2 {
     int totalRows = 0;
     for (ShardId shardId : shardIds) {
       Integer shardRows = null;
-      for (ColumnName columnName : COLUMNS) {
-        FastArmorShardColumn fas = readStore.getFastArmorShard(shardId, columnName.getName());
+      for (ColumnId columnId : COLUMNS) {
+        FastArmorShardColumn fas = readStore.getFastArmorShard(shardId, columnId.getName());
         FastArmorBlockReader far = fas.getFastArmorColumnReader();
         DataType dt = fas.getDataType();
         FastArmorBlock fab = null;

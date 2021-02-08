@@ -8,7 +8,7 @@ import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.io.AutoDeleteFileInputStream;
 import com.rapid7.armor.io.IOTools;
 import com.rapid7.armor.meta.ColumnMetadata;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.write.StreamProduct;
@@ -58,11 +58,11 @@ public class ColumnFileWriter implements AutoCloseable {
 
   public ColumnFileWriter(ColumnShardId columnShardId) throws IOException {
     metadata = new ColumnMetadata();
-    DataType dataType = columnShardId.getColumnName().dataType();
+    DataType dataType = columnShardId.getColumnId().dataType();
     this.columnShardId = columnShardId;
-    metadata.setDataType(columnShardId.getColumnName().dataType());
-    metadata.setColumnName(columnShardId.getColumnName().getName());
-    columnShardId.getColumnName().dataType();
+    metadata.setDataType(columnShardId.getColumnId().dataType());
+    metadata.setColumnId(columnShardId.getColumnId().getName());
+    columnShardId.getColumnId().dataType();
     if (dataType == DataType.STRING)
       strValueDictionary = new DictionaryWriter(false);
 
@@ -74,7 +74,7 @@ public class ColumnFileWriter implements AutoCloseable {
 
   public ColumnFileWriter(DataInputStream dataInputStream, ColumnShardId columnShardId) {
     try {
-      DataType dt = columnShardId.getColumnName().dataType();
+      DataType dt = columnShardId.getColumnId().dataType();
       int avail = dataInputStream.available();
       this.columnShardId = columnShardId;
       if (avail > 0) {
@@ -89,7 +89,7 @@ public class ColumnFileWriter implements AutoCloseable {
       } else {
         metadata = new ColumnMetadata();
         metadata.setDataType(dt);
-        metadata.setColumnName(columnShardId.getColumnName().getName());
+        metadata.setColumnId(columnShardId.getColumnId().getName());
         metadata.setLastUpdate(new Date().toString());
         if (dt == DataType.STRING)
           strValueDictionary = new DictionaryWriter(false);
@@ -148,8 +148,8 @@ public class ColumnFileWriter implements AutoCloseable {
     return columnShardId;
   }
 
-  public ColumnName getColumnName() {
-    return columnShardId.getColumnName();
+  public ColumnId getColumnId() {
+    return columnShardId.getColumnId();
   }
   
   private int loadEntityDictionary(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {

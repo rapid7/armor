@@ -8,7 +8,7 @@ import java.util.List;
 import org.roaringbitmap.RoaringBitmap;
 
 import com.rapid7.armor.entity.EntityRecord;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
 
 /**
@@ -24,8 +24,8 @@ import com.rapid7.armor.write.writers.ColumnFileWriter;
 public class ColumnShardVisualReader {
   private Path target = null;
   public ColumnShardVisualReader() {}
-  public ColumnShardVisualReader(ColumnName columnName, Path target) {
-    this.target = target.resolve(columnName.getName() + "-column-data");
+  public ColumnShardVisualReader(ColumnId columnId, Path target) {
+    this.target = target.resolve(columnId.getName() + "-column-data");
   }
 
   public void process(ColumnFileWriter columnWriter) throws IOException {

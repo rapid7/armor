@@ -24,7 +24,7 @@ import org.roaringbitmap.RoaringBitmap;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.write.component.DictionaryWriter;
@@ -82,16 +82,16 @@ public class ArmorEntityAnalyzer {
     }
     
     for (Path c : findAllFiles(path)) {
-      ColumnName columnName = null;
+      ColumnId columnId = null;
       try {
-        columnName = new ColumnName(c.getFileName().toString());
+        columnId = new ColumnId(c.getFileName().toString());
       } catch (Exception e) {
         // No valid so just skip.
         continue;
       }
       ObjectMapper om = new ObjectMapper();
       try (ColumnFileWriter writer = 
-          new ColumnFileWriter(new DataInputStream(Files.newInputStream(c, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
+          new ColumnFileWriter(new DataInputStream(Files.newInputStream(c, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnId))) {
         DictionaryWriter dw = writer.getEntityDictionary();
         if (dw == null) {
           if (isNumeric) {
@@ -114,7 +114,7 @@ public class ArmorEntityAnalyzer {
                 }
                 Files.copy(
                     new ByteArrayInputStream(om.writeValueAsBytes(writeValues)),
-                    targetPath.resolve(columnName.getName() + "-" + entityName + "-writeValues.json"),
+                    targetPath.resolve(columnId.getName() + "-" + entityName + "-writeValues.json"),
                     StandardCopyOption.REPLACE_EXISTING);
                 // If it exists here, then lets pull from the read side, for now just to the Fast.
                 FastArmorShardColumn fas = new FastArmorShardColumn(Files.newInputStream(c, StandardOpenOption.READ));
@@ -122,7 +122,7 @@ public class ArmorEntityAnalyzer {
                 ObjectMapper objectMapper = new ObjectMapper();
                 Files.copy(
                     new ByteArrayInputStream(objectMapper.writeValueAsBytes(readValues)),
-                    targetPath.resolve(columnName.getName() + "-" + entityName + "-readValues.json"),
+                    targetPath.resolve(columnId.getName() + "-" + entityName + "-readValues.json"),
                     StandardCopyOption.REPLACE_EXISTING);
               }
             }
@@ -149,7 +149,7 @@ public class ArmorEntityAnalyzer {
               }
               Files.copy(
                   new ByteArrayInputStream(om.writeValueAsBytes(writeValues)),
-                  targetPath.resolve(columnName.getName() + "-" + entityName + "-writeValues.json"),
+                  targetPath.resolve(columnId.getName() + "-" + entityName + "-writeValues.json"),
                   StandardCopyOption.REPLACE_EXISTING);
               // If it exists here, then lets pull from the read side, for now just to the Fast.
               FastArmorShardColumn fas = new FastArmorShardColumn(Files.newInputStream(c, StandardOpenOption.READ));
@@ -157,7 +157,7 @@ public class ArmorEntityAnalyzer {
               ObjectMapper objectMapper = new ObjectMapper();
               Files.copy(
                   new ByteArrayInputStream(objectMapper.writeValueAsBytes(readValues)),
-                  targetPath.resolve(columnName.getName() + "-" + entityName + "-readValues.json"),
+                  targetPath.resolve(columnId.getName() + "-" + entityName + "-readValues.json"),
                   StandardCopyOption.REPLACE_EXISTING);
               
             }

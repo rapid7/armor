@@ -64,8 +64,8 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     return column.size();
   }
 
-  public String columnName() {
-    return metadata.getColumnName();
+  public String columnId() {
+    return metadata.getColumnId();
   }
 
   public IntColumn getEntitesInt() {
@@ -136,12 +136,12 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     Integer surrogate = resolveEntity(entityid);
     List<Integer> rowNumbers = entityToRowNumbers.get(surrogate);
     if (rowNumbers == null)
-      return StringColumn.create(metadata.getColumnName());
+      return StringColumn.create(metadata.getColumnId());
 
     for (Integer rowNum : rowNumbers) {
       results.add((String) column.get(rowNum));
     }
-    return StringColumn.create(metadata.getColumnName(), results.toArray(new String[results.size()]));
+    return StringColumn.create(metadata.getColumnId(), results.toArray(new String[results.size()]));
   }
   
   public LongColumn getLongsByEntity(Object entityid) {
@@ -149,7 +149,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     ArrayList<Long> results = new ArrayList<>();
     List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
     if (rowNumbers == null)
-      return LongColumn.create(metadata.getColumnName());
+      return LongColumn.create(metadata.getColumnId());
 
     for (Integer rowNum : rowNumbers) {
       results.add((Long) column.get(rowNum));
@@ -161,7 +161,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
       else
         finalResults[i] = results.get(i);   
     }
-    return LongColumn.create(metadata.getColumnName(), finalResults);
+    return LongColumn.create(metadata.getColumnId(), finalResults);
   }
 
   public IntColumn getIntegersByEntity(Object entityid) {
@@ -169,12 +169,12 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     ArrayList<Integer> results = new ArrayList<>();
     List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
     if (rowNumbers == null)
-      return IntColumn.create(metadata.getColumnName());
+      return IntColumn.create(metadata.getColumnId());
 
     for (Integer rowNum : rowNumbers) {
       results.add((Integer) column.get(rowNum));
     }
-    return IntColumn.create(metadata.getColumnName(), results.toArray(new Integer[results.size()]));
+    return IntColumn.create(metadata.getColumnId(), results.toArray(new Integer[results.size()]));
   }
 
   public IntColumn getIntegers() {
@@ -192,15 +192,15 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     return (LongColumn) column;
   }
 
-  private Column<?> createColumn(DataType dataType, String columnName) {
+  private Column<?> createColumn(DataType dataType, String columnId) {
     switch (dataType) {
       case STRING:
-        return StringColumn.create(columnName);
+        return StringColumn.create(columnId);
       case INTEGER:
-        return IntColumn.create(columnName);
+        return IntColumn.create(columnId);
       case DATETIME:
       case LONG:
-        return LongColumn.create(columnName);
+        return LongColumn.create(columnId);
       default:
         break;
     }
@@ -234,7 +234,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     final AtomicInteger rowCounter = new AtomicInteger(1);
     DataType dt = metadata.getDataType();
 
-    column = createColumn(dt, metadata.getColumnName());
+    column = createColumn(dt, metadata.getColumnId());
 
     for (EntityRecord eir : indexRecords) {
       int entity = eir.getEntityId();
@@ -283,7 +283,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
             column.set(rowAdjusted, null);
           }
         } catch (Exception e) {
-          throw new RuntimeException("Unable to read column " + metadata.getColumnName(), e);
+          throw new RuntimeException("Unable to read column " + metadata.getColumnId(), e);
         }
       }
     }

@@ -2,22 +2,22 @@ package com.rapid7.armor.schema;
 
 import java.util.Objects;
 
-public class ColumnName {
+public class ColumnId {
   public final static String SEPERATOR = "_";
   private String name;
   private String type;
 
-  public ColumnName() {
+  public ColumnId() {
   }
 
-  public ColumnName(String fullName) {
+  public ColumnId(String fullName) {
     String[] parts = fullName.split(SEPERATOR);
     this.name = parts[0];
     DataType dt = DataType.getDataType(parts[1]);
     this.type = dt.getCode();  
   }
 
-  public ColumnName(String name, String type) {
+  public ColumnId(String name, String type) {
     this.name = name;
     this.type = type;
   }
@@ -48,7 +48,7 @@ public class ColumnName {
 
   @Override
   public String toString() {
-    return "ColumnName{" +
+    return "ColumnId{" +
         "name='" + name + '\'' +
         ", type='" + type + '\'' +
         '}';
@@ -58,7 +58,7 @@ public class ColumnName {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    ColumnName that = (ColumnName) o;
+    ColumnId that = (ColumnId) o;
     return Objects.equals(getName(), that.getName()) && Objects.equals(getType(), that.getType());
   }
 

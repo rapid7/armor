@@ -4,7 +4,7 @@ import com.rapid7.armor.Constants;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.shard.ShardStrategy;
@@ -52,14 +52,14 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, String columnName) {
+  public List<ShardId> findShardIds(String tenant, String table, String columnId) {
     List<ShardId> shardIds = new ArrayList<>();
     for (ShardId shardId : findShardIds(tenant, table)) {
       Path currentPath = Paths.get(resolveCurrentPath(tenant, table, shardId.getShardNum()));
       try (DirectoryStream<Path> stream = Files.newDirectoryStream(currentPath)) {
         for (Path path : stream) {
           if (!Files.isDirectory(path)) {
-            if (path.getFileName().toString().startsWith(columnName))
+            if (path.getFileName().toString().startsWith(columnId))
               shardIds.add(shardId);
           }
         }
@@ -94,7 +94,7 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public void saveColumn(String transaction, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
-    Path shardIdPath = basePath.resolve(Paths.get(columnShardId.getShardId().getShardId(), transaction, columnShardId.getColumnName().fullName()));
+    Path shardIdPath = basePath.resolve(Paths.get(columnShardId.getShardId().getShardId(), transaction, columnShardId.getColumnId().fullName()));
     try {
       Files.createDirectories(shardIdPath.getParent());
       long copied = Files.copy(inputStream, shardIdPath, StandardCopyOption.REPLACE_EXISTING);
@@ -116,7 +116,7 @@ public class FileWriteStore implements WriteStore {
         throw new RuntimeException(ioe);
       }
     }
-    Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnShardId.getColumnName().fullName()));
+    Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnShardId.getColumnId().fullName()));
     try {
       if (!Files.exists(shardIdPath)) {
         Files.createDirectories(shardIdPath.getParent());
@@ -130,18 +130,18 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public List<ColumnName> getColumNames(ShardId shardId) {
+  public List<ColumnId> getColumnIds(ShardId shardId) {
     String currentPath = resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum());
     if (currentPath == null)
       return new ArrayList<>();
     Path target = Paths.get(currentPath);
-    Set<ColumnName> fileList = new HashSet<>();
+    Set<ColumnId> fileList = new HashSet<>();
     try {
       Files.createDirectories(target);
       try (DirectoryStream<Path> stream = Files.newDirectoryStream(target)) {
         for (Path path : stream) {
           if (!Files.isDirectory(path) && !path.getFileName().toString().contains(Constants.SHARD_METADATA)) {
-            fileList.add(new ColumnName(path.getFileName().toString()));
+            fileList.add(new ColumnId(path.getFileName().toString()));
           }
         }
       }
@@ -160,19 +160,19 @@ public class FileWriteStore implements WriteStore {
   public List<ColumnFileWriter> loadColumnWriters(String tenant, String table, int shardNum) {
     String currentPath = resolveCurrentPath(tenant, table, shardNum);
     ShardId shardId = buildShardId(tenant, table, shardNum);
-    List<ColumnName> columNames = getColumNames(buildShardId(tenant, table, shardNum));
+    List<ColumnId> columnIds = getColumnIds(buildShardId(tenant, table, shardNum));
     List<ColumnFileWriter> writers = new ArrayList<>();
     TableMetadata tableMetadata = this.loadTableMetadata(tenant, table);
-    for (ColumnName columnName : columNames) {
-      if (tableMetadata.getEntityColumnId().equals(columnName.getName()))
+    for (ColumnId columnId : columnIds) {
+      if (tableMetadata.getEntityColumnId().equals(columnId.getName()))
         continue;
-      Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnName.fullName()));
+      Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnId.fullName()));
       try {
         if (!Files.exists(shardIdPath)) {
           Files.createDirectories(shardIdPath.getParent());
-          writers.add(new ColumnFileWriter(new ColumnShardId(shardId, columnName)));
+          writers.add(new ColumnFileWriter(new ColumnShardId(shardId, columnId)));
         } else {
-          ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)), new ColumnShardId(shardId, columnName));
+          ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)), new ColumnShardId(shardId, columnId));
           writers.add(writer);
         }
       } catch (IOException ioe) {
@@ -353,7 +353,7 @@ public class FileWriteStore implements WriteStore {
         Integer.toString(columnShardId.getShardNum()),
         Constants.LAST_ERROR,
         transaction,
-        columnShardId.getColumnName().fullName()));
+        columnShardId.getColumnId().fullName()));
     try {
       Files.createDirectories(shardIdPath.getParent());
       long copied = Files.copy(inputStream, shardIdPath, StandardCopyOption.REPLACE_EXISTING);

@@ -11,7 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.rapid7.armor.read.BaseArmorReader;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.ReadStore;
 
@@ -29,29 +29,29 @@ public class SlowArmorReader extends BaseArmorReader {
     super(store);
   }
 
-  public Column<?> getColumn(String tenant, String table, String columnName, int shardNum) throws IOException {
+  public Column<?> getColumn(String tenant, String table, String columnId, int shardNum) throws IOException {
     ShardId shardId = store.findShardId(tenant, table, shardNum);
     if (shardId == null)
       return null;
-    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);
+    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnId);
     return armorShard.getColumn();
   }
 
-  public Column<?> getColumn(String tenant, String table, String columnName, int limit, int shardNum) throws IOException {
+  public Column<?> getColumn(String tenant, String table, String columnId, int limit, int shardNum) throws IOException {
     ShardId shardId = store.findShardId(tenant, table, shardNum);
     if (shardId == null)
       return null;
-    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);
+    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnId);
     return armorShard.getColumn().first(limit);
   }
 
-  public Column<?> getColumn(String tenant, String table, String columnName) throws IOException {
-    List<ShardId> shardIds = store.findShardIds(tenant, table, columnName).stream()
+  public Column<?> getColumn(String tenant, String table, String columnId) throws IOException {
+    List<ShardId> shardIds = store.findShardIds(tenant, table, columnId).stream()
         .sorted(Comparator.comparingInt(ShardId::getShardNum))
         .collect(Collectors.toList());
     Column<?> column = null;
     for (ShardId shardId : shardIds) {
-      SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);
+      SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnId);
       if (column == null)
         column = armorShard.getColumn();
       else
@@ -61,11 +61,11 @@ public class SlowArmorReader extends BaseArmorReader {
   }
   
   public Table getEntity(String tenant, String table, Object entity) {
-    List<ColumnName> columnNames = store.getColumNames(tenant, table);
+    List<ColumnId> columnIds = store.getColumnIds(tenant, table);
     Map<String, Column<?>> columns = new HashMap<>();
     for (ShardId shardId : store.findShardIds(tenant, table)) {
-      for (ColumnName columnName : columnNames) {
-        SlowArmorShardColumn sas = store.getSlowArmorShard(shardId, columnName.getName());
+      for (ColumnId columnId : columnIds) {
+        SlowArmorShardColumn sas = store.getSlowArmorShard(shardId, columnId.getName());
         Column<?> column = sas.getColumnByEntityId(entity);
         if (columns.containsKey(column.name())) {
           columns.get(column.name()).append((Column) column);

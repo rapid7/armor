@@ -3,7 +3,7 @@ package com.rapid7.armor.store;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.write.WriteRequest;
@@ -32,9 +32,9 @@ public interface WriteStore {
 
   List<ShardId> findShardIds(String tenant, String table);
 
-  List<ColumnName> getColumNames(ShardId shardId);
+  List<ColumnId> getColumnIds(ShardId shardId);
 
-  List<ShardId> findShardIds(String tenant, String table, String columName);
+  List<ShardId> findShardIds(String tenant, String table, String columnId);
 
   String resolveCurrentPath(String tenant, String table, int shardNum);
 

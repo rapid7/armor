@@ -3,7 +3,7 @@ package com.rapid7.armor;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.meta.ColumnMetadata;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
@@ -110,16 +110,16 @@ public class S3StoreTest {
     assertTrue(levelShardIds.contains(shard0));
     assertTrue(levelShardIds.contains(shard1));
 
-    ColumnName nameColumn = new ColumnName("name", "S");
-    ColumnName levelColumn = new ColumnName("level", "I");
+    ColumnId nameColumn = new ColumnId("name", "S");
+    ColumnId levelColumn = new ColumnId("level", "I");
 
-    List<ColumnName> shard0columnNames = writeStore.getColumNames(shard0);
-    shard0columnNames.contains(nameColumn);
-    shard0columnNames.contains(levelColumn);
+    List<ColumnId> shard0columnIds = writeStore.getColumnIds(shard0);
+    shard0columnIds.contains(nameColumn);
+    shard0columnIds.contains(levelColumn);
 
-    List<ColumnName> shard1columnNames = writeStore.getColumNames(shard1);
-    shard1columnNames.contains(nameColumn);
-    shard1columnNames.contains(levelColumn);
+    List<ColumnId> shard1columnIds = writeStore.getColumnIds(shard1);
+    shard1columnIds.contains(nameColumn);
+    shard1columnIds.contains(levelColumn);
 
     assertEquals(shard0, writeStore.buildShardId("org1", "table1", 0));
     assertEquals(shard1, writeStore.buildShardId("org1", "table1", 1));
@@ -141,15 +141,15 @@ public class S3StoreTest {
     levelNameShardIds.contains(shard0);
     levelNameShardIds.contains(shard1);
 
-    List<ColumnName> shard0Columns = readStore.getColumNames(shard0);
+    List<ColumnId> shard0Columns = readStore.getColumnIds(shard0);
     assertTrue(shard0Columns.contains(nameColumn));
     assertTrue(shard0Columns.contains(levelColumn));
 
-    List<ColumnName> shard1Columns = readStore.getColumNames(shard1);
+    List<ColumnId> shard1Columns = readStore.getColumnIds(shard1);
     assertTrue(shard1Columns.contains(nameColumn));
     assertTrue(shard1Columns.contains(levelColumn));
 
-    List<ColumnName> tableColumns = readStore.getColumNames("org1", "table1");
+    List<ColumnId> tableColumns = readStore.getColumnIds("org1", "table1");
     assertTrue(tableColumns.contains(nameColumn));
     assertTrue(tableColumns.contains(levelColumn));
 
@@ -162,11 +162,11 @@ public class S3StoreTest {
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
     String myorg = "myorg";
     String table = "vulntable";
-    ColumnName name = new ColumnName("name", DataType.STRING.getCode());
-    ColumnName time = new ColumnName("time", DataType.LONG.getCode());
-    ColumnName vuln = new ColumnName("vuln", DataType.INTEGER.getCode());
-    ColumnName asset = new ColumnName("asset", DataType.INTEGER.getCode());
-    List<ColumnName> columns = Arrays.asList(name, time, vuln);
+    ColumnId name = new ColumnId("name", DataType.STRING.getCode());
+    ColumnId time = new ColumnId("time", DataType.LONG.getCode());
+    ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
+    ColumnId asset = new ColumnId("asset", DataType.INTEGER.getCode());
+    List<ColumnId> columns = Arrays.asList(name, time, vuln);
     try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, false, 10, () -> 1, null)) {
       String transction = armorWriter.startTransaction();
       Entity e11 = Entity.buildEntity("asset", 1, 1, null, name, time, vuln);
@@ -216,7 +216,7 @@ public class S3StoreTest {
       List<ShardId> shardIds = writeStore.findShardIds(myorg, table, "vuln");
       assertFalse(shardIds.isEmpty());
       ShardId shardId = shardIds.get(0);
-      assertEquals(Sets.newHashSet(name, asset, vuln, time), Sets.newHashSet(writeStore.getColumNames(shardId)));
+      assertEquals(Sets.newHashSet(name, asset, vuln, time), Sets.newHashSet(writeStore.getColumnIds(shardId)));
   
       // 12 rows, 2 entities 1 and 2, freebytes 0
       Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);

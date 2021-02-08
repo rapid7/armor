@@ -21,7 +21,7 @@ import org.apache.commons.cli.ParseException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.write.component.DictionaryWriter;
@@ -56,36 +56,36 @@ public class ArmorAnalyzer {
     if (mode.equals("write")) {
       
       for (Path columnFile : listFiles(path)) {
-        ColumnName columnName = null;
+        ColumnId columnId = null;
         try {
-          columnName = new ColumnName(columnFile.getFileName().toString());
+          columnId = new ColumnId(columnFile.getFileName().toString());
         } catch (Exception e) {
           continue;
           // Just skip
         }
         try (ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(Files.newInputStream(columnFile, StandardOpenOption.READ)),
-            new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
+            new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnId))) {
           ObjectMapper objectMapper = new ObjectMapper();
           Files.copy(
               new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getMetadata())),
-              targetPath.resolve(columnName.getName() + "-metadata.json"),
+              targetPath.resolve(columnId.getName() + "-metadata.json"),
               StandardCopyOption.REPLACE_EXISTING);
           DictionaryWriter entityDictionaryWriter = writer.getEntityDictionary();
           Files.copy(
               new ByteArrayInputStream(objectMapper.writeValueAsBytes(entityDictionaryWriter.getStrToInt())),
-              targetPath.resolve(columnName.getName() + "-entity-dictionary-str2Int.json"),
+              targetPath.resolve(columnId.getName() + "-entity-dictionary-str2Int.json"),
               StandardCopyOption.REPLACE_EXISTING);
           Files.copy(
               new ByteArrayInputStream(objectMapper.writeValueAsBytes(entityDictionaryWriter.getIntToStr())),
-              targetPath.resolve(columnName.getName() + "-entity-dictionary-int2Str.json"),
+              targetPath.resolve(columnId.getName() + "-entity-dictionary-int2Str.json"),
               StandardCopyOption.REPLACE_EXISTING);
           Files.copy(
               new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getEntityRecordSummaries())),
-              targetPath.resolve(columnName.getName() + "-ordered-enity-summaries.json"),
+              targetPath.resolve(columnId.getName() + "-ordered-enity-summaries.json"),
               StandardCopyOption.REPLACE_EXISTING);
           Files.copy(
               new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getEntites())),
-              targetPath.resolve(columnName.getName() + "-raw-entity-map.json"),
+              targetPath.resolve(columnId.getName() + "-raw-entity-map.json"),
               StandardCopyOption.REPLACE_EXISTING);
           
           DictionaryWriter rgDict = writer.getRowGroupWriter().getDictionaryWriter();
@@ -101,7 +101,7 @@ public class ArmorAnalyzer {
           }
           
           // Finally lets dump the output of the shard out into something we can consume visually
-          ColumnShardVisualReader reader = new ColumnShardVisualReader(columnName, targetPath);
+          ColumnShardVisualReader reader = new ColumnShardVisualReader(columnId, targetPath);
           reader.process(writer);
         }
       }

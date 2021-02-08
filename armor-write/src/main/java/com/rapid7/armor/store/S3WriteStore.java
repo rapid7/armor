@@ -4,7 +4,7 @@ import com.rapid7.armor.Constants;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.shard.ShardStrategy;
@@ -62,7 +62,7 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void saveColumn(String transactionId, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
     String key = columnShardId.getTenant() + "/" + columnShardId.getTable() + "/" + columnShardId.getShardNum() + "/" + transactionId + "/" +
-        columnShardId.getColumnName().fullName();
+        columnShardId.getColumnId().fullName();
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(byteSize);
     try {
@@ -77,7 +77,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public ColumnFileWriter loadColumnWriter(ColumnShardId columnShardId) {
-    String shardIdPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getShardNum()) + "/" + columnShardId.getColumnName().fullName();
+    String shardIdPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getShardNum()) + "/" + columnShardId.getColumnId().fullName();
     try {
       if (!s3Client.doesObjectExist(bucket, shardIdPath)) {
         return new ColumnFileWriter(columnShardId);
@@ -96,7 +96,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public List<ColumnName> getColumNames(ShardId shardId) {
+  public List<ColumnId> getColumnIds(ShardId shardId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()) + "/");
@@ -105,7 +105,7 @@ public class S3WriteStore implements WriteStore {
     return summaries.stream()
         .map(s -> Paths.get(s.getKey()).getFileName().toString())
         .filter(n -> !n.contains(Constants.SHARD_METADATA))
-        .map(ColumnName::new).collect(Collectors.toList());
+        .map(ColumnId::new).collect(Collectors.toList());
   }
 
   @Override
@@ -127,7 +127,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, String columName) {
+  public List<ShardId> findShardIds(String tenant, String table, String columnId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(tenant + "/" + table + "/");
@@ -146,20 +146,20 @@ public class S3WriteStore implements WriteStore {
   @Override
   public List<ColumnFileWriter> loadColumnWriters(String tenant, String table, int shardNum) {
     ShardId shardId = buildShardId(tenant, table, shardNum);
-    List<ColumnName> columNames = getColumNames(buildShardId(tenant, table, shardNum));
+    List<ColumnId> columnIds = getColumnIds(buildShardId(tenant, table, shardNum));
     List<ColumnFileWriter> writers = new ArrayList<>();
     TableMetadata tableMetadata = this.loadTableMetadata(tenant, table);
-    for (ColumnName columnName : columNames) {
-      if (tableMetadata.getEntityColumnId().equals(columnName.getName()))
+    for (ColumnId columnId : columnIds) {
+      if (tableMetadata.getEntityColumnId().equals(columnId.getName()))
         continue;
-      String shardIdPath = resolveCurrentPath(tenant, table, shardId.getShardNum()) + "/" + columnName.fullName();
+      String shardIdPath = resolveCurrentPath(tenant, table, shardId.getShardNum()) + "/" + columnId.fullName();
       try {
         if (!doesObjectExist(bucket, shardIdPath)) {
-          writers.add(new ColumnFileWriter(new ColumnShardId(shardId, columnName)));
+          writers.add(new ColumnFileWriter(new ColumnShardId(shardId, columnId)));
         } else {
           try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
             try {
-              ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(s3InputStream), new ColumnShardId(shardId, columnName));
+              ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(s3InputStream), new ColumnShardId(shardId, columnId));
               writers.add(writer);
             } catch (Exception e) {
               LOGGER.error("Detected an issue loading shard at {}, this investigate", shardIdPath, e);
@@ -394,7 +394,7 @@ public class S3WriteStore implements WriteStore {
       LOGGER.warn("Unable to previous shard version under {}", toDelete, e);
     }
 
-    String key = columnShardId.getTenant() + "/" + columnShardId.getTable() + "/" + columnShardId.getShardNum() + "/" + Constants.LAST_ERROR + "/" + transaction + "/" + columnShardId.getColumnName().fullName();
+    String key = columnShardId.getTenant() + "/" + columnShardId.getTable() + "/" + columnShardId.getShardNum() + "/" + Constants.LAST_ERROR + "/" + transaction + "/" + columnShardId.getColumnId().fullName();
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(size);
     try {
@@ -407,7 +407,7 @@ public class S3WriteStore implements WriteStore {
           columnShardId.getTable() + "/" +
           columnShardId.getShardNum() + "/" +
           Constants.LAST_ERROR + "/" +
-          transaction + "/" + columnShardId.getColumnName().fullName() + "_msg";
+          transaction + "/" + columnShardId.getColumnId().fullName() + "_msg";
         s3Client.putObject(bucket, description, error);
       }
     } catch (ResetException e) {

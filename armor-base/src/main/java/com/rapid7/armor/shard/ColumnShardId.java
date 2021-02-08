@@ -1,21 +1,21 @@
 package com.rapid7.armor.shard;
 
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import java.util.Objects;
 
 public class ColumnShardId {
   private final ShardId shardId;
-  private ColumnName columnName;
+  private ColumnId columnId;
 
-  public ColumnShardId(ShardId shardId, String columnName, DataType dataType) {
+  public ColumnShardId(ShardId shardId, String columnId, DataType dataType) {
     this.shardId = shardId;
-    this.columnName = new ColumnName(columnName, dataType.getCode());
+    this.columnId = new ColumnId(columnId, dataType.getCode());
   }
 
-  public ColumnShardId(ShardId shardId, ColumnName columnName) {
+  public ColumnShardId(ShardId shardId, ColumnId columnId) {
     this.shardId = shardId;
-    this.columnName = columnName;
+    this.columnId = columnId;
   }
 
   public ShardId shardId() {
@@ -30,12 +30,12 @@ public class ColumnShardId {
     return shardId.getTable();
   }
 
-  public ColumnName getColumnName() {
-    return columnName;
+  public ColumnId getColumnId() {
+    return columnId;
   }
 
-  public void setColumnName(ColumnName columnName) {
-    this.columnName = columnName;
+  public void setColumnId(ColumnId columnId) {
+    this.columnId = columnId;
   }
 
   public ShardId getShardId() {
@@ -47,16 +47,16 @@ public class ColumnShardId {
   }
 
   public String alternateString() {
-    return shardId.simpleString() + "_" + columnName.getName() + "_" + columnName.dataType();
+    return shardId.simpleString() + "_" + columnId.getName() + "_" + columnId.dataType();
   }
 
   public String toSimpleString() {
-    return "shard=" + shardId + "column=" + columnName.getName() + "_" + columnName.dataType();
+    return "shard=" + shardId + "column=" + columnId.getName() + "_" + columnId.dataType();
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(shardId, columnName);
+    return Objects.hash(shardId, columnId);
   }
 
   @Override
@@ -67,7 +67,7 @@ public class ColumnShardId {
     if (other instanceof ColumnShardId) {
       ColumnShardId otherColumnShardId = (ColumnShardId) other;
       return Objects.equals(shardId, otherColumnShardId.shardId) &&
-          Objects.equals(columnName, otherColumnShardId.columnName);
+          Objects.equals(columnId, otherColumnShardId.columnId);
     }
     return false;
   }
@@ -76,7 +76,7 @@ public class ColumnShardId {
   public String toString() {
     return "ColumnShardId{" +
         "shardId=" + shardId +
-        ", columnName=" + columnName +
+        ", columnId=" + columnId +
         '}';
   }
 }

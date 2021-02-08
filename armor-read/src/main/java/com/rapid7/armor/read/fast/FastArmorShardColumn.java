@@ -51,8 +51,8 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
     return metadata.getDataType();
   }
 
-  public String columnName() {
-    return metadata.getColumnName();
+  public String columnId() {
+    return metadata.getColumnId();
   }
 
   public FastArmorBlockReader getFastArmorColumnReader() {
@@ -171,7 +171,7 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
             rowsIsNull.add(rowCounter + relativeRowPosition);
           }
         } catch (Exception e) {
-          throw new RuntimeException("Unable to read column " + metadata.getColumnName(), e);
+          throw new RuntimeException("Unable to read column " + metadata.getColumnId(), e);
         }
       }
       rowCounter += numRows;

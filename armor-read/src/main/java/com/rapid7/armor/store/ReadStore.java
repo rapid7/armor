@@ -2,7 +2,7 @@ package com.rapid7.armor.store;
 
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ShardId;
 import java.util.List;
 import java.util.Map;
@@ -12,17 +12,17 @@ public interface ReadStore {
 
   ShardId findShardId(String tenant, String table, int shardNum);
 
-  SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columName);
+  SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnId);
 
-  FastArmorShardColumn getFastArmorShard(ShardId shardId, String columName);
+  FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnId);
 
-  List<ColumnName> getColumNames(String tenant, String table);
+  List<ColumnId> getColumnIds(String tenant, String table);
 
-  List<ColumnName> getColumNames(ShardId shardId);
+  List<ColumnId> getColumnIds(ShardId shardId);
 
   List<ShardId> findShardIds(String tenant, String table);
 
-  List<ShardId> findShardIds(String tenant, String table, String columName);
+  List<ShardId> findShardIds(String tenant, String table, String columnId);
 
   List<String> getTables(String tenant);
 

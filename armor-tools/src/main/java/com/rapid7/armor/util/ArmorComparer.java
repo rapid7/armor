@@ -34,7 +34,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.meta.ColumnMetadata;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.write.component.DictionaryWriter;
@@ -77,31 +77,31 @@ public class ArmorComparer {
     
     // First thing is to find, group column files and pair them up for comparison.
     Set<Path> paths = listFiles(path);
-    Map<ColumnName, ColumnMinMax> detectedColumns = new HashMap<>();  
+    Map<ColumnId, ColumnMinMax> detectedColumns = new HashMap<>();  
     for (Path p : paths) {
-      ColumnName columnName = null;
+      ColumnId columnId = null;
       try {
-        columnName = new ColumnName(p.getFileName().toString());
+        columnId = new ColumnId(p.getFileName().toString());
       } catch (Exception e) {
         // No valid so just skip.
         continue;
       }
       try (ColumnFileWriter writer = 
-          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnName))) {
+          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnId))) {
          // Its valid, extract the date
         String lastUpdate = writer.getMetadata().getLastUpdate();
         SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
         Date date  = sdf.parse(lastUpdate);
         
-        ColumnMinMax minMax = detectedColumns.get(columnName);
+        ColumnMinMax minMax = detectedColumns.get(columnId);
         if (minMax == null) {
           minMax = new ColumnMinMax();
-          minMax.columnName = columnName;
+          minMax.columnId = columnId;
           minMax.max = date.toInstant();
           minMax.min = date.toInstant();
           minMax.maxPath = p;
           minMax.minPath = p;
-          detectedColumns.put(columnName, minMax);
+          detectedColumns.put(columnId, minMax);
         } else {
           if (minMax.max.isBefore(date.toInstant())) {
             minMax.max = date.toInstant();
@@ -121,7 +121,7 @@ public class ArmorComparer {
     for (ColumnMinMax columnMinMax : columns) {
       Path maxPath = columnMinMax.maxPath;
       Path minPath = columnMinMax.minPath;
-      ColumnShardId dummyShard = new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnMinMax.columnName);
+      ColumnShardId dummyShard = new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnMinMax.columnId);
       try (ColumnFileWriter maxWriter = new ColumnFileWriter(new DataInputStream(Files.newInputStream(maxPath, StandardOpenOption.READ)), dummyShard);
            ColumnFileWriter minWriter = new ColumnFileWriter(new DataInputStream(Files.newInputStream(minPath, StandardOpenOption.READ)), dummyShard)) {
         Map<Integer, EntityRecord> minRecords = minWriter.getEntites();
@@ -205,15 +205,15 @@ public class ArmorComparer {
         ObjectMapper objectMapper = new ObjectMapper();
         Files.copy(
             new ByteArrayInputStream(objectMapper.writeValueAsBytes(removeEntities)),
-            targetPath.resolve(columnMinMax.columnName.getName() + "-removed-entities.json"),
+            targetPath.resolve(columnMinMax.columnId.getName() + "-removed-entities.json"),
             StandardCopyOption.REPLACE_EXISTING);
         Files.copy(
             new ByteArrayInputStream(objectMapper.writeValueAsBytes(addedEntities)),
-            targetPath.resolve(columnMinMax.columnName.getName() + "-added-entities.json"),
+            targetPath.resolve(columnMinMax.columnId.getName() + "-added-entities.json"),
             StandardCopyOption.REPLACE_EXISTING);
         Files.copy(
             new ByteArrayInputStream(objectMapper.writeValueAsBytes(changedEntities)),
-            targetPath.resolve(columnMinMax.columnName.getName() + "-changed-entities.json"),
+            targetPath.resolve(columnMinMax.columnId.getName() + "-changed-entities.json"),
             StandardCopyOption.REPLACE_EXISTING);
       }
     }    
@@ -252,7 +252,7 @@ public class ArmorComparer {
     }
   }
   private static class ColumnMinMax {
-     public ColumnName columnName;
+     public ColumnId columnId;
      public Instant max;
      public Instant min;
      public Path maxPath;

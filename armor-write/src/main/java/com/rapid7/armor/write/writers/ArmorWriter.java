@@ -6,7 +6,7 @@ import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
@@ -93,7 +93,7 @@ public class ArmorWriter implements Closeable {
     return UUID.randomUUID().toString();
   }
 
-  public Map<Integer, EntityRecord> getColumnEntityRecords(String tenant, String table, String columnName, int shard) {
+  public Map<Integer, EntityRecord> getColumnEntityRecords(String tenant, String table, String columnId, int shard) {
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter == null) {
@@ -107,7 +107,7 @@ public class ArmorWriter implements Closeable {
         ShardId shardId = store.buildShardId(tenant, table, shard);
         ShardWriter sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
         tableWriter.addShard(sw);
-        return sw.getEntities(columnName);
+        return sw.getEntities(columnId);
       } else {
         return null;
       }
@@ -119,11 +119,11 @@ public class ArmorWriter implements Closeable {
         sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
         tableWriter.addShard(sw);
       }
-      return sw.getEntities(columnName);
+      return sw.getEntities(columnId);
     }
   }
 
-  public ColumnMetadata getColumnMetadata(String tenant, String table, String columnName, int shard) {
+  public ColumnMetadata getColumnMetadata(String tenant, String table, String columnId, int shard) {
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter == null) {
@@ -137,7 +137,7 @@ public class ArmorWriter implements Closeable {
         ShardId shardId = store.buildShardId(tenant, table, shard);
         ShardWriter sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
         tableWriter.addShard(sw);
-        return sw.getMetadata(columnName);
+        return sw.getMetadata(columnId);
       } else
         return null;
     } else {
@@ -147,7 +147,7 @@ public class ArmorWriter implements Closeable {
         sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
         tableWriter.addShard(sw);
       }
-      return sw.getMetadata(columnName);
+      return sw.getMetadata(columnId);
     }
   }
 
@@ -263,24 +263,24 @@ public class ArmorWriter implements Closeable {
               }
 
               List<Entity> entityUpdates = entry.getValue();
-              Map<ColumnName, List<WriteRequest>> columnNameEntityColumns = new HashMap<>();
+              Map<ColumnId, List<WriteRequest>> columnIdEntityColumns = new HashMap<>();
               for (Entity eu : entityUpdates) {
                 Object entityId = eu.getEntityId();
                 long version = eu.getVersion();
                 String instanceid = eu.getInstanceId();
                 for (Column ec : eu.columns()) {
                   WriteRequest internalRequest = new WriteRequest(entityId, version, instanceid, ec);
-                  List<WriteRequest> payloads = columnNameEntityColumns.computeIfAbsent(
-                      ec.getColumnName(),
+                  List<WriteRequest> payloads = columnIdEntityColumns.computeIfAbsent(
+                      ec.getColumnId(),
                       k -> new ArrayList<>()
                   );
                   payloads.add(internalRequest);
                 }
               }
-              for (Map.Entry<ColumnName, List<WriteRequest>> e : columnNameEntityColumns.entrySet()) {
-                ColumnName columnName = e.getKey();
+              for (Map.Entry<ColumnId, List<WriteRequest>> e : columnIdEntityColumns.entrySet()) {
+                ColumnId columnId = e.getKey();
                 List<WriteRequest> columns = e.getValue();
-                shardWriter.write(transaction, columnName, columns);
+                shardWriter.write(transaction, columnId, columns);
               }
               return null;
             } finally {

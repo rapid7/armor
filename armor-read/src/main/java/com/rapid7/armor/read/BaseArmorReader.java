@@ -14,11 +14,11 @@ public class BaseArmorReader {
     this.store = store;
   }
 
-  public ColumnMetadata getColumnMetadata(String tenant, String table, String columnName, int shardNum) throws IOException {
+  public ColumnMetadata getColumnMetadata(String tenant, String table, String columnId, int shardNum) throws IOException {
     ShardId shardId = store.findShardId(tenant, table, shardNum);
     if (shardId == null)
       return null;
-    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);
+    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnId);
     if (armorShard == null)
       return null;
     return armorShard.getMetadata();

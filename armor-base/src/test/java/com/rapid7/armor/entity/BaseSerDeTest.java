@@ -1,6 +1,6 @@
 package com.rapid7.armor.entity;
 
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -12,19 +12,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class BaseSerDeTest {
 
   @Test
-  public void columnNameSerDer() throws IOException {
+  public void columnIdsSerDer() throws IOException {
     ObjectMapper om = new ObjectMapper();
-    ColumnName cn = new ColumnName("a", DataType.STRING.getCode());
+    ColumnId cn = new ColumnId("a", DataType.STRING.getCode());
 
-    String columnNameStr = om.writeValueAsString(cn);
-    ColumnName testColumnName = om.readValue(columnNameStr, ColumnName.class);
-    assertEquals(cn, testColumnName);
+    String columnIdStr = om.writeValueAsString(cn);
+    ColumnId testColumnId = om.readValue(columnIdStr, ColumnId.class);
+    assertEquals(cn, testColumnId);
   }
 
   @Test
   public void columnSerDer() throws IOException {
     ObjectMapper om = new ObjectMapper();
-    Column column = new Column(new ColumnName("a", DataType.STRING.getCode()));
+    Column column = new Column(new ColumnId("a", DataType.STRING.getCode()));
     column.addValue("test123");
     column.addValue(null);
 
@@ -47,11 +47,11 @@ public class BaseSerDeTest {
   public void entityBaseSerDer() throws IOException {
     ObjectMapper om = new ObjectMapper();
     Entity entity = new Entity();
-    entity.setColumnNames(Arrays.asList(
-        new ColumnName("a", DataType.STRING.getCode()),
-        new ColumnName("b", DataType.INTEGER.getCode()),
-        new ColumnName("c", DataType.INTEGER.getCode()),
-        new ColumnName("e", DataType.INTEGER.getCode())));
+    entity.setColumnIds(Arrays.asList(
+        new ColumnId("a", DataType.STRING.getCode()),
+        new ColumnId("b", DataType.INTEGER.getCode()),
+        new ColumnId("c", DataType.INTEGER.getCode()),
+        new ColumnId("e", DataType.INTEGER.getCode())));
     entity.setEntityIdColumn("austin");
     entity.setVersion(33);
     Row row1 = new Row();

@@ -3,7 +3,7 @@ package com.rapid7.armor.store;
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ShardId;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
@@ -41,7 +41,7 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public List<ColumnName> getColumNames(ShardId shardId) {
+  public List<ColumnId> getColumnIds(ShardId shardId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()) + "/");
@@ -50,7 +50,7 @@ public class S3ReadStore implements ReadStore {
     return summaries.stream()
         .map(s -> Paths.get(s.getKey()).getFileName().toString())
         .filter(n -> !n.contains(Constants.SHARD_METADATA))
-        .map(ColumnName::new).collect(Collectors.toList());
+        .map(ColumnId::new).collect(Collectors.toList());
   }
 
   @Override
@@ -72,7 +72,7 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, String columName) {
+  public List<ShardId> findShardIds(String tenant, String table, String columnId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(tenant + "/" + table + "/");
@@ -100,10 +100,10 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnName) {
-    List<ColumnName> columnNames = getColumNames(shardId);
-    Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columnName)).findFirst();
-    ColumnName cn = option.get();
+  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnId) {
+    List<ColumnId> columnIds = getColumnIds(shardId);
+    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
+    ColumnId cn = option.get();
     String shardIdPath = resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()) + "/" + cn.fullName();
     if (!doesObjectExist(bucket, shardIdPath)) {
       return new SlowArmorShardColumn();
@@ -118,10 +118,10 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columName) {
-    List<ColumnName> columnNames = getColumNames(shardId);
-    Optional<ColumnName> option = columnNames.stream().filter(c -> c.getName().equals(columName)).findFirst();
-    ColumnName cn = option.get();
+  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnId) {
+    List<ColumnId> columnIds = getColumnIds(shardId);
+    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
+    ColumnId cn = option.get();
     String shardIdPath = resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()) + "/" + cn.fullName();
     if (!doesObjectExist(bucket, shardIdPath)) {
       return null;
@@ -137,11 +137,11 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public List<ColumnName> getColumNames(String tenant, String table) {
+  public List<ColumnId> getColumnIds(String tenant, String table) {
     List<ShardId> shardIds = findShardIds(tenant, table);
     if (shardIds.isEmpty())
       return new ArrayList<>();
-    return getColumNames(shardIds.get(0));
+    return getColumnIds(shardIds.get(0));
   }
 
   @Override

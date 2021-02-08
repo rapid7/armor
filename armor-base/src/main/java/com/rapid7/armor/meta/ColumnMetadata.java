@@ -15,7 +15,7 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 public class ColumnMetadata {
   private int format = 1;
   private DataType dataType;
-  private String columnName;
+  private String columnId;
   private String lastUpdate;
   private boolean littleEndian = false;
   private int fragmentationLevel = 0;
@@ -91,12 +91,12 @@ public class ColumnMetadata {
     this.format = version;
   }
 
-  public String getColumnName() {
-    return columnName;
+  public String getColumnId() {
+    return columnId;
   }
 
-  public void setColumnName(String columnName) {
-    this.columnName = columnName;
+  public void setColumnId(String columnId) {
+    this.columnId = columnId;
   }
 
   public String getCompressionAlgorithm() {

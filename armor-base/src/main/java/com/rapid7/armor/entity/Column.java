@@ -1,19 +1,19 @@
 package com.rapid7.armor.entity;
 
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 public class Column {
-  private ColumnName columnName;
+  private ColumnId columnId;
   private List<Object> values = new ArrayList<>();
 
   public Column() {}
 
-  public Column(ColumnName columnName) {
-    this.columnName = columnName;
+  public Column(ColumnId columnId) {
+    this.columnId = columnId;
   }
   
   public int size() {
@@ -25,12 +25,12 @@ public class Column {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     Column column = (Column) o;
-    return Objects.equals(getColumnName(), column.getColumnName()) && Objects.equals(getValues(), column.getValues());
+    return Objects.equals(getColumnId(), column.getColumnId()) && Objects.equals(getValues(), column.getValues());
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getColumnName(), getValues());
+    return Objects.hash(getColumnId(), getValues());
   }
 
   public List<Object> getValues() {
@@ -41,12 +41,12 @@ public class Column {
     this.values = values;
   }
 
-  public ColumnName getColumnName() {
-    return columnName;
+  public ColumnId getColumnId() {
+    return columnId;
   }
 
-  public void setColumnName(ColumnName columnName) {
-    this.columnName = columnName;
+  public void setColumnId(ColumnId columnId) {
+    this.columnId = columnId;
   }
 
   public void addValue(Object value) {
@@ -61,16 +61,16 @@ public class Column {
   }
 
   public int decodedByteLength() {
-    if (columnName.dataType() == DataType.STRING)
+    if (columnId.dataType() == DataType.STRING)
       return values.stream().mapToInt(v -> v.toString().getBytes().length).sum();
     else
-      return columnName.dataType().determineByteLength(values.size());
+      return columnId.dataType().determineByteLength(values.size());
   }
 
   private void checkType(Object value) {
     if (value == null)
       return;
-    switch (columnName.dataType()) {
+    switch (columnId.dataType()) {
       case BOOLEAN:
         if (value instanceof Boolean)
           return;
@@ -97,6 +97,6 @@ public class Column {
           return;
         break;
     }
-    throw new RuntimeException("The value of type " + value.getClass() + " doesn't match for this column type " + columnName.dataType());
+    throw new RuntimeException("The value of type " + value.getClass() + " doesn't match for this column type " + columnId.dataType());
   }
 }

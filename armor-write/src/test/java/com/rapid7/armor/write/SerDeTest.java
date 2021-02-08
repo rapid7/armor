@@ -1,7 +1,7 @@
 package com.rapid7.armor.write;
 
 import com.rapid7.armor.entity.Column;
-import com.rapid7.armor.schema.ColumnName;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -11,10 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class SerDeTest {
 
   @Test
-  public void columnNameSerDer() throws IOException {
+  public void columnIdSerDer() throws IOException {
     ObjectMapper om = new ObjectMapper();
     WriteRequest icpr = new WriteRequest();
-    Column c = new Column(new ColumnName("a", DataType.STRING.getCode()));
+    Column c = new Column(new ColumnId("a", DataType.STRING.getCode()));
     c.addValue(null);
     c.addValue("test");
     icpr.setColumn(c);
