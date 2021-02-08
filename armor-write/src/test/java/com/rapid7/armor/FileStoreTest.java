@@ -77,14 +77,14 @@ public class FileStoreTest {
         String transaction = armorWriter.startTransaction();
         armorWriter.write(transaction, "myorg", "testtable", Arrays.asList(e1, e2, e3, e4, e5, e6, e7));
         armorWriter.getColumnEntityRecords("myorg", "testtable", "vuln", 0);
-        armorWriter.save(transaction, "myorg", "testtable");
+        armorWriter.commit(transaction, "myorg", "testtable");
       }
   
       try (ArmorWriter armorWriter2 = new ArmorWriter("test", fileStore, false, 10, null, null)) {
         String transaction = armorWriter2.startTransaction();
         Entity e8 = Entity.buildEntity("asset", 8, 1, null, vuln);
         armorWriter2.write(transaction, "myorg", "testtable", Collections.singletonList(e8));
-        armorWriter2.save(transaction, "myorg", "testtable");
+        armorWriter2.commit(transaction, "myorg", "testtable");
       }
     } finally {
       removeDirectory(testDirectory);
@@ -145,7 +145,7 @@ public class FileStoreTest {
           null, 6);
       String transction = armorWriter.startTransaction();
       armorWriter.write(transction, myorg, table, Arrays.asList(e11, e12, e10, e20));
-      armorWriter.save(transction, myorg, table);
+      armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
       // Verify store/shard stuff
       List<ShardId> shardIds = fileStore.findShardIds(myorg, table, "vuln");
@@ -169,7 +169,7 @@ public class FileStoreTest {
       // Delete the entity 1
       armorWriter.delete(transction, myorg, table, 1);
 
-      armorWriter.save(transction, myorg, table);
+      armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
 
       Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
@@ -195,7 +195,7 @@ public class FileStoreTest {
           "1", null, 6);
 
       armorWriter.write(transction, myorg, table, Collections.singletonList(e21));
-      armorWriter.save(transction, myorg, table);
+      armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
 
       Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
@@ -221,7 +221,7 @@ public class FileStoreTest {
       e31.addRow("1", null, -1);
 
       armorWriter.write(transction, myorg, table, Arrays.asList(e23, e31));
-      armorWriter.save(transction, myorg, table);
+      armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
 
       Map<Integer, EntityRecord> records4 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
@@ -244,7 +244,7 @@ public class FileStoreTest {
       ArmorWriter amrorWriter2 = new ArmorWriter("test", fileStore, false, 10, null, null);
 
       amrorWriter2.write(transction, myorg, table, Collections.singletonList(e32));
-      amrorWriter2.save(transction, myorg, table);
+      amrorWriter2.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
 
       Map<Integer, EntityRecord> records5 = amrorWriter2.getColumnEntityRecords(myorg, table, "vuln", 0);

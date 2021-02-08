@@ -209,7 +209,7 @@ public class S3StoreTest {
           null, 6);
   
       armorWriter.write(transction, myorg, table, Arrays.asList(e11, e12, e10, e20));
-      armorWriter.save(transction, myorg, table);
+      armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
   
       // Verify store/shard stuff
@@ -233,7 +233,7 @@ public class S3StoreTest {
   
       // Delete the entity 1
       armorWriter.delete(transction, myorg, table, 1);
-      armorWriter.save(transction, myorg, table);
+      armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
       Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
       ColumnMetadata cmd2 = armorWriter.getColumnMetadata(myorg, table, "vuln", 0);
@@ -260,7 +260,7 @@ public class S3StoreTest {
       armorWriter.write(transction, myorg, table, Collections.singletonList(e21));
       Map<Integer, EntityRecord> test1 = armorWriter.getColumnEntityRecords(myorg, table, "time", 0);
   
-      armorWriter.save(transction, myorg, table);
+      armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
   
       Map<Integer, EntityRecord> test = armorWriter.getColumnEntityRecords(myorg, table, "time", 0);
@@ -288,7 +288,7 @@ public class S3StoreTest {
       e31.addRow("1", null, -1);
   
       armorWriter.write(transction, myorg, table, Arrays.asList(e23, e31));
-      armorWriter.save(transction, myorg, table);
+      armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
   
       Map<Integer, EntityRecord> records4 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
@@ -312,7 +312,7 @@ public class S3StoreTest {
       Map<Integer, EntityRecord> records5a = amrorWriter2.getColumnEntityRecords(myorg, table, "vuln", 0);
   
       amrorWriter2.write(transction, myorg, table, Collections.singletonList(e32));
-      amrorWriter2.save(transction, myorg, table);
+      amrorWriter2.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
   
       Map<Integer, EntityRecord> records5 = amrorWriter2.getColumnEntityRecords(myorg, table, "vuln", 0);

@@ -247,19 +247,34 @@ public class FileStoreTestV2 {
     Row[] rows6 = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln, nevadaVuln, oregonVuln};
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
     int numEntities = 1000;
-    try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 1, null, null)) {
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 10, null, null)) {
       String xact = writer.startTransaction();
-      List<Entity> entities = new ArrayList<>();
+      List<Entity> entities4 = new ArrayList<>();
       for (int i = 0; i < 1000; i++) {
-        Entity random = generateEntity(Integer.toString(i), 1, rows4);
-        entities.add(random);
+        Entity random4 = generateEntity(Integer.toString(i), 1, rows4);
+        entities4.add(random4);
       }
       
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities));
-      writer.save(xact, TENANT, TABLE);
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities4));
+      writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(numEntities*4, testDirectory, 10);
       int random = RANDOM.nextInt(999);
-      verifyEntityReaderPOV(entities.get(random), testDirectory);
+      verifyEntityReaderPOV(entities4.get(random), testDirectory);
+      
+      // Ok now every entity will see an increase of rows from 4 to 6
+      List<Entity> entities6 = new ArrayList<>();
+      for (int i = 0; i < 1000; i++) {
+        Entity random6 = generateEntity(Integer.toString(i), 1, rows6);
+        entities6.add(random6);
+      }
+      
+      xact = writer.startTransaction();
+      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities6));
+      writer.commit(xact, TENANT, TABLE);
+      verifyTableReaderPOV(numEntities*6, testDirectory, 10);
+      random = RANDOM.nextInt(999);
+      verifyEntityReaderPOV(entities6.get(random), testDirectory);
+      
     }
 
   }
@@ -268,12 +283,12 @@ public class FileStoreTestV2 {
   public void deleteOnly() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
-    try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 1, null, null)) {
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 10, null, null)) {
       String xact = writer.startTransaction();
       for (int i = 0; i < 1000; i++) {
         writer.delete(xact, TENANT, TABLE, i);
       }
-      writer.save(xact, TENANT, TABLE);
+      writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(0, testDirectory, 0);
     }
   }
@@ -283,15 +298,15 @@ public class FileStoreTestV2 {
     Path testDirectory = Files.createTempDirectory("filestore");
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
     Assertions.assertThrows(WriteTranscationError.class, () -> {
-      try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 1, null, null)) {
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 10, null, null)) {
         List<Entity> entities = new ArrayList<>();
         Entity random = generateEntity("same", 1, null);
         entities.add(random);
         String xact = writer.startTransaction();
         writer.write(xact, TENANT, TABLE, entities);
-        writer.save(xact, TENANT, TABLE);
+        writer.commit(xact, TENANT, TABLE);
         writer.write(xact, TENANT, TABLE, entities);
-        writer.save(xact, TENANT, TABLE);
+        writer.commit(xact, TENANT, TABLE);
       } finally {
         removeDirectory(testDirectory);
       }
@@ -318,7 +333,7 @@ public class FileStoreTestV2 {
       }
       
       writer.write(xact, TENANT, TABLE, new ArrayList<>(entities));
-      writer.save(xact, TENANT, TABLE);
+      writer.commit(xact, TENANT, TABLE);
       writer.close();
       
       verifyTableReaderPOV(numEntities*2, testDirectory, numShards);
@@ -331,7 +346,7 @@ public class FileStoreTestV2 {
       for (int i = 0; i < 1000; i++) {
         writer.delete(xact, TENANT, TABLE, i);
       }
-      writer.save(xact, TENANT, TABLE);
+      writer.commit(xact, TENANT, TABLE);
       writer.close();
       
       verifyTableReaderPOV(0, testDirectory, numShards);
@@ -341,7 +356,7 @@ public class FileStoreTestV2 {
       writer = new ArmorWriter("aw1", store, true, numShards, null, null);
       xact = writer.startTransaction();      
       writer.write(xact, TENANT, TABLE, new ArrayList<>(entities));
-      writer.save(xact, TENANT, TABLE);
+      writer.commit(xact, TENANT, TABLE);
       
       verifyTableReaderPOV(numEntities*2, testDirectory, numShards);
       random = RANDOM.nextInt(999);
@@ -359,7 +374,7 @@ public class FileStoreTestV2 {
       writer.write(xact, TENANT, TABLE, new ArrayList<>(entities1));
       writer.write(xact, TENANT, TABLE, new ArrayList<>(entities1));
 
-      writer.save(xact, TENANT, TABLE);
+      writer.commit(xact, TENANT, TABLE);
       
       verifyTableReaderPOV((2*numEntities)*2, testDirectory, numShards);
       random = RANDOM.nextInt(999);
@@ -385,7 +400,7 @@ public class FileStoreTestV2 {
       // Make it out of order with respect to the enityIds.
       writer.write(xact, TENANT, TABLE, new ArrayList<>(entities3));
       writer.write(xact, TENANT, TABLE, new ArrayList<>(entities2));
-      writer.save(xact, TENANT, TABLE);
+      writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV((4*numEntities)*2, testDirectory, numShards);
       random = RANDOM.nextInt(999);
       verifyEntityReaderPOV(entities.get(random), testDirectory);

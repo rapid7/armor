@@ -285,7 +285,7 @@ public class ArmorWriter implements Closeable {
     }
   }
 
-  public void save(String transaction, String org, String table) {
+  public void commit(String transaction, String org, String table) {
     CompletionService<ShardMetadata> std = new ExecutorCompletionService<>(threadPool);
     int submitted = 0;
     TableWriteId tableId = new TableWriteId(org, table);

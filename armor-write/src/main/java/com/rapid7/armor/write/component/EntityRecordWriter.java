@@ -132,9 +132,6 @@ public class EntityRecordWriter extends FileComponent {
 
   public boolean putEntity(EntityRecord eir) throws IOException {
     if (entities.containsKey(eir.getEntityId())) {
-      EntityRecord prevEir = entities.get(eir.getEntityId());
-      if (prevEir.getVersion() >= eir.getVersion())
-        return false;
       int indexOffset = indexOffsets.get(eir.getEntityId());
       long prevPosition = position();
       try {
