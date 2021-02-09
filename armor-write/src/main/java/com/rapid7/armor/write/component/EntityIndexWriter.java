@@ -19,13 +19,19 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Writer for entity indexes. Write calls are written into memory (heap or direct) first and can be flushed to target upon
  * commit or close. Target can be a path or a given output stream.
  */
 public class EntityIndexWriter extends FileComponent {
+  private static final Logger LOGGER = LoggerFactory.getLogger(EntityIndexWriter.class);
+
   private Map<Integer, EntityRecord> entities = new HashMap<>();
   private Map<Integer, Integer> indexOffsets = new HashMap<>();
   private final ColumnShardId columnShardId;
@@ -62,9 +68,13 @@ public class EntityIndexWriter extends FileComponent {
     try {
       position(0);
       List<EntityRecord> rawRecords = new ArrayList<>();
-      for (int i = 0; i < nextOffset; i += RECORD_SIZE_BYTES) {
-        rawRecords.add(readEntityIndexRecord());
-      }
+      safeTraverse((a) -> {
+        try {
+          rawRecords.add(readEntityIndexRecord());
+        } catch (IOException ioe) {
+          throw new RuntimeException(ioe);
+        }
+      });
       return rawRecords;
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -154,10 +164,26 @@ public class EntityIndexWriter extends FileComponent {
   }
 
   private void loadOffsets() throws IOException {
+    safeTraverse((offset) -> {
+      try {
+        EntityRecord eir = readEntityIndexRecord();
+        entities.put(eir.getEntityId(), eir);
+        indexOffsets.put(eir.getEntityId(), offset);
+      } catch (IOException ioe) {
+        throw new RuntimeException("Detected an error loading index", ioe);
+      }
+    });
+  }
+  
+  private void safeTraverse(Consumer<Integer> function) {
     for (int i = 0; i < nextOffset; i += RECORD_SIZE_BYTES) {
-      EntityRecord eir = readEntityIndexRecord();
-      entities.put(eir.getEntityId(), eir);
-      indexOffsets.put(eir.getEntityId(), i);
+      // Do a check to see 
+      if (i + RECORD_SIZE_BYTES > nextOffset) {
+        LOGGER.error("The entity index is not of fixed page size of {} bytes, the total entity index size is {}. This may mean some data could be lost..skipping",
+            RECORD_SIZE_BYTES, nextOffset);
+        break;
+      }
+      function.accept(i);
     } 
   }
 
