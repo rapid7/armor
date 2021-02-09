@@ -13,7 +13,7 @@ public final class Constants {
   public final static int VERSION_BYTE_LENGTH = 8;
   public final static int DELETED_BYTE_LENGTH = 1;
   public final static int NULL_BYTE_LENGTH = 4;
-  public final static int REAL_BYTE_LENGTH = 4;
+  public final static int DECODED_BYTE_LENGTH = 4;
   public final static int INSTANCE_ID_BYTE_LENGTH = 36;
 
   public final static int RECORD_SIZE_BYTES =
@@ -23,7 +23,7 @@ public final class Constants {
       VERSION_BYTE_LENGTH +
       DELETED_BYTE_LENGTH +
       NULL_BYTE_LENGTH +
-      REAL_BYTE_LENGTH +
+      DECODED_BYTE_LENGTH +
       INSTANCE_ID_BYTE_LENGTH;
 
   public final static int BEGIN_OFFSET_OFFSET = ID_BYTE_LENGTH;
@@ -31,7 +31,7 @@ public final class Constants {
   public final static int BEGIN_DELETE_OFFSET = ID_BYTE_LENGTH + ROWGROUP_OFFSET_BYTE_LENGTH + VALUE_LENGTH_BYTE_LENGTH + VERSION_BYTE_LENGTH;
   public final static int BEGIN_NULL_BYTE_LENGTH_OFFSET = BEGIN_DELETE_OFFSET + DELETED_BYTE_LENGTH;
   public final static int BEGIN_REAL_LENGTH_OFFSET = BEGIN_DELETE_OFFSET + DELETED_BYTE_LENGTH + NULL_BYTE_LENGTH;
-  public final static int BEGIN_INSTANCE_ID_LENGTH_OFFSET = BEGIN_DELETE_OFFSET + DELETED_BYTE_LENGTH + NULL_BYTE_LENGTH + REAL_BYTE_LENGTH;
+  public final static int BEGIN_INSTANCE_ID_LENGTH_OFFSET = BEGIN_DELETE_OFFSET + DELETED_BYTE_LENGTH + NULL_BYTE_LENGTH + DECODED_BYTE_LENGTH;
 
 
   // Designates start of armor column

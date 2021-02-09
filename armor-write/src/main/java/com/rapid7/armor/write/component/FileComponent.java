@@ -25,9 +25,9 @@ public class FileComponent implements ChannelComponent {
   }
 
   /**
-   * Rebase the
+   * Rebase the path for this component to the given path.
    *
-   * @param path the path
+   * @param path The path to rebase to.
    */
   public void rebase(Path path) {
     // Execute a rebase where
