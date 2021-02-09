@@ -36,6 +36,7 @@ public class EntityIndexWriter extends FileComponent {
   private Map<Integer, Integer> indexOffsets = new HashMap<>();
   private final ColumnShardId columnShardId;
   private int nextOffset = 0;
+  private int preloadOffset = 0; 
   private final ByteBuffer readByteBuffer = ByteBuffer.allocate(RECORD_SIZE_BYTES);
   private final ByteBuffer writeByteBuffer = ByteBuffer.allocate(RECORD_SIZE_BYTES);
 
@@ -43,9 +44,14 @@ public class EntityIndexWriter extends FileComponent {
     super(path);
     this.columnShardId = columnShardId;
     nextOffset = (int) getCurrentSize();
+    preloadOffset = nextOffset;
     if (nextOffset > 0) {
       loadOffsets();
     }
+  }
+  
+  public int getPreLoadOffset() {
+    return preloadOffset;
   }
 
   public EntityRecord getEntityRecord(Integer entityId) {

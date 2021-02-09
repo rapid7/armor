@@ -378,8 +378,12 @@ public class ColumnFileWriter implements AutoCloseable {
       ByteArrayInputStream entityIndexLengths;
       totalBytes += 8;
       int uncompressed = (int) entityRecordWriter.getCurrentSize();
-      if (uncompressed % Constants.RECORD_SIZE_BYTES != 0)
-        throw new RuntimeException("The size of the entity index isn't in expected fixed widths of " + Constants.RECORD_SIZE_BYTES + ":" + uncompressed);
+      if (uncompressed % Constants.RECORD_SIZE_BYTES != 0) {
+        int bytesOff = uncompressed % Constants.RECORD_SIZE_BYTES;
+        LOGGER.error("The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}",
+           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityRecordWriter.getPreLoadOffset());
+        throw new RuntimeException("The size of the entity index is not in expected fixed widths of " + Constants.RECORD_SIZE_BYTES + ":" + uncompressed);
+      }
       if (compress) {
         String tempName = this.columnShardId.alternateString();
         Path eiTempPath = Files.createTempFile("entity-temp_" + tempName + "-", ".armor");
@@ -542,6 +546,8 @@ public class ColumnFileWriter implements AutoCloseable {
       final Integer entityId;
       if (entityCheck.getId() instanceof String) {
         entityId = entityDictionary.getSurrogate((String) entityCheck.getId());
+        if (entityId == null)
+          throw new RuntimeException("No surroogate could be found for " + entityCheck.getId());
       } else {
         entityId = (Integer) entityCheck.getId();
       }
