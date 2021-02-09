@@ -14,7 +14,7 @@ import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.write.StreamProduct;
 import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.component.DictionaryWriter;
-import com.rapid7.armor.write.component.EntityRecordWriter;
+import com.rapid7.armor.write.component.EntityIndexWriter;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.component.RowGroupWriter.RgOffsetWriteResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,7 +49,7 @@ import org.slf4j.LoggerFactory;
 public class ColumnFileWriter implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ColumnFileWriter.class);
   private static final ObjectMapper om = new ObjectMapper();
-  private EntityRecordWriter entityRecordWriter;
+  private EntityIndexWriter entityRecordWriter;
   private RowGroupWriter rowGroupWriter;
   private ColumnMetadata metadata;
   private DictionaryWriter strValueDictionary;
@@ -69,7 +69,7 @@ public class ColumnFileWriter implements AutoCloseable {
     entityDictionary = new DictionaryWriter(true);
     String name = columnShardId.alternateString() + ".armor";
     rowGroupWriter = new RowGroupWriter(Files.createTempFile("rowgroupstore_" + name + "-", ".armor"), columnShardId, strValueDictionary);
-    entityRecordWriter = new EntityRecordWriter(Files.createTempFile("entityindexstore_" + name + "-", ".armor"), columnShardId);
+    entityRecordWriter = new EntityIndexWriter(Files.createTempFile("entityindexstore_" + name + "-", ".armor"), columnShardId);
   }
 
   public ColumnFileWriter(DataInputStream dataInputStream, ColumnShardId columnShardId) {
@@ -95,7 +95,7 @@ public class ColumnFileWriter implements AutoCloseable {
           strValueDictionary = new DictionaryWriter(false);
         entityDictionary = new DictionaryWriter(true);
         rowGroupWriter = new RowGroupWriter(Files.createTempFile("rowgroupstore_" + columnShardId.alternateString() + "-", ".armor"), columnShardId, strValueDictionary);
-        entityRecordWriter = new EntityRecordWriter(Files.createTempFile("entityindexstore_" + columnShardId.alternateString() + "-", ".armor"), columnShardId);
+        entityRecordWriter = new EntityIndexWriter(Files.createTempFile("entityindexstore_" + columnShardId.alternateString() + "-", ".armor"), columnShardId);
       }
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -114,7 +114,7 @@ public class ColumnFileWriter implements AutoCloseable {
     return rowGroupWriter;
   }
   
-  public EntityRecordWriter getEntityRecordWriter() {
+  public EntityIndexWriter getEntityRecordWriter() {
     return entityRecordWriter;
   }
 
@@ -196,14 +196,14 @@ public class ColumnFileWriter implements AutoCloseable {
       try (ByteArrayInputStream bais = new ByteArrayInputStream(decompressed)) {
         Files.copy(bais, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
       }
-      entityRecordWriter = new EntityRecordWriter(entityIndexTemp, columnShardId);
+      entityRecordWriter = new EntityIndexWriter(entityIndexTemp, columnShardId);
     } else {
       byte[] uncompressedIndex = new byte[uncompressed];
       read = IOTools.readFully(inputStream, uncompressedIndex, 0, uncompressed);
       try (ByteArrayInputStream bais = new ByteArrayInputStream(uncompressedIndex)) {
         Files.copy(bais, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
       }
-      entityRecordWriter = new EntityRecordWriter(entityIndexTemp, columnShardId);
+      entityRecordWriter = new EntityIndexWriter(entityIndexTemp, columnShardId);
     }
     return read;
   }

@@ -174,8 +174,11 @@ public class ArmorWriter implements Closeable {
       ShardWriter sw = tableWriter.getShard(shardId.getShardNum());
       if (sw != null) {
         sw.delete(transaction, entityId);
+        return;
+      } else {
+        // NOTE: Let it fall through, since its a new shard we haven't loaded yet.
       }
-      return;
+      
     }
 
     // If it is null then table doesn't exist yet which means we can just return.

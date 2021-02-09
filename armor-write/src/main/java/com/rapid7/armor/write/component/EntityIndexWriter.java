@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
  * Writer for entity indexes. Write calls are written into memory (heap or direct) first and can be flushed to target upon
  * commit or close. Target can be a path or a given output stream.
  */
-public class EntityRecordWriter extends FileComponent {
+public class EntityIndexWriter extends FileComponent {
   private Map<Integer, EntityRecord> entities = new HashMap<>();
   private Map<Integer, Integer> indexOffsets = new HashMap<>();
   private final ColumnShardId columnShardId;
@@ -33,7 +33,7 @@ public class EntityRecordWriter extends FileComponent {
   private final ByteBuffer readByteBuffer = ByteBuffer.allocate(RECORD_SIZE_BYTES);
   private final ByteBuffer writeByteBuffer = ByteBuffer.allocate(RECORD_SIZE_BYTES);
 
-  public EntityRecordWriter(Path path, ColumnShardId columnShardId) throws IOException {
+  public EntityIndexWriter(Path path, ColumnShardId columnShardId) throws IOException {
     super(path);
     this.columnShardId = columnShardId;
     nextOffset = (int) getCurrentSize();

@@ -1,12 +1,29 @@
 package com.rapid7.armor;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Random;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.Row;
-import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.read.fast.FastArmorBlock;
 import com.rapid7.armor.read.fast.FastArmorBlockReader;
-import com.rapid7.armor.read.fast.FastArmorReader;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorReader;
 import com.rapid7.armor.schema.ColumnId;
@@ -17,45 +34,13 @@ import com.rapid7.armor.store.FileReadStore;
 import com.rapid7.armor.store.FileWriteStore;
 import com.rapid7.armor.store.WriteTranscationError;
 import com.rapid7.armor.write.writers.ArmorWriter;
-import com.google.common.collect.Sets;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Random;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import tech.tablesaw.api.IntColumn;
 import tech.tablesaw.api.LongColumn;
 import tech.tablesaw.api.StringColumn;
 import tech.tablesaw.api.Table;
 
-import tech.tablesaw.columns.Column;
-import tech.tablesaw.filtering.*;
-
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
-
-public class FileStoreTestV2 {
+public class FileStoreV2Test {
 
   // The table schema we will be working with
   private static List<ColumnId> COLUMNS = Arrays.asList(
@@ -98,6 +83,13 @@ public class FileStoreTestV2 {
   }
   
   private Entity randomEntity(long version, Row... rows) {
+    return Entity.buildEntity(ASSET_ID, UUID.randomUUID().toString(), version, TEST_UUID, COLUMNS, rows);
+  }
+  
+  private Entity randomEntity(long version, int numRows) {
+    List<Row> rows = new ArrayList<>();
+    for (int i = 0; i < numRows; i++)
+      rows.add(generateRandomRow());
     return Entity.buildEntity(ASSET_ID, UUID.randomUUID().toString(), version, TEST_UUID, COLUMNS, rows);
   }
   
@@ -242,6 +234,23 @@ public class FileStoreTestV2 {
   }
   
   @Test
+  public void completelyRandomWrites() throws IOException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    int numTries = RANDOM.nextInt(200);
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, true, 10, null, null)) {
+      for (int i = 0; i < numTries; i++) {
+        String xact = writer.startTransaction();
+        int randomRows = RANDOM.nextInt(5000);
+        Entity entity = randomEntity(1, randomRows);
+        writer.write(xact, TENANT, TABLE, Arrays.asList(entity));
+        writer.commit(xact, TENANT, TABLE);
+      }
+    }
+  }
+  
+  @Test
   public void entitesRowContentsChange() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
     Row[] rows2 = new Row[] {texasVuln, caliVuln};
@@ -305,7 +314,6 @@ public class FileStoreTestV2 {
       verifyTableReaderPOV(numEntities*3, testDirectory, 10);
       random = RANDOM.nextInt(999);
       verifyEntityReaderPOV(entitiesNull3.get(random), testDirectory);
-      
     }
 
   }

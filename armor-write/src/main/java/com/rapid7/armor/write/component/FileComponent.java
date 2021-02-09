@@ -85,7 +85,7 @@ public class FileComponent implements ChannelComponent {
     return fileChannel.read(byteBuffer);
   }
 
-
+  
   @Override
   public int write(ByteBuffer byteBuffer) throws IOException {
     return fileChannel.write(byteBuffer);

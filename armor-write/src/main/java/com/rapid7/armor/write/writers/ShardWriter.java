@@ -139,7 +139,6 @@ public class ShardWriter {
       store.captureWrites(transaction, shardId, null, null, entity);
     for (ColumnFileWriter writer : columnFileWriters.values())
       writer.delete(transaction, entity);
-
   }
 
   public void write(String transaction, ColumnId columnId, List<WriteRequest> writeRequests) throws IOException {
