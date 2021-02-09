@@ -11,7 +11,8 @@ import com.rapid7.armor.meta.ColumnMetadata;
 
 public class ColumnFileReader {
   private ColumnMetadata metadata;
-  
+  private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
   public ColumnMetadata getColumnMetadata() {
     return metadata;
   }
@@ -34,7 +35,7 @@ public class ColumnFileReader {
     int metadataLength = dataInputStream.readInt(); // Skip compressed, always uncompressed for meta
     byte[] metadataBytes = new byte[metadataLength];
     dataInputStream.readFully(metadataBytes);
-    metadata = new ObjectMapper().readValue(metadataBytes, ColumnMetadata.class);
+    metadata = OBJECT_MAPPER.readValue(metadataBytes, ColumnMetadata.class);
     // Load entity dictionary
     int entityDictCompressed = dataInputStream.readInt();
     int entityDictOriginal = dataInputStream.readInt();

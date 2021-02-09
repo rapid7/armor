@@ -35,7 +35,7 @@ import tech.tablesaw.api.Table;
 public class ArmorAnalyzer {
   public static void main(String[] args) throws IOException, ParseException {
     Options options = new Options();
-    options.addOption("p", "path", true, "Path to the armor file or directory");
+    options.addOption("p", "path", true, "Path to the armor directory");
     options.addOption("m", "mode", true, "Reader or writer mode each output has different set of files it pushes out");
     options.addOption("d", "destination", true, "Destination directory for the ouptut files");
 

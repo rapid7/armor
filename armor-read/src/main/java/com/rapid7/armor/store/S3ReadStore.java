@@ -30,6 +30,7 @@ public class S3ReadStore implements ReadStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3ReadStore.class);
   private final AmazonS3 s3Client;
   private final String bucket;
+  private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   public S3ReadStore(AmazonS3 s3Client, String bucket) {
     this.s3Client = s3Client;
@@ -169,9 +170,8 @@ public class S3ReadStore implements ReadStore {
     if (!doesObjectExist(this.bucket, key))
       return new HashMap<>();
     else {
-      ObjectMapper mapper = new ObjectMapper();
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return mapper.readValue(inputStream, new TypeReference<Map<String, String>>() {});
+        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }

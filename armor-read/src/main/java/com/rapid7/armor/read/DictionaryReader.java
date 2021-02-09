@@ -9,11 +9,12 @@ public class DictionaryReader {
   private final Map<Integer, byte[]> intToBytes;
   private Map<String, Integer> strToInt;
   private boolean bidirectional = false;
+  private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   public DictionaryReader(byte[] json, int capacity, boolean bidirectional) throws IOException {
     this.bidirectional = bidirectional;
     @SuppressWarnings("unchecked")
-    Map<String, String> map = new ObjectMapper().readValue(json, Map.class);
+    Map<String, String> map = OBJECT_MAPPER.readValue(json, Map.class);
     // Since integers are stored as string, convert them to real ints.
     intToBytes = new HashMap<>(capacity);
     for (Map.Entry<String, String> e : map.entrySet()) {

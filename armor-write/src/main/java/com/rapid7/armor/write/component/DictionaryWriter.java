@@ -16,7 +16,7 @@ public class DictionaryWriter implements Component, Dictionary {
   private final AtomicInteger nextInteger;
   private Map<String, Integer> strToInt = new HashMap<>();
   private final Map<Integer, String> intToStr = new HashMap<>();
-  private final ObjectMapper om = new ObjectMapper();
+  private final static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private boolean bidirectional = false;
 
   public DictionaryWriter(boolean bidirectional) {
@@ -27,7 +27,7 @@ public class DictionaryWriter implements Component, Dictionary {
   public DictionaryWriter(byte[] json, boolean bidirectional) throws IOException {
     this.bidirectional = bidirectional;
     @SuppressWarnings("unchecked")
-    Map<Object, String> map = om.readValue(json, Map.class);
+    Map<Object, String> map = OBJECT_MAPPER.readValue(json, Map.class);
     strToInt = new HashMap<>();
     int highestSurrogate = -1;
     for (Map.Entry<Object, String> e : map.entrySet()) {
@@ -62,7 +62,7 @@ public class DictionaryWriter implements Component, Dictionary {
     for (Map.Entry<String, Integer> e : strToInt.entrySet()) {
       reverse.put(e.getValue(), e.getKey());
     }
-    return new ByteArrayInputStream(om.writeValueAsBytes(reverse));
+    return new ByteArrayInputStream(OBJECT_MAPPER.writeValueAsBytes(reverse));
   }
 
   @Override
@@ -71,7 +71,7 @@ public class DictionaryWriter implements Component, Dictionary {
     for (Map.Entry<String, Integer> e : strToInt.entrySet()) {
       reverse.put(e.getValue(), e.getKey());
     }
-    return om.writeValueAsBytes(reverse).length;
+    return OBJECT_MAPPER.writeValueAsBytes(reverse).length;
   }
 
   public synchronized void removeSurrogate(String value) {

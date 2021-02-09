@@ -158,12 +158,12 @@ public class EntityIndexWriter extends FileComponent {
       EntityRecord eir = readEntityIndexRecord();
       entities.put(eir.getEntityId(), eir);
       indexOffsets.put(eir.getEntityId(), i);
-    }
+    } 
   }
 
   protected EntityRecord readEntityIndexRecord() throws IOException {
     readByteBuffer.rewind();
-    read(readByteBuffer);
+    int byteRead = read(readByteBuffer);
     readByteBuffer.flip();
     int entityUuid = readByteBuffer.getInt();
     int offset = readByteBuffer.getInt();
@@ -217,7 +217,9 @@ public class EntityIndexWriter extends FileComponent {
         tempEntities.put(er.getEntityId(), er);
         tempIndexOffsets.put(er.getEntityId(), recordOffset);
         writeEntityRecordToBuffer(er, buffer);
-        fileChannel.write(buffer);
+        int written = fileChannel.write(buffer);
+        if (written != RECORD_SIZE_BYTES)
+          throw new RuntimeException("When defragging, only write " + written + " when it should have been " + RECORD_SIZE_BYTES);
         recordOffset += RECORD_SIZE_BYTES;
       }
       copied = true;
@@ -226,7 +228,10 @@ public class EntityIndexWriter extends FileComponent {
         Files.deleteIfExists(path);
     }
     boolean rebased = false;
+    int totalSize = (int) Files.size(path);
     try {
+      if (totalSize % RECORD_SIZE_BYTES != 0)
+        throw new RuntimeException("When defragging, the fixed page size of " + RECORD_SIZE_BYTES + " wasn't achieved: " + totalSize);
       rebase(path);
       rebased = true;
     } finally {

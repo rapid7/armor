@@ -37,6 +37,7 @@ public class FileWriteStore implements WriteStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileWriteStore.class);
   private final Path basePath;
   private final ShardStrategy shardStrategy;
+  private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   public FileWriteStore(Path path, ShardStrategy shardStrategy) {
     this.basePath = path;
@@ -188,10 +189,9 @@ public class FileWriteStore implements WriteStore {
     Path target = basePath.resolve(relativeTarget);
     if (!Files.exists(target))
       return null;
-    ObjectMapper mapper = new ObjectMapper();
     try {
       byte[] payload = Files.readAllBytes(target);
-      return mapper.readValue(payload, TableMetadata.class);
+      return OBJECT_MAPPER.readValue(payload, TableMetadata.class);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
@@ -201,9 +201,8 @@ public class FileWriteStore implements WriteStore {
   public void saveTableMetadata(String transaction, String tenant, String table, TableMetadata tableMetadata) {
     String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
     Path target = basePath.resolve(relativeTarget);
-    ObjectMapper mapper = new ObjectMapper();
     try {
-      byte[] payload = mapper.writeValueAsBytes(tableMetadata);
+      byte[] payload = OBJECT_MAPPER.writeValueAsBytes(tableMetadata);
       if (!Files.exists(target)) {
         Files.createDirectories(target.getParent());
         Files.write(target, payload, StandardOpenOption.CREATE_NEW);
@@ -222,10 +221,9 @@ public class FileWriteStore implements WriteStore {
     Path shardIdPath = basePath.resolve(Paths.get(currendPath, Constants.SHARD_METADATA + ".armor"));
     if (!Files.exists(shardIdPath))
       return null;
-    ObjectMapper mapper = new ObjectMapper();
     try {
       byte[] payload = Files.readAllBytes(shardIdPath);
-      return mapper.readValue(payload, ShardMetadata.class);
+      return OBJECT_MAPPER.readValue(payload, ShardMetadata.class);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
@@ -237,8 +235,7 @@ public class FileWriteStore implements WriteStore {
     Path shardIdPath = basePath.resolve(Paths.get(shardId.getShardId(), transcationId, Constants.SHARD_METADATA + ".armor"));
     try {
       Files.createDirectories(shardIdPath.getParent());
-      ObjectMapper om = new ObjectMapper();
-      byte[] payload = om.writeValueAsBytes(shardMetadata);
+      byte[] payload = OBJECT_MAPPER.writeValueAsBytes(shardMetadata);
       Files.copy(new ByteArrayInputStream(payload), shardIdPath, StandardCopyOption.REPLACE_EXISTING);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -294,9 +291,8 @@ public class FileWriteStore implements WriteStore {
     if (!Files.exists(searchpath))
       return new HashMap<>();
     else {
-      ObjectMapper mapper = new ObjectMapper();
       try {
-        return mapper.readValue(Files.newInputStream(searchpath), new TypeReference<Map<String, String>>() {});
+        return OBJECT_MAPPER.readValue(Files.newInputStream(searchpath), new TypeReference<Map<String, String>>() {});
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -312,8 +308,7 @@ public class FileWriteStore implements WriteStore {
       currentValues.put("current", current);
       if (previous != null)
         currentValues.put("previous", previous);
-      ObjectMapper mapper = new ObjectMapper();
-      Files.write(searchpath, mapper.writeValueAsBytes(currentValues), StandardOpenOption.CREATE);
+      Files.write(searchpath, OBJECT_MAPPER.writeValueAsBytes(currentValues), StandardOpenOption.CREATE);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }

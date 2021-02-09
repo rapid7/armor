@@ -42,6 +42,7 @@ public class S3WriteStore implements WriteStore {
   private final AmazonS3 s3Client;
   private final String bucket;
   private final ShardStrategy shardStrategy;
+  private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   public S3WriteStore(AmazonS3 s3Client, String bucket, ShardStrategy shardStrategy) {
     this.s3Client = s3Client;
@@ -181,10 +182,9 @@ public class S3WriteStore implements WriteStore {
     String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
     try {
       if (doesObjectExist(bucket, relativeTarget)) {
-        ObjectMapper mapper = new ObjectMapper();
         try (S3Object s3Object = s3Client.getObject(bucket, relativeTarget); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
           try {
-            return mapper.readValue(s3InputStream, TableMetadata.class);
+            return OBJECT_MAPPER.readValue(s3InputStream, TableMetadata.class);
           } finally {
             com.amazonaws.util.IOUtils.drainInputStream(s3InputStream);
           }
@@ -202,9 +202,8 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void saveTableMetadata(String transaction, String tenant, String table, TableMetadata tableMetadata) {
     String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
-    ObjectMapper mapper = new ObjectMapper();
     try {
-      String payload = mapper.writeValueAsString(tableMetadata);
+      String payload = OBJECT_MAPPER.writeValueAsString(tableMetadata);
       s3Client.putObject(bucket, relativeTarget, payload);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -216,10 +215,9 @@ public class S3WriteStore implements WriteStore {
     String shardIdPath = resolveCurrentPath(tenant, table, shardNum) + "/" + Constants.SHARD_METADATA + ".armor";
 
     if (s3Client.doesObjectExist(bucket, shardIdPath)) {
-      ObjectMapper mapper = new ObjectMapper();
       try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
         try {
-          return mapper.readValue(s3ObjectInputStream, ShardMetadata.class);
+          return OBJECT_MAPPER.readValue(s3ObjectInputStream, ShardMetadata.class);
         } finally {
           com.amazonaws.util.IOUtils.drainInputStream(s3ObjectInputStream);
         }
@@ -235,8 +233,7 @@ public class S3WriteStore implements WriteStore {
     String shardIdPath = tenant + "/" + table + "/" + shardNum + "/" + transactionId + "/" + Constants.SHARD_METADATA + ".armor";
     for (int i = 0; i < 10; i++) {
       try {
-        ObjectMapper om = new ObjectMapper();
-        String payload = om.writeValueAsString(shardMetadata);
+        String payload = OBJECT_MAPPER.writeValueAsString(shardMetadata);
         s3Client.putObject(bucket, shardIdPath, payload);
       } catch (Exception ioe) {
         if (i + 1 == 5)
@@ -300,9 +297,8 @@ public class S3WriteStore implements WriteStore {
     if (!doesObjectExist(this.bucket, key))
       return new HashMap<>();
     else {
-      ObjectMapper mapper = new ObjectMapper();
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return mapper.readValue(inputStream, new TypeReference<Map<String, String>>() {});
+        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -317,8 +313,7 @@ public class S3WriteStore implements WriteStore {
       currentValues.put("current", current);
       if (previous != null)
         currentValues.put("previous", previous);
-      ObjectMapper om = new ObjectMapper();
-      String payload = om.writeValueAsString(currentValues);
+      String payload = OBJECT_MAPPER.writeValueAsString(currentValues);
       s3Client.putObject(bucket, key, payload);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -427,16 +422,15 @@ public class S3WriteStore implements WriteStore {
     if (shardId.getShardNum() >= 0) {
       key = key + "/" + shardId.getShardNum();
     }
-    ObjectMapper om = new ObjectMapper();
     try {
       if (entities != null) {
         String payloadName = key + "/" + "entities";
-        String payload = om.writeValueAsString(entities);
+        String payload = OBJECT_MAPPER.writeValueAsString(entities);
         s3Client.putObject(bucket, payloadName, payload);
       }
       if (requests != null) {
         String payloadName = key + "/" + "writeRequests";
-        String payload = om.writeValueAsString(requests);
+        String payload = OBJECT_MAPPER.writeValueAsString(requests);
         s3Client.putObject(bucket, payloadName, payload);
       }
       if (deleteEntity != null) {

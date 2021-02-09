@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 public class FileReadStore implements ReadStore {
   private final Path basePath;
+  private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   public FileReadStore(Path path) {
     this.basePath = path;
@@ -181,9 +182,8 @@ public class FileReadStore implements ReadStore {
     if (!Files.exists(searchpath))
       return new HashMap<>();
     else {
-      ObjectMapper mapper = new ObjectMapper();
       try {
-        return mapper.readValue(Files.newInputStream(searchpath), Map.class);
+        return OBJECT_MAPPER.readValue(Files.newInputStream(searchpath), Map.class);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }

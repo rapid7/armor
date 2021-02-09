@@ -48,7 +48,7 @@ import org.slf4j.LoggerFactory;
 
 public class ColumnFileWriter implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ColumnFileWriter.class);
-  private static final ObjectMapper om = new ObjectMapper();
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private EntityIndexWriter entityRecordWriter;
   private RowGroupWriter rowGroupWriter;
   private ColumnMetadata metadata;
@@ -313,7 +313,7 @@ public class ColumnFileWriter implements AutoCloseable {
     // Run through the values to update metadata
     rowGroupWriter.runThoughValues(metadata, records);
     // Store metadata
-    String metadataStr = om.writeValueAsString(metadata);
+    String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
     byte[] metadataPayload = metadataStr.getBytes();
     writeLength(headerPortion, 0, metadataPayload.length);
     headerPortion.write(metadataPayload);
@@ -347,7 +347,7 @@ public class ColumnFileWriter implements AutoCloseable {
         }
       }
 
-      // Send strValue dictionary;
+      // Send value dictionary;
       InputStream valueDictIs;
       ByteArrayInputStream valueDictLengths;
       totalBytes += 8;
@@ -377,6 +377,9 @@ public class ColumnFileWriter implements AutoCloseable {
       InputStream entityIndexIs;
       ByteArrayInputStream entityIndexLengths;
       totalBytes += 8;
+      int uncompressed = (int) entityRecordWriter.getCurrentSize();
+      if (uncompressed % Constants.RECORD_SIZE_BYTES != 0)
+        throw new RuntimeException("The size of the entity index isn't in expected fixed widths of " + Constants.RECORD_SIZE_BYTES + ":" + uncompressed);
       if (compress) {
         String tempName = this.columnShardId.alternateString();
         Path eiTempPath = Files.createTempFile("entity-temp_" + tempName + "-", ".armor");
@@ -387,11 +390,11 @@ public class ColumnFileWriter implements AutoCloseable {
         }
         int payloadSize = (int) Files.size(eiTempPath);
         totalBytes += payloadSize;
-        entityIndexLengths = new ByteArrayInputStream(writeLength(payloadSize, (int) entityRecordWriter.getCurrentSize()));
+        entityIndexLengths = new ByteArrayInputStream(writeLength(payloadSize, uncompressed));
         entityIndexIs = new AutoDeleteFileInputStream(eiTempPath);
       } else {
         totalBytes += (int) entityRecordWriter.getCurrentSize();
-        entityIndexLengths = new ByteArrayInputStream(writeLength(0, (int) entityRecordWriter.getCurrentSize()));
+        entityIndexLengths = new ByteArrayInputStream(writeLength(0, uncompressed));
         entityIndexIs = entityRecordWriter.getInputStream();
       }
 
@@ -526,12 +529,6 @@ public class ColumnFileWriter implements AutoCloseable {
 
   private void writeForMagicHeader(OutputStream outputStream) throws IOException {
     outputStream.write(IOTools.toByteArray(MAGIC_HEADER));
-  }
-
-  private void readForMagicHeader(DataInputStream dataInputStream) throws IOException {
-    short header = dataInputStream.readShort();
-    if (header != MAGIC_HEADER)
-      throw new IllegalArgumentException("The magic header doesn't exist");
   }
 
   public void defrag() throws IOException {
