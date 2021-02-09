@@ -14,6 +14,7 @@ import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.write.StreamProduct;
 import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.component.DictionaryWriter;
+import com.rapid7.armor.write.component.EntityIndexVariableWidthException;
 import com.rapid7.armor.write.component.EntityIndexWriter;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.component.RowGroupWriter.RgOffsetWriteResult;
@@ -380,9 +381,9 @@ public class ColumnFileWriter implements AutoCloseable {
       int uncompressed = (int) entityRecordWriter.getCurrentSize();
       if (uncompressed % Constants.RECORD_SIZE_BYTES != 0) {
         int bytesOff = uncompressed % Constants.RECORD_SIZE_BYTES;
-        LOGGER.error("The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}",
-           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityRecordWriter.getPreLoadOffset());
-        throw new RuntimeException("The size of the entity index is not in expected fixed widths of " + Constants.RECORD_SIZE_BYTES + ":" + uncompressed);
+        LOGGER.error("The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}: See {}",
+           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityRecordWriter.getPreLoadOffset(), columnShardId.alternateString());
+        throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityRecordWriter.getPreLoadOffset(), columnShardId.alternateString());
       }
       if (compress) {
         String tempName = this.columnShardId.alternateString();

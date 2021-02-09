@@ -191,7 +191,7 @@ public class EntityIndexWriter extends FileComponent {
         break;
       }
       function.accept(i);
-    } 
+    }
   }
 
   protected EntityRecord readEntityIndexRecord() throws IOException {
