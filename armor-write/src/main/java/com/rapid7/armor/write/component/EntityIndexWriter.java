@@ -185,8 +185,9 @@ public class EntityIndexWriter extends FileComponent {
     for (int i = 0; i < nextOffset; i += RECORD_SIZE_BYTES) {
       // Do a check to see 
       if (i + RECORD_SIZE_BYTES > nextOffset) {
-        LOGGER.error("The entity index is not of fixed page size of {} bytes, the total entity index size is {}. This may mean some data could be lost, skipping see {}",
-            RECORD_SIZE_BYTES, nextOffset, columnShardId.toSimpleString());
+        int bytesOff = nextOffset - i;
+        LOGGER.error("The entity index is not of fixed page size of {} bytes, the total entity index size is {} off by {} bytes. Some data could be lost see: {}",
+            RECORD_SIZE_BYTES, nextOffset, bytesOff, columnShardId.alternateString());
         break;
       }
       function.accept(i);
