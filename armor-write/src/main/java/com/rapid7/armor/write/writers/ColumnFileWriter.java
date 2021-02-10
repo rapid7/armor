@@ -291,7 +291,7 @@ public class ColumnFileWriter implements AutoCloseable {
     } else {
       for (EntityRecord er : records) {
         if (entityDictionary.getValue(er.getEntityId()) == null)
-          throw new RuntimeException("No string entity id exists for " + er.toString());
+          throw new RuntimeException("No string entity id exists for " + er.toString() + " in " + columnShardId.alternateString());
       }
 
       return records.stream()

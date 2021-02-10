@@ -338,7 +338,7 @@ public class ArmorWriter implements Closeable {
               LOGGER.warn("The underlying channels file are missing, most likely closed by another fried due to an issue: {}", nse.getMessage());
               return null;
             } catch (ClosedChannelException cce) {
-              LOGGER.warn("The underlying channels are closed, most likely closed by another thread due to an issue: {}", cce.getMessage());
+              LOGGER.warn("The underlying channels are closed in {}, most likely closed by another thread due to an issue: {}", shardWriter.getShardId(), cce.getMessage());
               return null;
             } catch (EntityOffsetException e1) {
               offsetExceptions.add(e1);
