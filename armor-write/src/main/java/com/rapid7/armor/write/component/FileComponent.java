@@ -56,6 +56,10 @@ public class FileComponent implements ChannelComponent {
       else {
         try {
           oldChannel.close();
+        } catch (IOException ioe) {
+          // do nothing
+        }
+        try {
           Files.deleteIfExists(oldPath);
         } catch (IOException ioe) {
           // do nothing
