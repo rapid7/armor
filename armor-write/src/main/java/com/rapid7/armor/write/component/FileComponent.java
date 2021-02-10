@@ -28,6 +28,11 @@ public class FileComponent implements ChannelComponent {
     }
   }
 
+  @Override
+  public void truncate(int size) throws IOException {
+    fileChannel.truncate(size);
+  }
+
   /**
    * Rebase the path for this component to the given path.
    *

@@ -20,6 +20,4 @@ public interface Component {
   InputStream getInputStream() throws IOException;
 
   long getCurrentSize() throws IOException;
-
-
 }

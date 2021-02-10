@@ -3,7 +3,7 @@ package com.rapid7.armor.write.component;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public interface ChannelComponent extends Component {
+public interface ChannelComponent extends Component, AutoCloseable {
 
   long position() throws IOException;
 
@@ -16,4 +16,6 @@ public interface ChannelComponent extends Component {
   int write(byte[] buffer) throws IOException;
 
   void close() throws IOException;
+
+  void truncate(int size) throws IOException;
 }
