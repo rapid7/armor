@@ -47,6 +47,7 @@ public class EntityIndexWriter extends FileComponent {
     super(path);
     this.columnShardId = columnShardId;
     nextOffset = (int) getCurrentSize();
+    preloadOffset = nextOffset;
     int bytesOff = nextOffset % RECORD_SIZE_BYTES;
     if (bytesOff > 0) {
       if (bytesOff > RECORD_SIZE_BYTES) {
@@ -54,13 +55,13 @@ public class EntityIndexWriter extends FileComponent {
       } else {
         LOGGER.error("The entity index is not of fixed record size {} bytes, total index is {} and is off by {} bytes. Some data could be lost see: {}",
             RECORD_SIZE_BYTES, nextOffset, bytesOff, columnShardId.alternateString());
-        LOGGER.error("Readjusting next offset from {} to {}..see {}",
+        LOGGER.error("Readjusting by truncating next offset from {} to {}..see {}",
             nextOffset, nextOffset - bytesOff, columnShardId.alternateString());
         truncate(nextOffset-bytesOff);
+        nextOffset = (int) getCurrentSize();
+        preloadOffset = nextOffset;
       }
     }
-
-    preloadOffset = nextOffset;
     if (nextOffset > 0) {
       loadOffsets();
     }
