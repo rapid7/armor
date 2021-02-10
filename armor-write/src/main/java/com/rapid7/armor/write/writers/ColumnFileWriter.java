@@ -54,7 +54,7 @@ public class ColumnFileWriter implements AutoCloseable {
   private EntityIndexWriter entityRecordWriter;
   private RowGroupWriter rowGroupWriter;
   private ColumnMetadata metadata;
-  private DictionaryWriter strValueDictionary;
+  private DictionaryWriter valueDictionary;
   private DictionaryWriter entityDictionary;
   private final ColumnShardId columnShardId;
   private final String ROWGROUP_STORE_PREFIX = "rowgroupstore_";
@@ -68,10 +68,10 @@ public class ColumnFileWriter implements AutoCloseable {
     metadata.setColumnId(columnShardId.getColumnId().getName());
     columnShardId.getColumnId().dataType();
     if (dataType == DataType.STRING)
-      strValueDictionary = new DictionaryWriter(false);
+      valueDictionary = new DictionaryWriter(false);
 
     entityDictionary = new DictionaryWriter(true);
-    rowGroupWriter = new RowGroupWriter(Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId, strValueDictionary);
+    rowGroupWriter = new RowGroupWriter(Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId, valueDictionary);
     entityRecordWriter = new EntityIndexWriter(Files.createTempFile(ENTITYINDEX_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId);
   }
 
@@ -83,7 +83,7 @@ public class ColumnFileWriter implements AutoCloseable {
       if (avail > 0) {
         try {
           if (dt == DataType.STRING)
-            strValueDictionary = new DictionaryWriter(false);
+            valueDictionary = new DictionaryWriter(false);
           entityDictionary = new DictionaryWriter(true);
           load(dataInputStream);
         } finally {
@@ -95,9 +95,9 @@ public class ColumnFileWriter implements AutoCloseable {
         metadata.setColumnId(columnShardId.getColumnId().getName());
         metadata.setLastUpdate(new Date().toString());
         if (dt == DataType.STRING)
-          strValueDictionary = new DictionaryWriter(false);
+          valueDictionary = new DictionaryWriter(false);
         entityDictionary = new DictionaryWriter(true);
-        rowGroupWriter = new RowGroupWriter(Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId, strValueDictionary);
+        rowGroupWriter = new RowGroupWriter(Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId, valueDictionary);
         entityRecordWriter = new EntityIndexWriter(Files.createTempFile(ENTITYINDEX_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId);
       }
     } catch (IOException ioe) {
@@ -178,11 +178,11 @@ public class ColumnFileWriter implements AutoCloseable {
       byte[] compressedDict = new byte[compressed];
       read = IOTools.readFully(inputStream, compressedDict, 0, compressed);
       byte[] decompressed = Zstd.decompress(compressedDict, uncompressed);
-      strValueDictionary = new DictionaryWriter(decompressed, false);
+      valueDictionary = new DictionaryWriter(decompressed, false);
     } else if (uncompressed > 0) {
       byte[] uncompressedDict = new byte[uncompressed];
       read = IOTools.readFully(inputStream, uncompressedDict, 0, uncompressed);
-      strValueDictionary = new DictionaryWriter(uncompressedDict, false);
+      valueDictionary = new DictionaryWriter(uncompressedDict, false);
     }
     return read;
   }
@@ -222,7 +222,7 @@ public class ColumnFileWriter implements AutoCloseable {
         Files.copy(bais, rgGroupTemp, StandardCopyOption.REPLACE_EXISTING);
       }
       decompressed = null;
-      rowGroupWriter = new RowGroupWriter(rgGroupTemp, columnShardId, strValueDictionary);
+      rowGroupWriter = new RowGroupWriter(rgGroupTemp, columnShardId, valueDictionary);
       rowGroupWriter.position(rowGroupWriter.getCurrentSize());
     } else {
       byte[] uncompressedRg = new byte[uncompressed];
@@ -230,7 +230,7 @@ public class ColumnFileWriter implements AutoCloseable {
       try (ByteArrayInputStream bais = new ByteArrayInputStream(uncompressedRg)) {
         Files.copy(bais, rgGroupTemp, StandardCopyOption.REPLACE_EXISTING);
       }
-      rowGroupWriter = new RowGroupWriter(rgGroupTemp, columnShardId, strValueDictionary);
+      rowGroupWriter = new RowGroupWriter(rgGroupTemp, columnShardId, valueDictionary);
       rowGroupWriter.position(rowGroupWriter.getCurrentSize());
     }
     return read;
@@ -358,22 +358,22 @@ public class ColumnFileWriter implements AutoCloseable {
       InputStream valueDictIs;
       ByteArrayInputStream valueDictLengths;
       totalBytes += 8;
-      if (strValueDictionary != null) {
+      if (valueDictionary != null) {
         if (compress) {
           Path valueDictTempPath = Files.createTempFile("value-dict-temp_" + columnShardId.alternateString() + "-", ".armor");
           tempPaths.add(valueDictTempPath);
           try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(valueDictTempPath.toFile()), RecyclingBufferPool.INSTANCE);
-               InputStream inputStream = strValueDictionary.getInputStream()) {
+               InputStream inputStream = valueDictionary.getInputStream()) {
             IOTools.copy(inputStream, zstdOutput);
           }
           int dictionaryLength = (int) Files.size(valueDictTempPath);
           totalBytes += dictionaryLength;
-          valueDictLengths = new ByteArrayInputStream(writeLength((int) Files.size(valueDictTempPath), (int) strValueDictionary.getCurrentSize()));
+          valueDictLengths = new ByteArrayInputStream(writeLength((int) Files.size(valueDictTempPath), (int) valueDictionary.getCurrentSize()));
           valueDictIs = new AutoDeleteFileInputStream(valueDictTempPath);
         } else {
-          totalBytes += (int) strValueDictionary.getCurrentSize();
-          valueDictLengths = new ByteArrayInputStream(writeLength(0, (int) strValueDictionary.getCurrentSize()));
-          valueDictIs = strValueDictionary.getInputStream();
+          totalBytes += (int) valueDictionary.getCurrentSize();
+          valueDictLengths = new ByteArrayInputStream(writeLength(0, (int) valueDictionary.getCurrentSize()));
+          valueDictIs = valueDictionary.getInputStream();
         }
       } else {
         valueDictLengths = new ByteArrayInputStream(writeLength(0, 0));
