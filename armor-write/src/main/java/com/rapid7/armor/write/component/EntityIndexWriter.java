@@ -266,9 +266,9 @@ public class EntityIndexWriter extends FileComponent {
   public void defrag(List<EntityRecord> entityRecords) throws IOException {
     Map<Integer, EntityRecord> tempEntities = new HashMap<>();
     Map<Integer, Integer> tempIndexOffsets = new HashMap<>();
-    ByteBuffer buffer = ByteBuffer.allocate(RECORD_SIZE_BYTES);
     Path path = Files.createTempFile("entityrecordwriter-defrag-" + columnShardId.alternateString() + "-", ".armor");
     boolean copied = false;
+    ByteBuffer buffer = BYTE_BUFFER_POOL.get();
     try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
       int recordOffset = 0;
       for (EntityRecord er : entityRecords) {
@@ -284,6 +284,7 @@ public class EntityIndexWriter extends FileComponent {
       }
       copied = true;
     } finally {
+      BYTE_BUFFER_POOL.release(buffer);
       if (!copied)
         Files.deleteIfExists(path);
     }
