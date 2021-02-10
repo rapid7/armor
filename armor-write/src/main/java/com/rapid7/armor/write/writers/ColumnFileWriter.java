@@ -289,6 +289,11 @@ public class ColumnFileWriter implements AutoCloseable {
               e.getInstanceId()))
           .filter(e -> e.getNumRows() > 0).collect(Collectors.toList());
     } else {
+      for (EntityRecord er : records) {
+        if (entityDictionary.getValue(er.getEntityId()) == null)
+          throw new RuntimeException("No string entity id exists for " + er.toString());
+      }
+
       return records.stream()
           .map(e -> new EntityRecordSummary(
               entityDictionary.getValue(e.getEntityId()),
@@ -484,7 +489,7 @@ public class ColumnFileWriter implements AutoCloseable {
   }
 
   private int getEntityId(Object entity) {
-    Objects.requireNonNull(entity, "The entity parameter cannot be null");
+    Objects.requireNonNull(entity,"The entity parameter cannot be null");
     Integer entityInt;
     if (entity instanceof String) {
       entityInt = entityDictionary.getSurrogate((String) entity);

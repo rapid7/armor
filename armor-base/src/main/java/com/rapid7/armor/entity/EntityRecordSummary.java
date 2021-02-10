@@ -14,7 +14,7 @@ public class EntityRecordSummary {
   private String instanceId;
 
   public EntityRecordSummary(Object id, int numRows, int offset, long version, byte[] instanceId) {
-    this.id = id;
+    this.id = Objects.requireNonNull(id, "The id parameter cannot be null");
     this.numRows = numRows;
     this.offset = offset;
     this.version = version;
