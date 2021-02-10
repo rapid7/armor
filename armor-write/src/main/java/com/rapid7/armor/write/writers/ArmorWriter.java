@@ -106,7 +106,7 @@ public class ArmorWriter implements Closeable {
         tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
         ShardId shardId = store.buildShardId(tenant, table, shard);
         ShardWriter sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-        tableWriter.addShard(sw);
+        sw = tableWriter.addShard(sw);
         return sw.getEntities(columnId);
       } else {
         return null;
@@ -117,7 +117,7 @@ public class ArmorWriter implements Closeable {
       if (sw == null) {
         ShardId shardId = store.buildShardId(tenant, table, shard);
         sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-        tableWriter.addShard(sw);
+        sw = tableWriter.addShard(sw);
       }
       return sw.getEntities(columnId);
     }
@@ -136,7 +136,7 @@ public class ArmorWriter implements Closeable {
 
         ShardId shardId = store.buildShardId(tenant, table, shard);
         ShardWriter sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-        tableWriter.addShard(sw);
+        sw = tableWriter.addShard(sw);
         return sw.getMetadata(columnId);
       } else
         return null;
@@ -145,7 +145,7 @@ public class ArmorWriter implements Closeable {
       if (sw == null) {
         ShardId shardId = store.buildShardId(tenant, table, shard);
         sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-        tableWriter.addShard(sw);
+        sw = tableWriter.addShard(sw);
       }
       return sw.getMetadata(columnId);
     }
@@ -199,7 +199,7 @@ public class ArmorWriter implements Closeable {
     ShardWriter sw = tableWriter.getShard(shardId.getShardNum());
     if (sw == null) {
       sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-      tableWriter.addShard(sw);
+      sw = tableWriter.addShard(sw);
     }
     sw.delete(transaction, entityId);
   }
@@ -267,7 +267,7 @@ public class ArmorWriter implements Closeable {
               Thread.currentThread().setName(originalThreadName + "(" + shardId.toString() + ")");
               if (shardWriter == null) {
                 shardWriter = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-                tableWriter.addShard(shardWriter);
+                shardWriter = tableWriter.addShard(shardWriter);
               }
 
               List<Entity> entityUpdates = entry.getValue();

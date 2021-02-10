@@ -6,8 +6,8 @@ import com.rapid7.armor.store.WriteStore;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +19,7 @@ public class TableWriter implements Closeable {
   private final String tenant;
   private final WriteStore store;
   // Must be have some synchronization to prevent lost shards.
-  private final Map<ShardId, ShardWriter> shards = new ConcurrentHashMap<>();
+  private final Map<ShardId, ShardWriter> shards = new HashMap<>();
 
   public TableWriter(String tenant, String table, WriteStore store) {
     this.store = store;
@@ -40,7 +40,7 @@ public class TableWriter implements Closeable {
   }
 
   @Override
-  public void close() throws IOException {
+  public synchronized void close() throws IOException {
     for (ShardWriter sw : shards.values()) {
       try {
         sw.close();
@@ -50,7 +50,7 @@ public class TableWriter implements Closeable {
     }
   }
 
-  public void close(int shard) {
+  public synchronized void close(int shard) {
     ShardId shardId = store.buildShardId(tenant, tableName, shard);
     ShardWriter sw = shards.get(shardId);
     if (sw != null)
@@ -62,7 +62,14 @@ public class TableWriter implements Closeable {
     return shards.get(shardId);
   }
 
-  public void addShard(ShardWriter writer) {
-    shards.put(writer.getShardId(), writer);
+  public synchronized ShardWriter addShard(ShardWriter shardWriter) {
+    ShardWriter sw = shards.get(shardWriter.getShardId());
+    if (sw != null) {
+      // A shard already exists, so close it and move on.
+      shardWriter.close();
+      return sw;
+    }
+    shards.put(shardWriter.getShardId(), shardWriter);
+    return shardWriter;
   }
 }

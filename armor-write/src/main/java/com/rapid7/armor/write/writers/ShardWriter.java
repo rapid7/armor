@@ -44,12 +44,22 @@ public class ShardWriter {
   private final Supplier<Integer> defragTrigger;
   private boolean compress = true;
   
+  private synchronized ColumnFileWriter addColumnFileWriter(ColumnFileWriter cfw) {
+    ColumnFileWriter previous = columnFileWriters.get(cfw.getColumnShardId());
+    if (previous != null) {
+      cfw.close();
+      return previous;
+    }
+    columnFileWriters.put(cfw.getColumnShardId(), cfw);
+    return cfw;
+  }
+
   public ShardWriter(
-      ShardId shardId,
-      WriteStore store,
-      boolean compress,
-      Supplier<Integer> defragTriggerSupplier,
-      BiPredicate<ShardId, String> captureWrite) {
+    ShardId shardId,
+    WriteStore store,
+    boolean compress,
+    Supplier<Integer> defragTriggerSupplier,
+    BiPredicate<ShardId, String> captureWrite) {
     this.shardId = shardId;
     this.store = store;
     this.compress = compress;
@@ -146,18 +156,18 @@ public class ShardWriter {
       store.captureWrites(transaction, shardId, null, writeRequests, null);
 
     Optional<ColumnFileWriter> opt = columnFileWriters.values().stream().filter(w -> w.getColumnId().equals(columnId)).findFirst();
-    ColumnFileWriter writer;
+    ColumnFileWriter columnFileWriter;
     ColumnShardId columnShardId = null;
     if (!opt.isPresent()) {
       // The column name is not present for this shard, so lets create a new column shard by create a writer.
       columnShardId = new ColumnShardId(shardId, columnId);
-      writer = store.loadColumnWriter(columnShardId);
-      columnFileWriters.put(columnShardId, writer);
+      columnFileWriter = store.loadColumnWriter(columnShardId);
+      columnFileWriter = addColumnFileWriter(columnFileWriter);
     } else {
-      writer = opt.get();
-      columnShardId = writer.getColumnShardId();
+      columnFileWriter = opt.get();
+      columnShardId = columnFileWriter.getColumnShardId();
     }
-    writer.write(transaction, writeRequests);
+    columnFileWriter.write(transaction, writeRequests);
   }
 
   /**
