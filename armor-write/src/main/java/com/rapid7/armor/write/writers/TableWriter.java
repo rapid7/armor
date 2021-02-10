@@ -4,7 +4,6 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,7 +39,7 @@ public class TableWriter implements Closeable {
   }
 
   @Override
-  public synchronized void close() throws IOException {
+  public synchronized void close() {
     for (ShardWriter sw : shards.values()) {
       try {
         sw.close();

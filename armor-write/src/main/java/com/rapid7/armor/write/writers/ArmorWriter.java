@@ -137,8 +137,8 @@ public class ArmorWriter implements Closeable {
     for (TableWriter table : tableWriters.values()) {
       try {
         table.close();
-      } catch (IOException ioe) {
-        LOGGER.warn("Unable to close table {}", table.getTableName(), ioe);
+      } catch (Exception e) {
+        LOGGER.warn("Unable to close table {}", table.getTableName(), e);
       }
     }
   }
@@ -168,12 +168,8 @@ public class ArmorWriter implements Closeable {
       return;
 
     if (tableWriter == null) {
-      tableWriter = new TableWriter(
-        tenant,
-        table,
-        store);
+      tableWriter = getTableWriter(tableId);
     }
-    tableWriters.put(tableId, tableWriter);
     tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
 
     ShardWriter sw = tableWriter.getShard(shardId.getShardNum());
@@ -182,6 +178,17 @@ public class ArmorWriter implements Closeable {
       sw = tableWriter.addShard(sw);
     }
     sw.delete(transaction, entityId);
+  }
+  
+  public synchronized TableWriter getTableWriter(TableId tableId) {
+    TableWriter existing = tableWriters.get(tableId);
+    if (existing == null) {
+      TableWriter tableWriter = new TableWriter(tableId.getTenant(), tableId.getTableName(), store);
+      tableWriters.put(tableId, tableWriter);
+      return tableWriter;
+    } else {
+      return existing;
+    }
   }
   
   /**
@@ -216,14 +223,12 @@ public class ArmorWriter implements Closeable {
       TableMetadata tableMeta = store.loadTableMetadata(tenant, table);
       if (tableMeta != null) {
         // The table exists, load it up then
-        tableWriter = new TableWriter(tenant, table, store);
-        tableWriters.put(tableId, tableWriter);
+        tableWriter = getTableWriter(tableId);
         tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
       } else {
         Entity entity = entities.get(0);
         // No shard metadata exists, create the first shard metadata for this.
-        tableWriter = new TableWriter(tenant, table, store);
-        tableWriters.put(tableId, tableWriter);
+        tableWriter = getTableWriter(tableId);
         tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
       }
     } else {

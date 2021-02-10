@@ -11,6 +11,14 @@ public class TableId {
     this.tenant = tenant;
   }
 
+  public String getTableName() {
+    return tableName;
+  }
+  
+  public String getTenant() {
+    return tenant;
+  }
+
   @Override
   public int hashCode() {
     return Objects.hash(tableName, tenant);
