@@ -52,7 +52,7 @@ public class RowGroupWriter extends FileComponent {
    * @param er The entity record to extract values from.
    * @param consumer The consumer to listen for objects from.
    */
-  public void customExtractValus(EntityRecord er, Consumer<List<Object>> consumer) throws IOException {
+  public void customExtractValues(EntityRecord er, Consumer<List<Object>> consumer) throws IOException {
     long previousPosition = position();
     int currentAlloc = 4096;
     ByteBuffer valBuf = ByteBuffer.allocate(currentAlloc);

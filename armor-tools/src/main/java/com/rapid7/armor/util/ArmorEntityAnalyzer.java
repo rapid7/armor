@@ -102,7 +102,7 @@ public class ArmorEntityAnalyzer {
               if (er != null) {
                 // Write info
                 List<Object> results = new ArrayList<>();
-                writer.getRowGroupWriter().customExtractValus(er, (a) -> {
+                writer.getRowGroupWriter().customExtractValues(er, (a) -> {
                   results.addAll(a);
                 });
                 
@@ -137,7 +137,7 @@ public class ArmorEntityAnalyzer {
             if (er != null) {
               // Write info
               List<Object> results = new ArrayList<>();
-              writer.getRowGroupWriter().customExtractValus(er, (a) -> {
+              writer.getRowGroupWriter().customExtractValues(er, (a) -> {
                 results.addAll(a);
               });
               
