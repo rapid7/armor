@@ -32,6 +32,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -93,61 +94,40 @@ public class ArmorWriter implements Closeable {
     return UUID.randomUUID().toString();
   }
 
-  public Map<Integer, EntityRecord> getColumnEntityRecords(String tenant, String table, String columnId, int shard) {
+  public Map<Integer, EntityRecord> columnEntityRecords(String tenant, String table, String columnId, int shard) {
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter == null) {
-      // There is no writer, so we should first check to see if a metadata file exists for this table.
-      TableMetadata tableMeta = store.loadTableMetadata(tenant, table);
-      if (tableMeta != null) {
-        // Metadata file exists, meaning the table exists, use the metadata to determine.
-        tableWriter = new TableWriter(tenant, table, store);
-        tableWriters.put(tableId, tableWriter);
-        tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
-        ShardId shardId = store.buildShardId(tenant, table, shard);
-        ShardWriter sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-        sw = tableWriter.addShard(sw);
-        return sw.getEntities(columnId);
-      } else {
         return null;
-      }
     } else {
-      // Tablewriter exists so just return what we need.
       ShardWriter sw = tableWriter.getShard(shard);
-      if (sw == null) {
-        ShardId shardId = store.buildShardId(tenant, table, shard);
-        sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-        sw = tableWriter.addShard(sw);
-      }
-      return sw.getEntities(columnId);
+      if (sw == null)
+        return null;
+      else 
+        return sw.getEntities(columnId);
     }
   }
 
-  public ColumnMetadata getColumnMetadata(String tenant, String table, String columnId, int shard) {
+  /**
+   * Returns the columnMetadata IF it was already loaded. If it hasn't been loaded by the writer, it will
+   * simply return null;
+   * 
+   * @param tenant The tenant.
+   * @param table The table in question.
+   * @param columnId The id of the column.
+   * @param shard The shard number.
+   */
+  public ColumnMetadata columnMetadata(String tenant, String table, String columnId, int shard) {
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter == null) {
-      TableMetadata tableMeta = store.loadTableMetadata(tenant, table);
-      if (tableMeta != null) {
-        // The table does exist, load it up then
-        tableWriter = new TableWriter(tenant, table, store);
-        tableWriters.put(tableId, tableWriter);
-        tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
-
-        ShardId shardId = store.buildShardId(tenant, table, shard);
-        ShardWriter sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-        sw = tableWriter.addShard(sw);
-        return sw.getMetadata(columnId);
-      } else
-        return null;
+      return null;
     } else {
       ShardWriter sw = tableWriter.getShard(shard);
-      if (sw == null) {
-        ShardId shardId = store.buildShardId(tenant, table, shard);
-        sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
-        sw = tableWriter.addShard(sw);
-      }
-      return sw.getMetadata(columnId);
+      if (sw == null)
+        return null;
+      else
+        return sw.getMetadata(columnId);
     }
   }
 

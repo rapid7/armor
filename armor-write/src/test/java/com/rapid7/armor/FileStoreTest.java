@@ -76,7 +76,7 @@ public class FileStoreTest {
       try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, false, 10, null, null)) {
         String transaction = armorWriter.startTransaction();
         armorWriter.write(transaction, "myorg", "testtable", Arrays.asList(e1, e2, e3, e4, e5, e6, e7));
-        armorWriter.getColumnEntityRecords("myorg", "testtable", "vuln", 0);
+        armorWriter.columnEntityRecords("myorg", "testtable", "vuln", 0);
         armorWriter.commit(transaction, "myorg", "testtable");
       }
   
@@ -154,8 +154,8 @@ public class FileStoreTest {
       assertEquals(Sets.newHashSet(name, asset, vuln, time), Sets.newHashSet(fileStore.getColumnIds(shardId)));
 
       // 12 rows, 2 entities 1 and 2, freebytes 0
-      Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata cmd1 = armorWriter.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata cmd1 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(2, vulnEntityRecords1.size());
       assertEquals(Integer.valueOf(0), Integer.valueOf(cmd1.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), cmd1.getMaxValue());
@@ -172,8 +172,8 @@ public class FileStoreTest {
       armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
 
-      Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata cmd2 = armorWriter.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(2, vulnEntityRecords2.size());
       assertEquals(Integer.valueOf(50), Integer.valueOf(cmd2.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), cmd2.getMaxValue());
@@ -198,8 +198,8 @@ public class FileStoreTest {
       armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
 
-      Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata cmd3 = armorWriter.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata cmd3 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(1, vulnEntityRecords3.size());
       assertEquals(Integer.valueOf(0), Integer.valueOf(cmd3.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), cmd3.getMaxValue());
@@ -224,8 +224,8 @@ public class FileStoreTest {
       armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
 
-      Map<Integer, EntityRecord> records4 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata md4 = armorWriter.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(2, records4.size());
       assertEquals(Integer.valueOf(58), Integer.valueOf(md4.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), md4.getMaxValue());
@@ -247,8 +247,8 @@ public class FileStoreTest {
       amrorWriter2.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
 
-      Map<Integer, EntityRecord> records5 = amrorWriter2.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata md5 = amrorWriter2.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> records5 = amrorWriter2.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(2, records5.size());
       assertEquals(Integer.valueOf(0), Integer.valueOf(md5.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), md5.getMaxValue());

@@ -219,8 +219,8 @@ public class S3StoreTest {
       assertEquals(Sets.newHashSet(name, asset, vuln, time), Sets.newHashSet(writeStore.getColumnIds(shardId)));
   
       // 12 rows, 2 entities 1 and 2, freebytes 0
-      Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata cmd1 = armorWriter.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata cmd1 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(2, vulnEntityRecords1.size());
       assertEquals(Integer.valueOf(0), Integer.valueOf(cmd1.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), cmd1.getMaxValue());
@@ -235,8 +235,8 @@ public class S3StoreTest {
       armorWriter.delete(transction, myorg, table, 1);
       armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
-      Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata cmd2 = armorWriter.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(2, vulnEntityRecords2.size());
       assertEquals(Integer.valueOf(50), Integer.valueOf(cmd2.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), cmd2.getMaxValue());
@@ -258,15 +258,15 @@ public class S3StoreTest {
           "1", null, 6);
   
       armorWriter.write(transction, myorg, table, Collections.singletonList(e21));
-      Map<Integer, EntityRecord> test1 = armorWriter.getColumnEntityRecords(myorg, table, "time", 0);
+      Map<Integer, EntityRecord> test1 = armorWriter.columnEntityRecords(myorg, table, "time", 0);
   
       armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
   
-      Map<Integer, EntityRecord> test = armorWriter.getColumnEntityRecords(myorg, table, "time", 0);
+      Map<Integer, EntityRecord> test = armorWriter.columnEntityRecords(myorg, table, "time", 0);
   
-      Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata cmd3 = armorWriter.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata cmd3 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(1, vulnEntityRecords3.size());
       assertEquals(Integer.valueOf(0), Integer.valueOf(cmd3.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), cmd3.getMaxValue());
@@ -291,8 +291,8 @@ public class S3StoreTest {
       armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
   
-      Map<Integer, EntityRecord> records4 = armorWriter.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata md4 = armorWriter.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(2, records4.size());
       assertEquals(Integer.valueOf(58), Integer.valueOf(md4.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), md4.getMaxValue());
@@ -309,14 +309,14 @@ public class S3StoreTest {
       e32.addRow(null, null, null);
   
       ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, false, 10, () -> 1, null);
-      Map<Integer, EntityRecord> records5a = amrorWriter2.getColumnEntityRecords(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> records5a = amrorWriter2.columnEntityRecords(myorg, table, "vuln", 0);
   
       amrorWriter2.write(transction, myorg, table, Collections.singletonList(e32));
       amrorWriter2.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
   
-      Map<Integer, EntityRecord> records5 = amrorWriter2.getColumnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata md5 = amrorWriter2.getColumnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> records5 = amrorWriter2.columnEntityRecords(myorg, table, "vuln", 0);
+      ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, "vuln", 0);
       assertEquals(2, records5.size());
       assertEquals(Integer.valueOf(0), Integer.valueOf(md5.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), md5.getMaxValue());
