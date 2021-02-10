@@ -43,6 +43,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -483,6 +484,7 @@ public class ColumnFileWriter implements AutoCloseable {
   }
 
   private int getEntityId(Object entity) {
+    Objects.requireNonNull(entity, "The entity parameter cannot be null");
     Integer entityInt;
     if (entity instanceof String) {
       entityInt = entityDictionary.getSurrogate((String) entity);
@@ -491,7 +493,7 @@ public class ColumnFileWriter implements AutoCloseable {
     } else if (entity instanceof Integer) {
       entityInt = ((Integer) entity);
     } else
-      throw new IllegalArgumentException("Entity uuids must be string, long or int");
+      throw new IllegalArgumentException("Entity uuids must be string, long or int not " + entity.getClass().getCanonicalName());
     return entityInt;
   }
 
