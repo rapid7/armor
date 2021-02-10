@@ -2,6 +2,7 @@ package com.rapid7.armor.write.component;
 
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.io.FixedCapacityByteBufferPool;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.write.EntityOffsetException;
@@ -10,12 +11,14 @@ import static com.rapid7.armor.Constants.BEGIN_DELETE_OFFSET;
 import static com.rapid7.armor.Constants.RECORD_SIZE_BYTES;
 
 import java.io.IOException;
+import java.lang.ref.SoftReference;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,10 +39,9 @@ public class EntityIndexWriter extends FileComponent {
   private Map<Integer, Integer> indexOffsets = new HashMap<>();
   private final ColumnShardId columnShardId;
   private int nextOffset = 0;
-  private int preloadOffset = 0; 
-  private final ByteBuffer readByteBuffer = ByteBuffer.allocate(RECORD_SIZE_BYTES);
-  private final ByteBuffer writeByteBuffer = ByteBuffer.allocate(RECORD_SIZE_BYTES);
+  private int preloadOffset = 0;
   private final static byte[] DELETE_PAYLOAD = new byte[] {1}; 
+  private final static FixedCapacityByteBufferPool BYTE_BUFFER_POOL = new FixedCapacityByteBufferPool(RECORD_SIZE_BYTES);
 
   public EntityIndexWriter(Path path, ColumnShardId columnShardId) throws IOException {
     super(path);
@@ -209,19 +211,24 @@ public class EntityIndexWriter extends FileComponent {
   }
 
   protected EntityRecord readEntityIndexRecord() throws IOException {
-    readByteBuffer.rewind();
-    int byteRead = read(readByteBuffer);
-    readByteBuffer.flip();
-    int entityUuid = readByteBuffer.getInt();
-    int offset = readByteBuffer.getInt();
-    int valueLength = readByteBuffer.getInt();
-    long version = readByteBuffer.getLong();
-    byte deleted = readByteBuffer.get();
-    int nullLength = readByteBuffer.getInt();
-    int decodedLength = readByteBuffer.getInt();
-    byte[] instanceid = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
-    readByteBuffer.get(instanceid, 0, Constants.INSTANCE_ID_BYTE_LENGTH);
-    return new EntityRecord(entityUuid, offset, valueLength, version, deleted, nullLength, decodedLength, instanceid);
+    ByteBuffer readByteBuffer = BYTE_BUFFER_POOL.get();
+    try {
+      readByteBuffer.rewind();
+      int byteRead = read(readByteBuffer);
+      readByteBuffer.flip();
+      int entityUuid = readByteBuffer.getInt();
+      int offset = readByteBuffer.getInt();
+      int valueLength = readByteBuffer.getInt();
+      long version = readByteBuffer.getLong();
+      byte deleted = readByteBuffer.get();
+      int nullLength = readByteBuffer.getInt();
+      int decodedLength = readByteBuffer.getInt();
+      byte[] instanceid = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
+      readByteBuffer.get(instanceid, 0, Constants.INSTANCE_ID_BYTE_LENGTH);
+      return new EntityRecord(entityUuid, offset, valueLength, version, deleted, nullLength, decodedLength, instanceid);
+    } finally {
+      BYTE_BUFFER_POOL.release(readByteBuffer);
+    }
   }
 
   private void writeEntityRecordToBuffer(EntityRecord eir, ByteBuffer byteBuffer) throws IOException {
@@ -239,8 +246,13 @@ public class EntityIndexWriter extends FileComponent {
 
 
   public void writeEntityIndexRecord(EntityRecord eir) throws IOException {
-    writeEntityRecordToBuffer(eir, writeByteBuffer);
-    write(writeByteBuffer);
+    ByteBuffer writeByteBuffer = BYTE_BUFFER_POOL.get();
+    try {
+      writeEntityRecordToBuffer(eir, writeByteBuffer);
+      write(writeByteBuffer);
+    } finally {
+      BYTE_BUFFER_POOL.release(writeByteBuffer);
+    }
   }
 
   /**
