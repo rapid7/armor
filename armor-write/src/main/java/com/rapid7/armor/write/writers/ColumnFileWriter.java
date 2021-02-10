@@ -214,7 +214,7 @@ public class ColumnFileWriter implements AutoCloseable {
   
   private int loadRowGroup(DataInputStream inputStream, int compressed, int uncompressed, List<Path> temps) throws IOException {
     Path rgGroupTemp = Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor");
-    LOGGER.info("Rowgroup created at {}", rgGroupTemp);
+    LOGGER.info("Rowgroup created at {} on thread {}", rgGroupTemp, Thread.currentThread().getName());
     temps.add(rgGroupTemp);
     int read = 0;
     if (compressed > 0) {
