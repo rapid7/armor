@@ -163,17 +163,15 @@ public class FileWriteStore implements WriteStore {
     ShardId shardId = buildShardId(tenant, table, shardNum);
     List<ColumnId> columnIds = getColumnIds(buildShardId(tenant, table, shardNum));
     List<ColumnFileWriter> writers = new ArrayList<>();
-    TableMetadata tableMetadata = this.loadTableMetadata(tenant, table);
     for (ColumnId columnId : columnIds) {
-      if (tableMetadata.getEntityColumnId().equals(columnId.getName()))
-        continue;
       Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnId.fullName()));
       try {
-        if (!Files.exists(shardIdPath)) {
-          Files.createDirectories(shardIdPath.getParent());
-          writers.add(new ColumnFileWriter(new ColumnShardId(shardId, columnId)));
-        } else {
+        if (Files.exists(shardIdPath)) {
           ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)), new ColumnShardId(shardId, columnId));
+          if (writer.getMetadata().getEntityId()) {
+            writer.close();
+            continue;
+          }
           writers.add(writer);
         }
       } catch (IOException ioe) {

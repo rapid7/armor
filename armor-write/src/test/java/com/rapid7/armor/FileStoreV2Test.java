@@ -355,7 +355,6 @@ public class FileStoreV2Test {
   @Test
   public void burstCheck() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
-    System.out.println("Test directory at " + testDirectory);
     int numShards = 10;
     int numEntities = 1000;
     Row[] rows = new Row[] {texasVuln, caliVuln};

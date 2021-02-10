@@ -149,27 +149,25 @@ public class S3WriteStore implements WriteStore {
     ShardId shardId = buildShardId(tenant, table, shardNum);
     List<ColumnId> columnIds = getColumnIds(buildShardId(tenant, table, shardNum));
     List<ColumnFileWriter> writers = new ArrayList<>();
-    TableMetadata tableMetadata = this.loadTableMetadata(tenant, table);
     for (ColumnId columnId : columnIds) {
-      if (tableMetadata.getEntityColumnId() == null)
-        throw new IllegalStateException("Detected an existing column with no table-metadata, the table should have valid metadata: " + tableMetadata);
-      if (tableMetadata.getEntityColumnId().equals(columnId.getName()))
-        continue;
       String shardIdPath = resolveCurrentPath(tenant, table, shardId.getShardNum()) + "/" + columnId.fullName();
       try {
-        if (!doesObjectExist(bucket, shardIdPath)) {
-          writers.add(new ColumnFileWriter(new ColumnShardId(shardId, columnId)));
-        } else {
-          try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
-            try {
-              ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(s3InputStream), new ColumnShardId(shardId, columnId));
-              writers.add(writer);
-            } catch (Exception e) {
-              LOGGER.error("Detected an issue loading shard at {}, this investigate", shardIdPath, e);
-              throw e;
-            } finally {
-              com.amazonaws.util.IOUtils.drainInputStream(s3InputStream);
+        if (doesObjectExist(bucket, shardIdPath)) {
+          S3ObjectInputStream s3InputStream = null;
+          try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath);) {
+            s3InputStream = s3Object.getObjectContent();
+            ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(s3InputStream), new ColumnShardId(shardId, columnId));
+            if (writer.getMetadata().getEntityId()) {
+              writer.close();
+              continue;
             }
+            writers.add(writer);
+          } catch (Exception e) {
+            LOGGER.error("Detected an issue loading shard at {}, this investigate", shardIdPath, e);
+            throw e;
+          } finally {
+            if (s3InputStream != null)
+              com.amazonaws.util.IOUtils.drainInputStream(s3InputStream);
           }
         }
       } catch (IOException ioe) {

@@ -261,6 +261,7 @@ public class ShardWriter {
     ColumnId cn = new ColumnId(entityIdColumn, entityIdType.getCode());
     String randomId = UUID.randomUUID().toString();
     try (ColumnFileWriter cw = new ColumnFileWriter(new ColumnShardId(shardId, cn))) {
+      cw.getMetadata().setEntityId(true);
       List<WriteRequest> putRequests = new ArrayList<>();
       if (baselineSummaries != null) {
         for (EntityRecordSummary summary : baselineSummaries) {

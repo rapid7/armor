@@ -320,7 +320,7 @@ public class ArmorWriter implements Closeable {
     if (entityColumnId == null) {
       TableMetadata tableMetadata = this.store.loadTableMetadata(tenant, table);
       if (tableMetadata == null) {
-        throw new RuntimeException("Unable to determine the entityid column name and type, cannot commit");
+        throw new RuntimeException("Unable to determine the entityid column name from store or memory, cannot commit");
       }
       entityColumnId = toColumnId(tableMetadata);
     }

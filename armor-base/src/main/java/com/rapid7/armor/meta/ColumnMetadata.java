@@ -13,6 +13,7 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 @JsonInclude(value = Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ColumnMetadata {
+  private boolean entityId = false;
   private int format = 1;
   private DataType dataType;
   private String columnId;
@@ -26,6 +27,14 @@ public class ColumnMetadata {
   private int numEntities = 0;
   private int cardinaility = 0;
   private String lastDefrag;
+
+  public void setEntityId(boolean entityId) {
+    this.entityId = entityId;
+  }
+  
+  public boolean getEntityId() {
+    return entityId;
+  }
 
   public String getLastDefrag() {
     return lastDefrag;
@@ -96,11 +105,6 @@ public class ColumnMetadata {
   }
 
   public void setColumnId(String columnId) {
-    this.columnId = columnId;
-  }
-  
-  // TODO: Remove this when its all done, for now backwards compliant
-  public void setColumnName(String columnId) {
     this.columnId = columnId;
   }
 

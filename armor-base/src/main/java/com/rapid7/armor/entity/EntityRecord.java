@@ -54,14 +54,15 @@ public class EntityRecord {
   }
 
   public static List<EntityRecord> sortRecordsByOffset(Collection<EntityRecord> records, Dictionary dictionary) {
-    Comparator<EntityRecord> compareByLastName = (o1, o2) -> {
+    Comparator<EntityRecord> compareStrValue = (o1, o2) -> {
       String val1 = dictionary.getValue(o1.getEntityId());
       String val2 = dictionary.getValue(o2.getEntityId());
       if (val1 == null || val2 == null)
-        throw new IllegalStateException("One of the entities doe not have have an surrogate id..see " + o1.getEntityId() + " or " + o2.getEntityId());
+        throw new IllegalStateException("One of the entities does not have have an surrogate id..see " + o1.getEntityId() + " or " + o2.getEntityId());
       return val1.compareTo(val2);
     };
-    Comparator<EntityRecord> compareByString = OFFSET_COMPARATOR.thenComparing(compareByLastName);
+    // Add an extra comparison by string if they match up.
+    Comparator<EntityRecord> compareByString = OFFSET_COMPARATOR.thenComparing(compareStrValue);
     return records.stream()
         .sorted(compareByString)
         .collect(Collectors.toList());
