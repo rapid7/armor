@@ -72,7 +72,6 @@ public class ColumnFileWriter implements AutoCloseable {
 
     entityDictionary = new DictionaryWriter(true);
     rowGroupWriter = new RowGroupWriter(Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId, strValueDictionary);
-    LOGGER.info("Rowgroup1 created at {}", rowGroupWriter.getPath());
     entityRecordWriter = new EntityIndexWriter(Files.createTempFile(ENTITYINDEX_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId);
   }
 
@@ -99,7 +98,6 @@ public class ColumnFileWriter implements AutoCloseable {
           strValueDictionary = new DictionaryWriter(false);
         entityDictionary = new DictionaryWriter(true);
         rowGroupWriter = new RowGroupWriter(Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId, strValueDictionary);
-        LOGGER.info("Rowgroup2 created at {}", rowGroupWriter.getPath());
         entityRecordWriter = new EntityIndexWriter(Files.createTempFile(ENTITYINDEX_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId);
       }
     } catch (IOException ioe) {
@@ -214,7 +212,6 @@ public class ColumnFileWriter implements AutoCloseable {
   
   private int loadRowGroup(DataInputStream inputStream, int compressed, int uncompressed, List<Path> temps) throws IOException {
     Path rgGroupTemp = Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor");
-    LOGGER.info("Rowgroup created at {} on thread {}", rgGroupTemp, Thread.currentThread().getName());
     temps.add(rgGroupTemp);
     int read = 0;
     if (compressed > 0) {

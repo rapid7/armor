@@ -114,7 +114,6 @@ public class FileComponent implements ChannelComponent {
     try{
       fileChannel.close();
     } finally {
-      LOGGER.info("Deleting {}", path);
       Files.deleteIfExists(path);
     }
   }
