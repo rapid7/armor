@@ -148,7 +148,6 @@ public class S3WriteStore implements WriteStore {
   public List<ColumnFileWriter> loadColumnWriters(String tenant, String table, int shardNum) {
     ShardId shardId = buildShardId(tenant, table, shardNum);
     List<ColumnId> columnIds = getColumnIds(buildShardId(tenant, table, shardNum));
-    LOGGER.info("For {} we get these column ids {}", shardId, columnIds);
     List<ColumnFileWriter> writers = new ArrayList<>();
     TableMetadata tableMetadata = this.loadTableMetadata(tenant, table);
     for (ColumnId columnId : columnIds) {
