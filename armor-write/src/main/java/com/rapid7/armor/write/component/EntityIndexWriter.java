@@ -39,6 +39,7 @@ public class EntityIndexWriter extends FileComponent {
   private int preloadOffset = 0; 
   private final ByteBuffer readByteBuffer = ByteBuffer.allocate(RECORD_SIZE_BYTES);
   private final ByteBuffer writeByteBuffer = ByteBuffer.allocate(RECORD_SIZE_BYTES);
+  private final static byte[] DELETE_PAYLOAD = new byte[] {1}; 
 
   public EntityIndexWriter(Path path, ColumnShardId columnShardId) throws IOException {
     super(path);
@@ -134,10 +135,7 @@ public class EntityIndexWriter extends FileComponent {
       try {
         int indexOffset = indexOffsets.get(entityUuid);
         position(indexOffset + BEGIN_DELETE_OFFSET);
-        ByteBuffer buffer = ByteBuffer.allocate(1);
-        buffer.put((byte) 1);
-        buffer.flip();
-        write(buffer);
+        write(DELETE_PAYLOAD);
         EntityRecord eir = entities.get(entityUuid);
         eir.setDeleted((byte) 1);
         return eir;

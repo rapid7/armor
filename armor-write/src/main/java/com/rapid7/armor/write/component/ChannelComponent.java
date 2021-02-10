@@ -13,5 +13,7 @@ public interface ChannelComponent extends Component {
 
   int write(ByteBuffer byteBuffer) throws IOException;
 
+  int write(byte[] buffer) throws IOException;
+
   void close() throws IOException;
 }

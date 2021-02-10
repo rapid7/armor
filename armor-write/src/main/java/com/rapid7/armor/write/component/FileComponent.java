@@ -1,9 +1,12 @@
 package com.rapid7.armor.write.component;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -86,6 +89,11 @@ public class FileComponent implements ChannelComponent {
     return fileChannel.read(byteBuffer);
   }
 
+  @Override
+  public int write(byte[] buffer) throws IOException {
+    ReadableByteChannel rbc = Channels.newChannel(new ByteArrayInputStream(buffer));
+    return (int) this.fileChannel.transferFrom(rbc, 0, buffer.length);
+  }
   
   @Override
   public int write(ByteBuffer byteBuffer) throws IOException {
