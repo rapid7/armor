@@ -64,11 +64,11 @@ public class ShardWriter {
   }
 
   public void close() {
-    for (ColumnFileWriter writer : columnFileWriters.values()) {
+    for (ColumnFileWriter cfw : columnFileWriters.values()) {
       try {
-        writer.close();
+        cfw.close();
       } catch (Exception e) {
-        LOGGER.warn("Unable to close column {}", writer.getColumnId(), e);
+        LOGGER.warn("Unable to close column {}", cfw.getColumnId(), e);
       }
     }
   }
