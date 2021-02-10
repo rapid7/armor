@@ -43,6 +43,10 @@ public class EntityIndexWriter extends FileComponent {
   private final static byte[] DELETE_PAYLOAD = new byte[] {1}; 
   private final static FixedCapacityByteBufferPool BYTE_BUFFER_POOL = new FixedCapacityByteBufferPool(RECORD_SIZE_BYTES);
 
+  public static int bufferPoolSize() {
+    return BYTE_BUFFER_POOL.currentSize();
+  }
+
   public EntityIndexWriter(Path path, ColumnShardId columnShardId) throws IOException {
     super(path);
     this.columnShardId = columnShardId;

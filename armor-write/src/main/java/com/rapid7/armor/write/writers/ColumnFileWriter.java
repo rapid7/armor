@@ -290,8 +290,9 @@ public class ColumnFileWriter implements AutoCloseable {
           .filter(e -> e.getNumRows() > 0).collect(Collectors.toList());
     } else {
       for (EntityRecord er : records) {
-        if (entityDictionary.getValue(er.getEntityId()) == null)
+        if (entityDictionary.getValue(er.getEntityId()) == null) {
           throw new RuntimeException("No string entity id exists for " + er.toString() + " in " + columnShardId.alternateString());
+        }
       }
 
       return records.stream()

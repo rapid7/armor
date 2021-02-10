@@ -8,6 +8,10 @@ public class FixedCapacityByteBufferPool {
   private Deque<ByteBuffer> pool = new ArrayDeque<>();
   private int capacity;
   
+  public int currentSize() {
+    return pool.size();
+  }
+
   public FixedCapacityByteBufferPool(int capacity) {
     this.capacity = capacity;
   }

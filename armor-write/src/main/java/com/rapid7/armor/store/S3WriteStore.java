@@ -151,6 +151,8 @@ public class S3WriteStore implements WriteStore {
     List<ColumnFileWriter> writers = new ArrayList<>();
     TableMetadata tableMetadata = this.loadTableMetadata(tenant, table);
     for (ColumnId columnId : columnIds) {
+      if (tableMetadata.getEntityColumnId() == null)
+        throw new IllegalStateException("Detected an existing column with no table-metadata, the table should have valid metadata: " + tableMetadata);
       if (tableMetadata.getEntityColumnId().equals(columnId.getName()))
         continue;
       String shardIdPath = resolveCurrentPath(tenant, table, shardId.getShardNum()) + "/" + columnId.fullName();
