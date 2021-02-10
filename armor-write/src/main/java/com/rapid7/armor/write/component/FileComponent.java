@@ -107,7 +107,10 @@ public class FileComponent implements ChannelComponent {
 
   @Override
   public void close() throws IOException {
-    fileChannel.close();
-    Files.deleteIfExists(path);
+    try{
+      fileChannel.close();
+    } finally {
+      Files.deleteIfExists(path);
+    }
   }
 }
