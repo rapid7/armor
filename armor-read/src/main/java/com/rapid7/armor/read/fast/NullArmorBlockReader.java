@@ -11,8 +11,8 @@ import io.airlift.slice.Slices;
  */
 public class NullArmorBlockReader extends FastArmorBlockReader {
 
-  public NullArmorBlockReader(int numRows, DataType dataType) {
-    super(null, null, null, numRows, -1, null, null, dataType);
+  public NullArmorBlockReader(int numRows) {
+    super(null, null, null, numRows, -1, null, null, null);
  }
 
   public FastArmorBlock getLongBlock(int batchRows) {
@@ -63,6 +63,9 @@ public class NullArmorBlockReader extends FastArmorBlockReader {
     
     int[] sliceOffsets = new int[allocate];
     boolean[] valueIsNull = new boolean[allocate];
+    rowCounterIndex += allocate;
+    if (rowCounterIndex >= this.numRows)
+      hasNext = false;
     return new FastArmorBlock(slice, sliceOffsets, valueIsNull, allocate, batchNum);
   }
 
