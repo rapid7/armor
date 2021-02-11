@@ -1,6 +1,7 @@
 package com.rapid7.armor.columnfile;
 
 import static com.rapid7.armor.Constants.MAGIC_HEADER;
+import static com.rapid7.armor.Constants.VERSION;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -29,6 +30,8 @@ public class ColumnFileReader {
   public void read(DataInputStream dataInputStream, ColumnFileListener listener) throws IOException {
     // Header first
     readForMagicHeader(dataInputStream);
+
+    readForFormatVersion(dataInputStream);
 
     // Metadata
     dataInputStream.readInt(); // Skip compressed, always uncompressed for meta
@@ -76,5 +79,11 @@ public class ColumnFileReader {
     short header = dataInputStream.readShort();
     if (header != MAGIC_HEADER)
       throw new IllegalArgumentException("The magic header doesn't exist");
+  }
+  
+  private void readForFormatVersion(DataInputStream dataInputStream) throws IOException {
+    int version = dataInputStream.readInt();
+    if (version != VERSION)
+      throw new IllegalArgumentException("Unable to read columnfile since version is " + version + " and this lib is only for " + VERSION);
   }
 }

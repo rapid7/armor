@@ -24,6 +24,7 @@ import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdOutputStream;
 
 import static com.rapid7.armor.Constants.MAGIC_HEADER;
+import static com.rapid7.armor.Constants.VERSION;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -309,6 +310,7 @@ public class ColumnFileWriter implements AutoCloseable {
     int totalBytes = 0;
     ByteArrayOutputStream headerPortion = new ByteArrayOutputStream();
     writeForMagicHeader(headerPortion);
+    writeForVersion(headerPortion);
 
     // Prepare metadata for writing
     metadata.setLastUpdate(new Date().toString());
@@ -542,6 +544,10 @@ public class ColumnFileWriter implements AutoCloseable {
 
   private void writeForMagicHeader(OutputStream outputStream) throws IOException {
     outputStream.write(IOTools.toByteArray(MAGIC_HEADER));
+  }
+  
+  private void writeForVersion(OutputStream outputStream) throws IOException {
+    outputStream.write(IOTools.toByteArray(VERSION));
   }
 
   public void defrag() throws IOException {

@@ -11,14 +11,12 @@ import static com.rapid7.armor.Constants.BEGIN_DELETE_OFFSET;
 import static com.rapid7.armor.Constants.RECORD_SIZE_BYTES;
 
 import java.io.IOException;
-import java.lang.ref.SoftReference;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

@@ -34,10 +34,11 @@ public final class Constants {
   public final static int BEGIN_INSTANCE_ID_LENGTH_OFFSET = BEGIN_DELETE_OFFSET + DELETED_BYTE_LENGTH + NULL_BYTE_LENGTH + DECODED_BYTE_LENGTH;
 
 
+  // Version that is supported. If there is a change to the format, then update this value.
+  public final static int VERSION = 0x0001;
+
   // Designates start of armor column
   public final static short MAGIC_HEADER = (short) 0xA1EE;
-  // Designates start of armor entity column
-  public final static short MAGIC_ENTITY_HEADER = (short) 0xA7EE;
 
   public final static String TABLE_METADATA = "table-metadata";
   public final static String SHARD_METADATA = "shard-metadata";
