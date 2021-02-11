@@ -3,6 +3,7 @@ package com.rapid7.armor.entity;
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.dictionary.Dictionary;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
@@ -152,7 +153,7 @@ public class EntityRecord {
         ", rowGroupOffset=" + rowGroupOffset +
         ", valueLength=" + valueLength +
         ", version=" + version +
-        ", instanceUuid=" + Arrays.toString(instanceUuid) +
+        ", instanceUuid=" + new String(instanceUuid, StandardCharsets.UTF_8) +
         ", deleted=" + deleted +
         ", nullLength=" + nullLength +
         ", decodedLength=" + decodedLength +
