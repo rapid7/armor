@@ -6,6 +6,7 @@ import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.io.AutoDeleteFileInputStream;
+import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.io.IOTools;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnId;
@@ -58,8 +59,8 @@ public class ColumnFileWriter implements AutoCloseable {
   private DictionaryWriter valueDictionary;
   private DictionaryWriter entityDictionary;
   private final ColumnShardId columnShardId;
-  private final String ROWGROUP_STORE_PREFIX = "rowgroupstore_";
-  private final String ENTITYINDEX_STORE_PREFIX = "entityindexstore_";
+  private final String ROWGROUP_STORE_SUFFIX = "_rowgroup-";
+  private final String ENTITYINDEX_STORE_SUFFIX = "_entityindex-";
 
   public ColumnFileWriter(ColumnShardId columnShardId) throws IOException {
     metadata = new ColumnMetadata();
@@ -72,8 +73,8 @@ public class ColumnFileWriter implements AutoCloseable {
       valueDictionary = new DictionaryWriter(false);
 
     entityDictionary = new DictionaryWriter(true);
-    rowGroupWriter = new RowGroupWriter(Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId, valueDictionary);
-    entityRecordWriter = new EntityIndexWriter(Files.createTempFile(ENTITYINDEX_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId);
+    rowGroupWriter = new RowGroupWriter(Files.createTempFile(columnShardId.alternateString() + ROWGROUP_STORE_SUFFIX, ".armor"), columnShardId, valueDictionary);
+    entityRecordWriter = new EntityIndexWriter(Files.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor"), columnShardId);
   }
 
   public ColumnFileWriter(DataInputStream dataInputStream, ColumnShardId columnShardId) {
@@ -98,8 +99,8 @@ public class ColumnFileWriter implements AutoCloseable {
         if (dt == DataType.STRING)
           valueDictionary = new DictionaryWriter(false);
         entityDictionary = new DictionaryWriter(true);
-        rowGroupWriter = new RowGroupWriter(Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId, valueDictionary);
-        entityRecordWriter = new EntityIndexWriter(Files.createTempFile(ENTITYINDEX_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor"), columnShardId);
+        rowGroupWriter = new RowGroupWriter(Files.createTempFile(columnShardId.alternateString() + ROWGROUP_STORE_SUFFIX, ".armor"), columnShardId, valueDictionary);
+        entityRecordWriter = new EntityIndexWriter(Files.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor"), columnShardId);
       }
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -189,7 +190,7 @@ public class ColumnFileWriter implements AutoCloseable {
   }
   
   private int loadEntityIndex(DataInputStream inputStream, int compressed, int uncompressed, List<Path> temps) throws IOException {
-    Path entityIndexTemp = Files.createTempFile(ENTITYINDEX_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor");
+    Path entityIndexTemp = Files.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor");
     temps.add(entityIndexTemp);
     int read = 0;
     if (compressed > 0) {
@@ -212,7 +213,7 @@ public class ColumnFileWriter implements AutoCloseable {
   }
   
   private int loadRowGroup(DataInputStream inputStream, int compressed, int uncompressed, List<Path> temps) throws IOException {
-    Path rgGroupTemp = Files.createTempFile(ROWGROUP_STORE_PREFIX + columnShardId.alternateString() + "-", ".armor");
+    Path rgGroupTemp = Files.createTempFile(columnShardId.alternateString() + ROWGROUP_STORE_SUFFIX, ".armor");
     temps.add(rgGroupTemp);
     int read = 0;
     if (compressed > 0) {
@@ -306,7 +307,7 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
   
-  public StreamProduct buildInputStream(boolean compress) throws IOException {
+  public StreamProduct buildInputStream(Compression compress) throws IOException {
     int totalBytes = 0;
     ByteArrayOutputStream headerPortion = new ByteArrayOutputStream();
     writeForMagicHeader(headerPortion);
@@ -314,10 +315,10 @@ public class ColumnFileWriter implements AutoCloseable {
 
     // Prepare metadata for writing
     metadata.setLastUpdate(new Date().toString());
-    if (compress)
-      metadata.setCompressionAlgorithm("zstd"); // Currently we only support this.
+    if (compress == Compression.ZSTD)
+      metadata.setCompressionAlgorithm(Compression.ZSTD.name()); // Currently we only support this.
     else
-      metadata.setCompressionAlgorithm("none");
+      metadata.setCompressionAlgorithm(Compression.NONE.name());
     List<EntityRecord> records = entityRecordWriter.getEntityRecords(entityDictionary);
     entityRecordWriter.runThroughRecords(metadata, records);
     // Run through the values to update metadata
@@ -339,7 +340,7 @@ public class ColumnFileWriter implements AutoCloseable {
         entityDictionaryLengths = new ByteArrayInputStream(writeLength(0, 0));
         entityDictIs = new ByteArrayInputStream(new byte[0]);
       } else {
-        if (compress) {
+        if (compress == Compression.ZSTD) {
           Path entityDictTempPath = Files.createTempFile("entity-dict-temp_" + columnShardId.alternateString(), ".armor");
           tempPaths.add(entityDictTempPath);
           try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(entityDictTempPath.toFile()), RecyclingBufferPool.INSTANCE);
@@ -362,7 +363,7 @@ public class ColumnFileWriter implements AutoCloseable {
       ByteArrayInputStream valueDictLengths;
       totalBytes += 8;
       if (valueDictionary != null) {
-        if (compress) {
+        if (compress == Compression.ZSTD) {
           Path valueDictTempPath = Files.createTempFile("value-dict-temp_" + columnShardId.alternateString() + "-", ".armor");
           tempPaths.add(valueDictTempPath);
           try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(valueDictTempPath.toFile()), RecyclingBufferPool.INSTANCE);
@@ -394,7 +395,7 @@ public class ColumnFileWriter implements AutoCloseable {
            uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityRecordWriter.getPreLoadOffset(), columnShardId.alternateString());
         throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityRecordWriter.getPreLoadOffset(), columnShardId.alternateString());
       }
-      if (compress) {
+      if (compress == Compression.ZSTD) {
         String tempName = this.columnShardId.alternateString();
         Path eiTempPath = Files.createTempFile("entity-temp_" + tempName + "-", ".armor");
         tempPaths.add(eiTempPath);
@@ -416,7 +417,7 @@ public class ColumnFileWriter implements AutoCloseable {
       InputStream rgIs;
       ByteArrayInputStream rgLengths;
       totalBytes += 8;
-      if (compress) {
+      if (compress == Compression.ZSTD) {
         String tempName = columnShardId.alternateString();
         Path rgTempPath = Files.createTempFile("rowgroup-temp_" + tempName + "-", ".armor");
         tempPaths.add(rgTempPath);

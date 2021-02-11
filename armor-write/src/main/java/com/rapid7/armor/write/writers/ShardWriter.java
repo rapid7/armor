@@ -3,6 +3,7 @@ package com.rapid7.armor.write.writers;
 import com.rapid7.armor.entity.Column;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.EntityRecordSummary;
+import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.schema.ColumnId;
@@ -42,7 +43,7 @@ public class ShardWriter {
   private final ShardId shardId;
   private final BiPredicate<ShardId, String> captureWrite;
   private final Supplier<Integer> defragTrigger;
-  private boolean compress = true;
+  private Compression compress = Compression.ZSTD;
   
   private synchronized ColumnFileWriter addColumnFileWriter(ColumnFileWriter cfw) {
     ColumnFileWriter previous = columnFileWriters.get(cfw.getColumnShardId());
@@ -57,7 +58,7 @@ public class ShardWriter {
   public ShardWriter(
     ShardId shardId,
     WriteStore store,
-    boolean compress,
+    Compression compress,
     Supplier<Integer> defragTriggerSupplier,
     BiPredicate<ShardId, String> captureWrite) {
     this.shardId = shardId;

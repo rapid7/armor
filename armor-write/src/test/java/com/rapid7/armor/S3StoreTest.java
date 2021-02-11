@@ -2,6 +2,7 @@ package com.rapid7.armor;
 
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
@@ -167,7 +168,7 @@ public class S3StoreTest {
     ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
     ColumnId asset = new ColumnId("asset", DataType.INTEGER.getCode());
     List<ColumnId> columns = Arrays.asList(name, time, vuln);
-    try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, false, 10, () -> 1, null)) {
+    try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, Compression.NONE, 10, () -> 1, null)) {
       String transction = armorWriter.startTransaction();
       Entity e11 = Entity.buildEntity("asset", 1, 1, null, name, time, vuln);
       e11.addRows(
@@ -308,7 +309,7 @@ public class S3StoreTest {
       e32.addRow("1", null, -1);
       e32.addRow(null, null, null);
   
-      ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, false, 10, () -> 1, null);
+      ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, Compression.NONE, 10, () -> 1, null);
       Map<Integer, EntityRecord> records5a = amrorWriter2.columnEntityRecords(myorg, table, "vuln", 0);
   
       amrorWriter2.write(transction, myorg, table, Collections.singletonList(e32));

@@ -2,6 +2,7 @@ package com.rapid7.armor;
 
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.read.fast.FastArmorBlock;
 import com.rapid7.armor.read.fast.FastArmorBlockReader;
@@ -73,14 +74,14 @@ public class FileStoreTest {
     Entity e7 = Entity.buildEntity("asset", 7, 1, instanceId, vuln);
 
     try {
-      try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, false, 10, null, null)) {
+      try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, Compression.NONE, 10, null, null)) {
         String transaction = armorWriter.startTransaction();
         armorWriter.write(transaction, "myorg", "testtable", Arrays.asList(e1, e2, e3, e4, e5, e6, e7));
         armorWriter.columnEntityRecords("myorg", "testtable", "vuln", 0);
         armorWriter.commit(transaction, "myorg", "testtable");
       }
   
-      try (ArmorWriter armorWriter2 = new ArmorWriter("test", fileStore, false, 10, null, null)) {
+      try (ArmorWriter armorWriter2 = new ArmorWriter("test", fileStore, Compression.NONE, 10, null, null)) {
         String transaction = armorWriter2.startTransaction();
         Entity e8 = Entity.buildEntity("asset", 8, 1, null, vuln);
         armorWriter2.write(transaction, "myorg", "testtable", Collections.singletonList(e8));
@@ -104,7 +105,7 @@ public class FileStoreTest {
     ColumnId asset = new ColumnId("asset", DataType.INTEGER.getCode());
     List<ColumnId> columns = Arrays.asList(name, time, vuln);
     String instanceId = UUID.randomUUID().toString();
-    try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, false, 10, () -> 1, null)) {
+    try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, Compression.NONE, 10, () -> 1, null)) {
       Entity e11 = Entity.buildEntity("asset", 1, 1, instanceId, name, time, vuln);
       e11.addRows(
           "a", 6L, 1,
@@ -241,7 +242,7 @@ public class FileStoreTest {
       e32.addRow("1", null, -1);
       e32.addRow(null, null, null);
 
-      ArmorWriter amrorWriter2 = new ArmorWriter("test", fileStore, false, 10, null, null);
+      ArmorWriter amrorWriter2 = new ArmorWriter("test", fileStore, Compression.NONE, 10, null, null);
 
       amrorWriter2.write(transction, myorg, table, Collections.singletonList(e32));
       amrorWriter2.commit(transction, myorg, table);

@@ -3,6 +3,7 @@ package com.rapid7.armor.write.writers;
 import com.rapid7.armor.entity.Column;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
@@ -16,7 +17,6 @@ import com.rapid7.armor.write.TableId;
 import com.rapid7.armor.write.WriteRequest;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.file.NoSuchFileException;
 import java.util.ArrayList;
@@ -47,10 +47,10 @@ public class ArmorWriter implements Closeable {
   private final Supplier<Integer> defragTrigger;
   private boolean selfPool = true;
   private final BiPredicate<ShardId, String> captureWrites;
-  private boolean compress = false;
+  private Compression compress = Compression.ZSTD;
   private String name;
 
-  public ArmorWriter(String name, WriteStore store, boolean compress, int numThreads) {
+  public ArmorWriter(String name, WriteStore store, Compression compress, int numThreads) {
     this.store = store;
     this.threadPool = Executors.newFixedThreadPool(numThreads);
     this.selfPool = true;
@@ -60,7 +60,7 @@ public class ArmorWriter implements Closeable {
     this.captureWrites = null;
   }
 
-  public ArmorWriter(String name, WriteStore store, boolean compress, int numThreads, Supplier<Integer> defragTrigger, BiPredicate<ShardId, String> captureWrites) {
+  public ArmorWriter(String name, WriteStore store, Compression compress, int numThreads, Supplier<Integer> defragTrigger, BiPredicate<ShardId, String> captureWrites) {
     this.store = store;
     this.threadPool = Executors.newFixedThreadPool(numThreads);
     this.selfPool = true;
@@ -73,7 +73,17 @@ public class ArmorWriter implements Closeable {
       this.defragTrigger = defragTrigger;
   }
 
-  public ArmorWriter(String name, WriteStore store, boolean compress, ExecutorService pool, Supplier<Integer> defragTrigger, BiPredicate<ShardId, String> captureWrites) {
+  /**
+   * Constructs an ArmorWriter.
+   *
+   * @param name Assign a name to a writer.
+   * @param store A write store instance it should be running against.
+   * @param compress The compression option.
+   * @param shardPool A thread pool to use where one thread is run per shard for writing.
+   * @param defragTrigger Supply a setting of when to start defrag.
+   * @param captureWrites Predicate to determine when to trigger capturing write requests.
+   */
+  public ArmorWriter(String name, WriteStore store, Compression compress, ExecutorService pool, Supplier<Integer> defragTrigger, BiPredicate<ShardId, String> captureWrites) {
     this.store = store;
     this.threadPool = pool;
     this.captureWrites = captureWrites;
