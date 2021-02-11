@@ -257,7 +257,8 @@ public class RowGroupWriter extends FileComponent {
             } else {
               String strValue = (String) v;
               strLength += strValue.getBytes().length; // Special characters mask the String.length method where its not included in size.
-              surrogates.add(dictionaryWriter.getSurrogate(strValue));
+              Integer surrogate = dictionaryWriter.getSurrogate(strValue);
+              surrogates.add(surrogate.intValue());
             }
           }
           valueRequest = surrogates.toArray();
