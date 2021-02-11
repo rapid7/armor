@@ -14,7 +14,6 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ColumnMetadata {
   private boolean entityId = false;
-  private int format = 1;
   private DataType dataType;
   private String columnId;
   private String lastUpdate;
@@ -90,14 +89,6 @@ public class ColumnMetadata {
 
   public void setDataType(DataType dataType) {
     this.dataType = dataType;
-  }
-
-  public int getFormatVersion() {
-    return format;
-  }
-
-  public void setFormatVersion(int version) {
-    this.format = version;
   }
 
   public String getColumnId() {
