@@ -205,17 +205,17 @@ public class FileStoreV2Test {
     assertTableEquals(checkEntity, entityTable);
   }
   
-  private void verifyColumn(int expectedNumberRows, String column, Path path, int numShards) throws IOException {
+  private void verifyColumn(int expectedNumberRows, ColumnId column, Path path, int numShards) throws IOException {
     FileReadStore readStore = new FileReadStore(path);
     List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE);
     assertEquals(numShards, shardIds.size());
     int totalRows = 0;
     FastArmorReader reader = new FastArmorReader(readStore);
     for (ShardId shardId : shardIds) {
-      FastArmorBlockReader far = reader.getColumn(TENANT, TABLE, column, shardId.getShardNum());
-      DataType dt = far.dataType();
+      FastArmorBlockReader far = reader.getColumn(TENANT, TABLE, column.getName(), shardId.getShardNum());
+      
       FastArmorBlock fab = null;
-      switch (dt) {
+      switch (column.dataType()) {
         case INTEGER:
           fab = far.getIntegerBlock(5000);
           break;
@@ -226,7 +226,7 @@ public class FileStoreV2Test {
           fab = far.getStringBlock(5000);
           break;
           default:
-            throw new RuntimeException("Unsupported data type" + dt);
+            throw new RuntimeException("Unsupported data type" + column);
       }
       totalRows += fab.getNumRows();
     }
@@ -276,7 +276,8 @@ public class FileStoreV2Test {
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
     Row[] rows2 = new Row[] { texasVuln, caliVuln };
     List<ColumnId> EXTRA_COLUMNS = new ArrayList<>(COLUMNS);
-    EXTRA_COLUMNS.add(new ColumnId("city", DataType.STRING.getCode()));
+    ColumnId newColumn = new ColumnId("city", DataType.STRING.getCode());
+    EXTRA_COLUMNS.add(newColumn);
 
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10)) {
       String xact = writer.startTransaction();
@@ -295,7 +296,7 @@ public class FileStoreV2Test {
 
       System.out.println(printTable(testDirectory));
       verifyTableReaderPOV(3, testDirectory, 2);
-      verifyColumn(3, "city", testDirectory, 2);
+      verifyColumn(3, newColumn, testDirectory, 2);
     }
 
   }
