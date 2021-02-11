@@ -441,4 +441,9 @@ public class S3WriteStore implements WriteStore {
       throw new RuntimeException(e);
     }
   }
+
+  @Override
+  public String rootDirectory() {
+    return bucket;
+  }
 }

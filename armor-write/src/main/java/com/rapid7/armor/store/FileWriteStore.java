@@ -361,4 +361,9 @@ public class FileWriteStore implements WriteStore {
   @Override
   public void captureWrites(String correlationId, ShardId shardId, List<Entity> entities, List<WriteRequest> requests, Object deleteEntity) {
   }
+
+  @Override
+  public String rootDirectory() {
+    return basePath.toString();
+  }
 }

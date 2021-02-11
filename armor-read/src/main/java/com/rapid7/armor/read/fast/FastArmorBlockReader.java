@@ -3,6 +3,7 @@ package com.rapid7.armor.read.fast;
 import java.nio.ByteBuffer;
 
 import com.rapid7.armor.read.DictionaryReader;
+import com.rapid7.armor.schema.DataType;
 
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
@@ -14,16 +15,17 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
  */
 public class FastArmorBlockReader {
   private final ByteBuffer columnValues;
-  private boolean hasNext = true;
-  private final int numRows;
+  protected boolean hasNext = true;
+  protected final int numRows;
   private final int[] entityDecodedLength;
   private final int[] entityNumRows;
   private int entityCounter;
   private final DictionaryReader strValueDictionary;
   private final int numEntities;
-  private int rowCounterIndex;
+  protected int rowCounterIndex;
   private final IntArrayList rowIsNull;
-  private int batchNum = 0;
+  protected int batchNum = 0;
+  private DataType dataType;
 
   public FastArmorBlockReader(
       ByteBuffer columnValues,
@@ -32,7 +34,8 @@ public class FastArmorBlockReader {
       int numRows,
       int numEntities,
       int[] entityDecodedLength,
-      int[] entityNumRows) {
+      int[] entityNumRows,
+      DataType dataType) {
     this.columnValues = columnValues;
     this.strValueDictionary = strValueDictionary;
     this.numRows = numRows;
@@ -42,6 +45,11 @@ public class FastArmorBlockReader {
     this.entityCounter = 0;
     this.rowCounterIndex = 0;
     this.rowIsNull = rowIsNull; // Note zero-indexed row number
+    this.dataType = dataType;
+  }
+
+  public DataType dataType() {
+    return dataType;
   }
 
   public int rowCounter() {
@@ -239,7 +247,7 @@ public class FastArmorBlockReader {
       }
       entityRowOffset = 0; // Any further offsets will be reset to zero.
     }
-    //System.out.println("!!!!!!" + entityRowOffset +  " " + entityCounter + " " + sessionReadRows);
+
     if (sessionReadRows < batchRows && entityCounter < this.numEntities) {
       entityCounter++;
       entityRowOffset = 0;

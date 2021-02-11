@@ -1,5 +1,6 @@
 package com.rapid7.armor.store;
 
+import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnId;
@@ -10,11 +11,15 @@ import java.util.Map;
 public interface ReadStore {
   List<String> getTenants();
 
+  ColumnId findColumnId(String tenant, String table, String columnName);
+  
+  ShardMetadata getShardMetadata(String tenant, String table, int shardNum);
+  
   ShardId findShardId(String tenant, String table, int shardNum);
 
-  SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnId);
+  SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnName);
 
-  FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnId);
+  FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnName);
 
   List<ColumnId> getColumnIds(String tenant, String table);
 

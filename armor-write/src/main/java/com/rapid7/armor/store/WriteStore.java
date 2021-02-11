@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 public interface WriteStore {
+  String rootDirectory();
+
   // Loading from store
   List<ColumnFileWriter> loadColumnWriters(String tenant, String table, int shardNum);
 

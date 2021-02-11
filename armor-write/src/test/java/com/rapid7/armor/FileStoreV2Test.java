@@ -25,6 +25,7 @@ import com.rapid7.armor.entity.Row;
 import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.read.fast.FastArmorBlock;
 import com.rapid7.armor.read.fast.FastArmorBlockReader;
+import com.rapid7.armor.read.fast.FastArmorReader;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorReader;
 import com.rapid7.armor.schema.ColumnId;
@@ -187,6 +188,13 @@ public class FileStoreV2Test {
     assertEquals(0, entityTable.rowCount());
   }
   
+  private String printTable(Path path) {
+    FileReadStore readStore = new FileReadStore(path);
+    SlowArmorReader reader = new SlowArmorReader(readStore);
+    Table entityTable = reader.getTable(TENANT, TABLE);
+    return entityTable.print();
+  }
+  
   private void verifyEntityReaderPOV(Entity entity, Path path) {
     FileReadStore readStore = new FileReadStore(path);
     Table checkEntity = entityToTableSawRow(entity);
@@ -197,6 +205,34 @@ public class FileStoreV2Test {
     assertTableEquals(checkEntity, entityTable);
   }
   
+  private void verifyColumn(int expectedNumberRows, String column, Path path, int numShards) throws IOException {
+    FileReadStore readStore = new FileReadStore(path);
+    List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE);
+    assertEquals(numShards, shardIds.size());
+    int totalRows = 0;
+    FastArmorReader reader = new FastArmorReader(readStore);
+    for (ShardId shardId : shardIds) {
+      FastArmorBlockReader far = reader.getColumn(TENANT, TABLE, column, shardId.getShardNum());
+      DataType dt = far.dataType();
+      FastArmorBlock fab = null;
+      switch (dt) {
+        case INTEGER:
+          fab = far.getIntegerBlock(5000);
+          break;
+        case LONG:
+          fab = far.getLongBlock(5000);
+          break;
+        case STRING:
+          fab = far.getStringBlock(5000);
+          break;
+          default:
+            throw new RuntimeException("Unsupported data type" + dt);
+      }
+      totalRows += fab.getNumRows();
+    }
+    assertEquals(expectedNumberRows, totalRows);
+  }
+
   private void verifyTableReaderPOV(int expectedNumberRows, Path path, int numShards) {
     FileReadStore readStore = new FileReadStore(path);
     List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE);
@@ -235,6 +271,37 @@ public class FileStoreV2Test {
   }
   
   @Test
+  public void newColumn() throws IOException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    Row[] rows2 = new Row[] { texasVuln, caliVuln };
+    List<ColumnId> EXTRA_COLUMNS = new ArrayList<>(COLUMNS);
+    EXTRA_COLUMNS.add(new ColumnId("city", DataType.STRING.getCode()));
+
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities1 = new ArrayList<>();
+      Entity entity1 = generateEntity("firstEntity", 1, rows2);
+      entities1.add(entity1);
+      writer.write(xact, TENANT, TABLE, entities1);
+ 
+      // Add a column called city to the mix.
+      Row texasVulnExtra = new Row(1, 101l, "texas", "houston");
+      Entity entity2 = Entity.buildEntity(ASSET_ID, "secondEntity", 1, TEST_UUID, EXTRA_COLUMNS, texasVulnExtra);
+      List<Entity> entities2 = new ArrayList<>();
+      entities2.add(entity2);
+      writer.write(xact, TENANT, TABLE, entities2);
+      writer.commit(xact, TENANT, TABLE);
+
+      System.out.println(printTable(testDirectory));
+      verifyTableReaderPOV(3, testDirectory, 2);
+      verifyColumn(3, "city", testDirectory, 2);
+    }
+
+  }
+  
+  
+  @Test
   public void completelyRandomWrites() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
     
@@ -268,7 +335,7 @@ public class FileStoreV2Test {
         entities4.add(random4);
       }
       
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities4));
+      writer.write(xact, TENANT, TABLE, entities4);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(numEntities*4, testDirectory, 10);
       int random = RANDOM.nextInt(999);
@@ -282,7 +349,7 @@ public class FileStoreV2Test {
       }
       
       xact = writer.startTransaction();
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities6));
+      writer.write(xact, TENANT, TABLE, entities6);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(numEntities*6, testDirectory, 10);
       random = RANDOM.nextInt(999);
@@ -296,7 +363,7 @@ public class FileStoreV2Test {
       }
       
       xact = writer.startTransaction();
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities2));
+      writer.write(xact, TENANT, TABLE, entities2);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(numEntities*2, testDirectory, 10);
       random = RANDOM.nextInt(999);
@@ -310,7 +377,7 @@ public class FileStoreV2Test {
       }
       
       xact = writer.startTransaction();
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entitiesNull3));
+      writer.write(xact, TENANT, TABLE, entitiesNull3);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(numEntities*3, testDirectory, 10);
       random = RANDOM.nextInt(999);
@@ -371,7 +438,7 @@ public class FileStoreV2Test {
         entities.add(random);
       }
       
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities));
+      writer.write(xact, TENANT, TABLE, entities);
       writer.commit(xact, TENANT, TABLE);
       writer.close();
       
@@ -394,7 +461,7 @@ public class FileStoreV2Test {
       // Add it back
       writer = new ArmorWriter("aw1", store, Compression.ZSTD, numShards, null, null);
       xact = writer.startTransaction();      
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities));
+      writer.write(xact, TENANT, TABLE, entities);
       writer.commit(xact, TENANT, TABLE);
       
       verifyTableReaderPOV(numEntities*2, testDirectory, numShards);
@@ -410,8 +477,8 @@ public class FileStoreV2Test {
 
       xact = writer.startTransaction();
       // Attempt to also try and double count it shouldn't double count.
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities1));
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities1));
+      writer.write(xact, TENANT, TABLE, entities1);
+      writer.write(xact, TENANT, TABLE, entities1);
 
       writer.commit(xact, TENANT, TABLE);
       
@@ -437,8 +504,8 @@ public class FileStoreV2Test {
       }
       
       // Make it out of order with respect to the enityIds.
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities3));
-      writer.write(xact, TENANT, TABLE, new ArrayList<>(entities2));
+      writer.write(xact, TENANT, TABLE, entities3);
+      writer.write(xact, TENANT, TABLE, entities2);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV((4*numEntities)*2, testDirectory, numShards);
       random = RANDOM.nextInt(999);

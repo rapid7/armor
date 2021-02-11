@@ -250,11 +250,10 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
       int rowGroupOffset = eir.getRowGroupOffset();
       if (readBytes < rowGroupOffset) {
         // Read up to the offset to skip.
-        inputStream.skip(rowGroupOffset - readBytes);
-        readBytes += (rowGroupOffset - readBytes);
+        readBytes += inputStream.skip(rowGroupOffset - readBytes);
       }
       byte[] payload = new byte[eir.getValueLength()];
-      inputStream.read(payload);
+      readBytes += inputStream.read(payload);
       DataInputStream dis = new DataInputStream(new ByteArrayInputStream(payload));
       dt.traverseDataInputStream(dis, eir.getValueLength(), r -> {
         entityIndexColumn.append(entity);
@@ -266,7 +265,6 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
           column.appendObj(r);
         rowCounter.incrementAndGet();
       });
-      readBytes += payload.length;
 
       // Read the next int to see if there is a nullbitmap
       int nullBitMapLength = eir.getNullLength();
@@ -274,7 +272,6 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
         byte[] buffer = new byte[nullBitMapLength];
         try {
           readBytes += inputStream.read(buffer);
-
           RoaringBitmap roar = new RoaringBitmap();
           roar.deserialize(ByteBuffer.wrap(buffer));
 
@@ -306,7 +303,11 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
   protected int readRowGroup(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
     if (compressed > 0) {
       ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
-      return readToTable(entityRecords, zstdInputStream, metadata);
+      int uncompressedRead = readToTable(entityRecords, zstdInputStream, metadata);
+      if (uncompressed != uncompressedRead) {
+        LOGGER.warn("The expected number of bytes to be read for {} doesn't match {} read vs. {} expected, this can be an issue", this.columnId(), uncompressedRead, uncompressed);
+      }
+      return compressed;
     } else {
       return readToTable(entityRecords, inputStream, metadata);
     }

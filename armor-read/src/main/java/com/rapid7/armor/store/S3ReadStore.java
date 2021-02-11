@@ -1,6 +1,7 @@
 package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
+import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnId;
@@ -206,5 +207,33 @@ public class S3ReadStore implements ReadStore {
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<String> commonPrefixes = ol.getCommonPrefixes();
     return commonPrefixes.stream().map(o -> o.replace("/", "")).collect(Collectors.toList());
+  }
+
+  @Override
+  public ColumnId findColumnId(String tenant, String table, String columnName) {
+    List<ColumnId> columnIds = getColumnIds(tenant, table);
+    Optional<ColumnId> first = columnIds.stream().filter(c -> c.getName().equalsIgnoreCase(columnName)).findFirst();
+    if (first.isPresent())
+      return first.get();
+    else
+      return null;
+  }
+
+  @Override
+  public ShardMetadata getShardMetadata(String tenant, String table, int shardNum) {
+    String shardIdPath = resolveCurrentPath(tenant, table, shardNum) + "/" + Constants.SHARD_METADATA + ".armor";
+
+    if (s3Client.doesObjectExist(bucket, shardIdPath)) {
+      try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
+        try {
+          return OBJECT_MAPPER.readValue(s3ObjectInputStream, ShardMetadata.class);
+        } finally {
+          com.amazonaws.util.IOUtils.drainInputStream(s3ObjectInputStream);
+        }
+      } catch (IOException ioe) {
+        throw new RuntimeException(ioe);
+      }
+    } else
+      return null;
   }
 }

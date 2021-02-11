@@ -63,7 +63,8 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
         metadata.getNumRows(),
         metadata.getNumEntities(),
         entityDecodedLength,
-        entityNumRows);
+        entityNumRows,
+        metadata.getDataType());
   }
   
   public List<Object> getValuesForRecord(int entityId) {
@@ -140,20 +141,18 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
       if (bytesRead < rowGroupOffset) {
         // Read up to the offset to skip.
         int skipBytes = rowGroupOffset - bytesRead;
-        IOTools.skipFully(inputStream, skipBytes);
-        bytesRead += skipBytes;
+        bytesRead += IOTools.skipFully(inputStream, skipBytes);
       }
 
       // Read into column values the encoded value portion 
       int valueLength = eir.getValueLength();
-      IOTools.readFully(inputStream, columnValuesArray, columnValuesArrayOffset, valueLength);
+      bytesRead += IOTools.readFully(inputStream, columnValuesArray, columnValuesArrayOffset, valueLength);
       // Find out how many this equates to and record
       int numRows = dataType.determineNumValues(valueLength);
       entityNumRows[entityCounter] = dataType.determineNumValues(valueLength);
 
       // Update offsets, counters, etc.
       columnValuesArrayOffset += valueLength;
-      bytesRead += valueLength;
 
       // Read the next int to see if there is a nullbitmap
       int nullBitMapLength = eir.getNullLength();
@@ -164,7 +163,6 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
 
         try {
           bytesRead += IOTools.readFully(inputStream, nullBuffer, 0, nullBitMapLength);
-          //bytesRead += inputStream.read(nullBuffer, 0, nullBitMapLength);
           RoaringBitmap roar = new RoaringBitmap();
           roar.deserialize(ByteBuffer.wrap(nullBuffer));
           for (int relativeRowPosition : roar.toArray()) {
@@ -204,7 +202,11 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
     // Next row group
     if (compressed > 0) {
       ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
-      return loadToByteBuffer(entityRecords, zstdInputStream, metadata);
+      int uncompressedRead = loadToByteBuffer(entityRecords, zstdInputStream, metadata);
+      if (uncompressed != uncompressedRead) {
+        LOGGER.warn("The expected number of bytes to be read for {} doesn't match {} read vs. {} expected, this can be an issue", this.columnId(), uncompressedRead, uncompressed);
+      }
+      return compressed;
     } else {
       return loadToByteBuffer(entityRecords, inputStream, metadata);
     }

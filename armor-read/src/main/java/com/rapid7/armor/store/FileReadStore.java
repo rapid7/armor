@@ -1,6 +1,7 @@
 package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
+import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnId;
@@ -93,6 +94,8 @@ public class FileReadStore implements ReadStore {
   public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnId) {
     List<ColumnId> columnIds = getColumnIds(shardId);
     Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
+    if (!option.isPresent())
+      return null;
     ColumnId cn = option.get();
     Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()), cn.fullName());
     try {
@@ -126,9 +129,11 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnId) {
+  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnName) {
     List<ColumnId> columnIds = getColumnIds(shardId);
-    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
+    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnName)).findFirst();
+    if (!option.isPresent())
+      return null;
     ColumnId cn = option.get();
     Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getShardNum()), cn.fullName());
     if (!Files.exists(shardIdPath)) {
@@ -163,7 +168,10 @@ public class FileReadStore implements ReadStore {
     List<ShardId> shardIds = findShardIds(tenant, table);
     if (shardIds.isEmpty())
       return new ArrayList<>();
-    return getColumnIds(shardIds.get(0));
+    Set<ColumnId> columnIds = new HashSet<>();
+    for (ShardId shardId : shardIds)
+      columnIds.addAll(getColumnIds(shardId));
+    return new ArrayList<>(columnIds);
   }
 
   @Override
@@ -194,5 +202,31 @@ public class FileReadStore implements ReadStore {
   public List<String> getTenants() {
     File[] directories = basePath.toFile().listFiles(File::isDirectory);
     return Arrays.stream(directories).map(File::getName).collect(Collectors.toList());
+  }
+
+  @Override
+  public ColumnId findColumnId(String tenant, String table, String columnName) {
+    List<ColumnId> columnIds = getColumnIds(tenant, table);
+    Optional<ColumnId> first = columnIds.stream().filter(c -> c.getName().equalsIgnoreCase(columnName)).findFirst();
+    if (first.isPresent())
+      return first.get();
+    else
+      return null;
+  }
+
+  @Override
+  public ShardMetadata getShardMetadata(String tenant, String table, int shardNum) {
+    String currendPath = resolveCurrentPath(tenant, table, shardNum);
+    if (currendPath == null)
+      return null;
+    Path shardIdPath = basePath.resolve(Paths.get(currendPath, Constants.SHARD_METADATA + ".armor"));
+    if (!Files.exists(shardIdPath))
+      return null;
+    try {
+      byte[] payload = Files.readAllBytes(shardIdPath);
+      return OBJECT_MAPPER.readValue(payload, ShardMetadata.class);
+    } catch (IOException ioe) {
+      throw new RuntimeException(ioe);
+    }
   }
 }
