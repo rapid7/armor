@@ -44,7 +44,7 @@ public class ArmorWriter implements Closeable {
   private final Map<TableId, TableWriter> tableWriters = new ConcurrentHashMap<>();
   private final Map<TableId, ColumnId> tableEntityColumnIds = new ConcurrentHashMap<>();
 
-  private final Supplier<Integer> defragTrigger;
+  private final Supplier<Integer> compactionTrigger;
   private boolean selfPool = true;
   private final BiPredicate<ShardId, String> captureWrites;
   private Compression compress = Compression.ZSTD;
@@ -56,21 +56,21 @@ public class ArmorWriter implements Closeable {
     this.selfPool = true;
     this.compress = compress;
     this.name = name;
-    this.defragTrigger = () -> 50;
+    this.compactionTrigger = () -> 50;
     this.captureWrites = null;
   }
 
-  public ArmorWriter(String name, WriteStore store, Compression compress, int numThreads, Supplier<Integer> defragTrigger, BiPredicate<ShardId, String> captureWrites) {
+  public ArmorWriter(String name, WriteStore store, Compression compress, int numThreads, Supplier<Integer> compactionTrigger, BiPredicate<ShardId, String> captureWrites) {
     this.store = store;
     this.threadPool = Executors.newFixedThreadPool(numThreads);
     this.selfPool = true;
     this.captureWrites = captureWrites;
     this.compress = compress;
     this.name = name;
-    if (defragTrigger == null) {
-      this.defragTrigger = () -> 50;
+    if (compactionTrigger == null) {
+      this.compactionTrigger = () -> 50;
     } else
-      this.defragTrigger = defragTrigger;
+      this.compactionTrigger = compactionTrigger;
   }
 
   /**
@@ -80,20 +80,20 @@ public class ArmorWriter implements Closeable {
    * @param store A write store instance it should be running against.
    * @param compress The compression option.
    * @param shardPool A thread pool to use where one thread is run per shard for writing.
-   * @param defragTrigger Supply a setting of when to start defrag.
+   * @param compactionTrigger Supply a setting of when to start compaction.
    * @param captureWrites Predicate to determine when to trigger capturing write requests.
    */
-  public ArmorWriter(String name, WriteStore store, Compression compress, ExecutorService pool, Supplier<Integer> defragTrigger, BiPredicate<ShardId, String> captureWrites) {
+  public ArmorWriter(String name, WriteStore store, Compression compress, ExecutorService pool, Supplier<Integer> compactionTrigger, BiPredicate<ShardId, String> captureWrites) {
     this.store = store;
     this.threadPool = pool;
     this.captureWrites = captureWrites;
     this.selfPool = false;
     this.name = name;
     this.compress = compress;
-    if (defragTrigger == null) {
-      this.defragTrigger = () -> 50;
+    if (compactionTrigger == null) {
+      this.compactionTrigger = () -> 50;
     } else
-      this.defragTrigger = defragTrigger;
+      this.compactionTrigger = compactionTrigger;
   }
 
   public String getName() {
@@ -153,7 +153,7 @@ public class ArmorWriter implements Closeable {
     }
   }
 
-  public void delete(String transaction, String tenant, String table, Object entityId) {
+  public void delete(String transaction, String tenant, String table, Object entityId, long version, String instanceId) {
     ShardId shardId = store.findShardId(tenant, table, entityId);
     if (captureWrites != null && captureWrites.test(shardId, ArmorWriter.class.getSimpleName()))
       store.captureWrites(transaction, shardId, null, null, entityId);
@@ -163,7 +163,7 @@ public class ArmorWriter implements Closeable {
       // This occurs if a write happened first then delete.
       ShardWriter sw = tableWriter.getShard(shardId.getShardNum());
       if (sw != null) {
-        sw.delete(transaction, entityId);
+        sw.delete(transaction, entityId, version, instanceId);
         return;
       } else {
         // NOTE: Let it fall through, since its a new shard we haven't loaded yet.
@@ -184,10 +184,10 @@ public class ArmorWriter implements Closeable {
 
     ShardWriter sw = tableWriter.getShard(shardId.getShardNum());
     if (sw == null) {
-      sw = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
+      sw = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
       sw = tableWriter.addShard(sw);
     }
-    sw.delete(transaction, entityId);
+    sw.delete(transaction, entityId, version, instanceId);
   }
   
   public synchronized TableWriter getTableWriter(TableId tableId) {
@@ -261,7 +261,7 @@ public class ArmorWriter implements Closeable {
               ShardWriter shardWriter = tableWriter.getShard(shardId.getShardNum());
               Thread.currentThread().setName(originalThreadName + "(" + shardId.toString() + ")");
               if (shardWriter == null) {
-                shardWriter = new ShardWriter(shardId, store, compress, defragTrigger, captureWrites);
+                shardWriter = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
                 shardWriter = tableWriter.addShard(shardWriter);
               }
 

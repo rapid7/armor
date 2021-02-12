@@ -233,7 +233,7 @@ public class S3StoreTest {
       checkEntityIndexRecord(vulnEntityRecords1.get(2), 24, 24, 15, (byte) 0);
   
       // Delete the entity 1
-      armorWriter.delete(transction, myorg, table, 1);
+      armorWriter.delete(transction, myorg, table, 1, Integer.MAX_VALUE, "dkfjd;kfd");
       armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();
       Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);

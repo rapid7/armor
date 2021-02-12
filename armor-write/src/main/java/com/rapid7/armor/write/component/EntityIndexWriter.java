@@ -7,7 +7,6 @@ import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.write.EntityOffsetException;
 
-import static com.rapid7.armor.Constants.BEGIN_DELETE_OFFSET;
 import static com.rapid7.armor.Constants.RECORD_SIZE_BYTES;
 
 import java.io.IOException;
@@ -20,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -38,8 +38,8 @@ public class EntityIndexWriter extends FileComponent {
   private final ColumnShardId columnShardId;
   private int nextOffset = 0;
   private int preloadOffset = 0;
-  private final static byte[] DELETE_PAYLOAD = new byte[] {1}; 
   private final static FixedCapacityByteBufferPool BYTE_BUFFER_POOL = new FixedCapacityByteBufferPool(RECORD_SIZE_BYTES);
+  private final static String ENTITY_INDEX_COMPACTION_SUFFIX = "_entityindex-compaction-";
 
   public static int bufferPoolSize() {
     return BYTE_BUFFER_POOL.currentSize();
@@ -147,15 +147,19 @@ public class EntityIndexWriter extends FileComponent {
     metadata.setNumRows(metadata.getDataType().rowCount(usedBytes));
   }
 
-  public EntityRecord delete(int entityUuid) throws IOException {
-    if (entities.containsKey(entityUuid)) {
+  public EntityRecord delete(int entityUuid, long version, String instanceId) throws IOException {
+    // Before executing the delete, first ensure the version is higher or greater than.
+    EntityRecord eir = entities.get(entityUuid);
+    if (eir != null && version > eir.getVersion()) {
       long prevPosition = position();
+      int indexOffset = indexOffsets.get(entityUuid);
       try {
-        int indexOffset = indexOffsets.get(entityUuid);
-        position(indexOffset + BEGIN_DELETE_OFFSET);
-        write(DELETE_PAYLOAD);
-        EntityRecord eir = entities.get(entityUuid);
+        position(indexOffset);
         eir.setDeleted((byte) 1);
+        eir.instanceId(instanceId);
+        eir.setVersion(version);
+        writeEntityIndexRecord(eir);
+        entities.put(entityUuid, eir);
         return eir;
       } finally {
         position(prevPosition);
@@ -247,6 +251,12 @@ public class EntityIndexWriter extends FileComponent {
     byteBuffer.flip();
   }
 
+  public void removeEntityReferences(Set<Integer> toRemove) {
+    for (Integer entityId : toRemove) {
+      entities.remove(entityId);
+      indexOffsets.remove(entityId);
+    }
+  }
 
   public void writeEntityIndexRecord(EntityRecord eir) throws IOException {
     ByteBuffer writeByteBuffer = BYTE_BUFFER_POOL.get();
@@ -259,29 +269,30 @@ public class EntityIndexWriter extends FileComponent {
   }
 
   /**
-   * Defrags here is taking a given list of records that should be recorded. Callers should filter out
+   * Compacts here is taking a given list of records that should be recorded. Callers should filter out
    * records that do not need to be recorded (delete). The approach here is to build a temp file and then replace
    * the underlying file as well as in-memory records with new ones.
    * 
-   * @param entityRecords A list of entity records to defrag.
+   * @param entitiesToKeep A list of entity records to keep during compaction.
    */
-  public void defrag(List<EntityRecord> entityRecords) throws IOException {
+  public void compact(List<EntityRecord> entitiesToKeep) throws IOException {
     Map<Integer, EntityRecord> tempEntities = new HashMap<>();
     Map<Integer, Integer> tempIndexOffsets = new HashMap<>();
-    Path path = Files.createTempFile("entityrecordwriter-defrag-" + columnShardId.alternateString() + "-", ".armor");
+    Path path = Files.createTempFile(columnShardId.alternateString() + ENTITY_INDEX_COMPACTION_SUFFIX, ".armor");
     boolean copied = false;
     ByteBuffer buffer = BYTE_BUFFER_POOL.get();
     try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
       int recordOffset = 0;
-      for (EntityRecord er : entityRecords) {
-        if (er.getDeleted() == 1)
+      for (EntityRecord er : entitiesToKeep) {
+        if (er.getDeleted() == 1) {
           continue;
+        }
         tempEntities.put(er.getEntityId(), er);
         tempIndexOffsets.put(er.getEntityId(), recordOffset);
         writeEntityRecordToBuffer(er, buffer);
         int written = fileChannel.write(buffer);
         if (written != RECORD_SIZE_BYTES)
-          throw new RuntimeException("When defragging, only write " + written + " when it should have been " + RECORD_SIZE_BYTES);
+          throw new RuntimeException("When compacting, only write " + written + " when it should have been " + RECORD_SIZE_BYTES);
         recordOffset += RECORD_SIZE_BYTES;
       }
       copied = true;
@@ -294,7 +305,7 @@ public class EntityIndexWriter extends FileComponent {
     int totalSize = (int) Files.size(path);
     try {
       if (totalSize % RECORD_SIZE_BYTES != 0)
-        throw new RuntimeException("When defragging, the fixed page size of " + RECORD_SIZE_BYTES + " wasn't achieved: " + totalSize);
+        throw new RuntimeException("When compacting, the fixed page size of " + RECORD_SIZE_BYTES + " wasn't achieved: " + totalSize);
       rebase(path);
       rebased = true;
     } finally {

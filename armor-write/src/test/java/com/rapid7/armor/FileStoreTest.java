@@ -168,7 +168,7 @@ public class FileStoreTest {
       checkEntityIndexRecord(vulnEntityRecords1.get(2), 24, 24, 15, (byte) 0);
 
       // Delete the entity 1
-      armorWriter.delete(transction, myorg, table, 1);
+      armorWriter.delete(transction, myorg, table, 1, 1000l, "test");
 
       armorWriter.commit(transction, myorg, table);
       transction = armorWriter.startTransaction();

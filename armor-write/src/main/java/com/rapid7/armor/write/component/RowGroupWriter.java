@@ -34,7 +34,7 @@ public class RowGroupWriter extends FileComponent {
   private final ColumnShardId columnShardId;
   private final DictionaryWriter dictionaryWriter;
   private final DataType dataType;
-
+  private final static String ROWGROUP_COMPACTION_SUFFIX = "_rowgroup_compaction-";
   public RowGroupWriter(Path path, ColumnShardId columnShardId, DictionaryWriter dictionary) {
     super(path);
     this.dictionaryWriter = dictionary;
@@ -354,19 +354,19 @@ public class RowGroupWriter extends FileComponent {
   }
 
   /**
-   * Compacts the row group given a set of defrag records, this will rebuild the underlying
+   * Compacts the row group given a set of entity records to keep, this will rebuild the underlying
    * group shifting certain portions of data from one place to another. Compaction is done as a one
    * scan pass where it copies contents from one file to another.
    * 
-   * @param entityRecords A list of records to defrag against.
+   * @param entitiesToKeep A list of records to keep while compacting.
    */
-  public List<EntityRecord> defrag(List<EntityRecord> entityRecords) throws IOException {
-    int totalRequiredBytes = entityRecords.stream().mapToInt(EntityRecord::totalLength).sum();
+  public List<EntityRecord> compact(List<EntityRecord> entitiesToKeep) throws IOException {
+    int totalRequiredBytes = entitiesToKeep.stream().mapToInt(EntityRecord::totalLength).sum();
     ByteBuffer output = ByteBuffer.allocate(totalRequiredBytes * 2);
-    Path path = Files.createTempFile("rowgroup-defragged-" + columnShardId.alternateString() + "-", ".armor");
+    Path path = Files.createTempFile(columnShardId.alternateString() + ROWGROUP_COMPACTION_SUFFIX, ".armor");
     boolean copied = false;
     try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
-      for (EntityRecord er : entityRecords) {
+      for (EntityRecord er : entitiesToKeep) {
         if (er.getDeleted() == 1)
           continue;
         long position = output.position();
@@ -408,7 +408,7 @@ public class RowGroupWriter extends FileComponent {
       if (!rebased)
         Files.deleteIfExists(path);
     }
-    return entityRecords;
+    return entitiesToKeep;
   }
 
   public static class RgOffsetWriteResult {

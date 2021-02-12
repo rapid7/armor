@@ -4,7 +4,6 @@ import com.rapid7.armor.Constants;
 import com.rapid7.armor.dictionary.Dictionary;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
@@ -23,14 +22,14 @@ public class EntityRecord {
   private final int entityId;
   private int rowGroupOffset;
   private int valueLength;
-  private final long version;
+  private long version;
   private byte[] instanceUuid;
   private byte deleted;
   private int nullLength;
   private int decodedLength;
 
   public EntityRecord(
-      int entityId, int rowGroupOffset, int valueLength, long version, byte deleted, int nullLength, int decodedLength, byte[] instanceUuid) {
+    int entityId, int rowGroupOffset, int valueLength, long version, byte deleted, int nullLength, int decodedLength, byte[] instanceUuid) {
     this.entityId = entityId;
     this.rowGroupOffset = rowGroupOffset;
     this.valueLength = valueLength;
@@ -38,20 +37,7 @@ public class EntityRecord {
     this.deleted = deleted;
     this.nullLength = nullLength;
     this.decodedLength = decodedLength;
-    if (instanceUuid == null)
-      this.instanceUuid = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
-    else {
-      if (instanceUuid.length > Constants.INSTANCE_ID_BYTE_LENGTH) {
-        LOGGER.warn("The given instance id is longer than 36 bytes restricting to first 36 bytes on {}", entityId);
-        this.instanceUuid = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
-        System.arraycopy(instanceUuid, 0, this.instanceUuid, 0, Constants.INSTANCE_ID_BYTE_LENGTH);
-      } else if (instanceUuid.length < Constants.INSTANCE_ID_BYTE_LENGTH) {
-        LOGGER.warn("The given instance id is less than 36 bytes will append trailing zeros on {}", entityId);
-        this.instanceUuid = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
-        System.arraycopy(instanceUuid, 0, this.instanceUuid, 0, instanceUuid.length);
-      } else
-        this.instanceUuid = instanceUuid;
-    }
+    setupInstanceUuid(instanceUuid);
   }
 
   public static List<EntityRecord> sortRecordsByOffset(Collection<EntityRecord> records, Dictionary dictionary) {
@@ -101,13 +87,21 @@ public class EntityRecord {
   public String instanceId() {
     return new String(instanceUuid);
   }
+  
+  public void instanceId(String instanceId) {
+    setupInstanceUuid(instanceId == null ? null : instanceId.getBytes());
+  }
 
   public byte[] getInstanceId() {
     return instanceUuid;
   }
 
   public void setInstanceId(byte[] instanceUuid) {
-    this.instanceUuid = instanceUuid;
+    setupInstanceUuid(instanceUuid);
+  }
+  
+  public void setVersion(long version) {
+    this.version = version;
   }
 
   public long getVersion() {
@@ -181,5 +175,22 @@ public class EntityRecord {
           Objects.equals(deleted, otherRecord.deleted);
     }
     return false;
+  }
+  
+  private void setupInstanceUuid(byte[] instanceUuid) {
+    if (instanceUuid == null)
+      this.instanceUuid = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
+    else {
+      if (instanceUuid.length > Constants.INSTANCE_ID_BYTE_LENGTH) {
+        LOGGER.warn("The given instance id is longer than 36 bytes restricting to first 36 bytes on {}", entityId);
+        this.instanceUuid = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
+        System.arraycopy(instanceUuid, 0, this.instanceUuid, 0, Constants.INSTANCE_ID_BYTE_LENGTH);
+      } else if (instanceUuid.length < Constants.INSTANCE_ID_BYTE_LENGTH) {
+        LOGGER.warn("The given instance id is less than 36 bytes will append trailing zeros on {}", entityId);
+        this.instanceUuid = new byte[Constants.INSTANCE_ID_BYTE_LENGTH];
+        System.arraycopy(instanceUuid, 0, this.instanceUuid, 0, instanceUuid.length);
+      } else
+        this.instanceUuid = instanceUuid;
+    }
   }
 }

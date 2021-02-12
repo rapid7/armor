@@ -73,6 +73,13 @@ public class DictionaryWriter implements Component, Dictionary {
     }
     return OBJECT_MAPPER.writeValueAsBytes(reverse).length;
   }
+  
+  public synchronized void removeValue(Integer surrogate) {
+    String removedValue = intToStr.remove(surrogate);
+    if (removedValue != null)
+      strToInt.remove(removedValue);
+  }
+
 
   public synchronized void removeSurrogate(String value) {
     Integer removedSurrogate = strToInt.remove(value);

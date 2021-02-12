@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +54,7 @@ import org.slf4j.LoggerFactory;
 public class ColumnFileWriter implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ColumnFileWriter.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private EntityIndexWriter entityRecordWriter;
+  private EntityIndexWriter entityIndexWriter;
   private RowGroupWriter rowGroupWriter;
   private ColumnMetadata metadata;
   private DictionaryWriter valueDictionary;
@@ -74,7 +75,7 @@ public class ColumnFileWriter implements AutoCloseable {
 
     entityDictionary = new DictionaryWriter(true);
     rowGroupWriter = new RowGroupWriter(Files.createTempFile(columnShardId.alternateString() + ROWGROUP_STORE_SUFFIX, ".armor"), columnShardId, valueDictionary);
-    entityRecordWriter = new EntityIndexWriter(Files.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor"), columnShardId);
+    entityIndexWriter = new EntityIndexWriter(Files.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor"), columnShardId);
   }
 
   public ColumnFileWriter(DataInputStream dataInputStream, ColumnShardId columnShardId) {
@@ -100,7 +101,7 @@ public class ColumnFileWriter implements AutoCloseable {
           valueDictionary = new DictionaryWriter(false);
         entityDictionary = new DictionaryWriter(true);
         rowGroupWriter = new RowGroupWriter(Files.createTempFile(columnShardId.alternateString() + ROWGROUP_STORE_SUFFIX, ".armor"), columnShardId, valueDictionary);
-        entityRecordWriter = new EntityIndexWriter(Files.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor"), columnShardId);
+        entityIndexWriter = new EntityIndexWriter(Files.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor"), columnShardId);
       }
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -109,7 +110,7 @@ public class ColumnFileWriter implements AutoCloseable {
   
   public List<EntityRecord> allEntityRecords() {
     try {
-      return entityRecordWriter.allRecords();
+      return entityIndexWriter.allRecords();
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
@@ -120,11 +121,11 @@ public class ColumnFileWriter implements AutoCloseable {
   }
   
   public EntityIndexWriter getEntityRecordWriter() {
-    return entityRecordWriter;
+    return entityIndexWriter;
   }
 
   public Map<Integer, EntityRecord> getEntites() {
-    return entityRecordWriter.getEntities();
+    return entityIndexWriter.getEntities();
   }
 
   public DictionaryWriter getEntityDictionary() {
@@ -139,7 +140,7 @@ public class ColumnFileWriter implements AutoCloseable {
       LOGGER.error("Unable to close rowGroupWriter on {}", columnShardId, ioe);
     }
     try {
-      entityRecordWriter.close();
+      entityIndexWriter.close();
     } catch (IOException ioe) {
       LOGGER.error("Unable to close entityRecordWriter writer on {}", columnShardId, ioe);
     }
@@ -200,14 +201,14 @@ public class ColumnFileWriter implements AutoCloseable {
       try (ByteArrayInputStream bais = new ByteArrayInputStream(decompressed)) {
         Files.copy(bais, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
       }
-      entityRecordWriter = new EntityIndexWriter(entityIndexTemp, columnShardId);
+      entityIndexWriter = new EntityIndexWriter(entityIndexTemp, columnShardId);
     } else {
       byte[] uncompressedIndex = new byte[uncompressed];
       read = IOTools.readFully(inputStream, uncompressedIndex, 0, uncompressed);
       try (ByteArrayInputStream bais = new ByteArrayInputStream(uncompressedIndex)) {
         Files.copy(bais, entityIndexTemp, StandardCopyOption.REPLACE_EXISTING);
       }
-      entityRecordWriter = new EntityIndexWriter(entityIndexTemp, columnShardId);
+      entityIndexWriter = new EntityIndexWriter(entityIndexTemp, columnShardId);
     }
     return read;
   }
@@ -280,7 +281,7 @@ public class ColumnFileWriter implements AutoCloseable {
    */
   public List<EntityRecordSummary> getEntityRecordSummaries() {
     int byteLength = metadata.getDataType().getByteLength();
-    List<EntityRecord> records = entityRecordWriter.getEntityRecords(entityDictionary);
+    List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
     if (entityDictionary.isEmpty()) {
       return records.stream()
           .map(e -> new EntityRecordSummary(
@@ -319,8 +320,8 @@ public class ColumnFileWriter implements AutoCloseable {
       metadata.setCompressionAlgorithm(Compression.ZSTD.name()); // Currently we only support this.
     else
       metadata.setCompressionAlgorithm(Compression.NONE.name());
-    List<EntityRecord> records = entityRecordWriter.getEntityRecords(entityDictionary);
-    entityRecordWriter.runThroughRecords(metadata, records);
+    List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
+    entityIndexWriter.runThroughRecords(metadata, records);
     // Run through the values to update metadata
     rowGroupWriter.runThoughValues(metadata, records);
     // Store metadata
@@ -388,19 +389,19 @@ public class ColumnFileWriter implements AutoCloseable {
       InputStream entityIndexIs;
       ByteArrayInputStream entityIndexLengths;
       totalBytes += 8;
-      int uncompressed = (int) entityRecordWriter.getCurrentSize();
+      int uncompressed = (int) entityIndexWriter.getCurrentSize();
       if (uncompressed % Constants.RECORD_SIZE_BYTES != 0) {
         int bytesOff = uncompressed % Constants.RECORD_SIZE_BYTES;
         LOGGER.error("The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}: See {}",
-           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityRecordWriter.getPreLoadOffset(), columnShardId.alternateString());
-        throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityRecordWriter.getPreLoadOffset(), columnShardId.alternateString());
+           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.alternateString());
+        throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.alternateString());
       }
       if (compress == Compression.ZSTD) {
         String tempName = this.columnShardId.alternateString();
         Path eiTempPath = Files.createTempFile("entity-temp_" + tempName + "-", ".armor");
         tempPaths.add(eiTempPath);
         try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(eiTempPath.toFile()), RecyclingBufferPool.INSTANCE);
-             InputStream inputStream = entityRecordWriter.getInputStream()) {
+             InputStream inputStream = entityIndexWriter.getInputStream()) {
           IOTools.copy(inputStream, zstdOutput);
         }
         int payloadSize = (int) Files.size(eiTempPath);
@@ -408,9 +409,9 @@ public class ColumnFileWriter implements AutoCloseable {
         entityIndexLengths = new ByteArrayInputStream(writeLength(payloadSize, uncompressed));
         entityIndexIs = new AutoDeleteFileInputStream(eiTempPath);
       } else {
-        totalBytes += (int) entityRecordWriter.getCurrentSize();
+        totalBytes += (int) entityIndexWriter.getCurrentSize();
         entityIndexLengths = new ByteArrayInputStream(writeLength(0, uncompressed));
-        entityIndexIs = entityRecordWriter.getInputStream();
+        entityIndexIs = entityIndexWriter.getInputStream();
       }
 
       // Send row group
@@ -470,23 +471,22 @@ public class ColumnFileWriter implements AutoCloseable {
     outputStream.write(IOTools.toByteArray(uncompressed));
   }
 
-  public void delete(String transaction, Object entity) {
+  public synchronized boolean delete(String transaction, Object entity, long version, String instanceId) {
     int entityId;
     if (entity instanceof String) {
       entityId = entityDictionary.getSurrogate((String) entity);
-      entityDictionary.removeSurrogate((String) entity);
     } else if (entity instanceof Long)
       entityId = ((Long) entity).intValue();
     else if (entity instanceof Integer)
       entityId = ((Integer) entity);
     else
       throw new IllegalArgumentException("The entity type of " + entity.getClass().toString() + " is not supported for identity");
-    delete(transaction, entityId);
+    return delete(transaction, entityId, version, instanceId);
   }
 
-  public void delete(String transaction, int entity) {
+  public synchronized boolean delete(String transaction, int entity, long version, String instanceId) {
     try {
-      entityRecordWriter.delete(entity);
+      return entityIndexWriter.delete(entity, version, instanceId) != null;
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
@@ -506,13 +506,13 @@ public class ColumnFileWriter implements AutoCloseable {
     return entityInt;
   }
 
-  public void write(String transaction, List<WriteRequest> writeRequests) throws IOException {
+  public synchronized void write(String transaction, List<WriteRequest> writeRequests) throws IOException {
     // First filter out already old stuff that doesn't need to be written.
     HashMap<Object, WriteRequest> groupByMax = new HashMap<>();
     for (WriteRequest wr : writeRequests) {
       WriteRequest maxVersionWriteRequest = groupByMax.get(wr.getEntityId());
       if (maxVersionWriteRequest == null) {
-        EntityRecord er = entityRecordWriter.getEntityRecord(getEntityId(wr.getEntityId()));
+        EntityRecord er = entityIndexWriter.getEntityRecord(getEntityId(wr.getEntityId()));
         if (er == null || er.getVersion() <= wr.getVersion())
           groupByMax.put(wr.getEntityId(), wr);
       } else {
@@ -539,7 +539,7 @@ public class ColumnFileWriter implements AutoCloseable {
           (int) offsetResults.nullLength,
           (int) offsetResults.decodedLength,
           writeRequest.getInstanceId() == null ? null : writeRequest.getInstanceId().getBytes());
-      entityRecordWriter.putEntity(er);
+      entityIndexWriter.putEntity(er);
     }
   }
 
@@ -551,26 +551,27 @@ public class ColumnFileWriter implements AutoCloseable {
     outputStream.write(IOTools.toByteArray(VERSION));
   }
 
-  public void defrag() throws IOException {
-    defrag(getEntityRecordSummaries());
+  public void compact() throws IOException {
+    compact(getEntityRecordSummaries());
   }
 
-  // Defrag requires a list of entities to use, it can either be preexisting or non-existing.
-  public void defrag(List<EntityRecordSummary> recordSummaries) throws IOException {
-    List<EntityRecord> records = new ArrayList<>();
-    for (EntityRecordSummary entityCheck : recordSummaries) {
+  // Compaction requires a list of entities to use, it can either be preexisting or non-existing.
+  public void compact(List<EntityRecordSummary> entitiesToKeep) throws IOException {
+    List<EntityRecord> entityRecords = new ArrayList<>();
+    for (EntityRecordSummary entityCheck : entitiesToKeep) {
       final Integer entityId;
       if (entityCheck.getId() instanceof String) {
         entityId = entityDictionary.getSurrogate((String) entityCheck.getId());
         if (entityId == null)
-          throw new RuntimeException("No surroogate could be found for " + entityCheck.getId());
+          throw new RuntimeException("No surrogate could be found for " + entityCheck.getId());
       } else {
         entityId = (Integer) entityCheck.getId();
       }
 
-      EntityRecord eRecord = entityRecordWriter.getEntityRecord(entityId);
+      EntityRecord eRecord = entityIndexWriter.getEntityRecord(entityId);
       if (eRecord == null) {
-        // This doesn't exist, so fill it in
+        // This doesn't exist on this column but may on other columns according to the entities
+        // passed in as a parameter. Because of this we should fill in null values for this.
         int valueLength = metadata.getDataType().determineByteLength(entityCheck.getNumRows());
         EntityRecord er = new EntityRecord(
             entityId,
@@ -581,15 +582,26 @@ public class ColumnFileWriter implements AutoCloseable {
             0,
             valueLength,
             entityCheck.getInstanceId() == null ? null : entityCheck.getInstanceId().getBytes());
-        records.add(er);
+        entityRecords.add(er);
       } else {
-        records.add(eRecord);
+        entityRecords.add(eRecord);
       }
     }
 
-    // With a list of sorted records, lets start the process of defrag
-    List<EntityRecord> adjustedRecords = rowGroupWriter.defrag(records);
-    entityRecordWriter.defrag(adjustedRecords);
-    metadata.setLastDefrag(new Date().toString());
+    // With a list of sorted records, lets start the process of compaction
+    List<EntityRecord> adjustedRecords = rowGroupWriter.compact(entityRecords);
+    entityIndexWriter.compact(adjustedRecords);
+
+    // Now hard-deleted deleted entites from entity index writer.
+    Set<Integer> deletedEntities = 
+        entityIndexWriter.getEntities().values().stream().filter(e -> e.getDeleted() == 1).map(e -> e.getEntityId()).collect(Collectors.toSet());
+    entityIndexWriter.removeEntityReferences(deletedEntities);
+    if (entityDictionary != null) {
+      for (Integer surrogate : deletedEntities) {
+        entityDictionary.getValue(surrogate);
+      }
+    }
+
+    metadata.setLastCompaction(new Date().toString());
   }
 }

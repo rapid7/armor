@@ -42,7 +42,7 @@ public class ShardWriter {
   private final WriteStore store;
   private final ShardId shardId;
   private final BiPredicate<ShardId, String> captureWrite;
-  private final Supplier<Integer> defragTrigger;
+  private final Supplier<Integer> compactionTrigger;
   private Compression compress = Compression.ZSTD;
   
   private synchronized ColumnFileWriter addColumnFileWriter(ColumnFileWriter cfw) {
@@ -59,15 +59,15 @@ public class ShardWriter {
     ShardId shardId,
     WriteStore store,
     Compression compress,
-    Supplier<Integer> defragTriggerSupplier,
+    Supplier<Integer> compactionTriggerSupplier,
     BiPredicate<ShardId, String> captureWrite) {
     this.shardId = shardId;
     this.store = store;
     this.compress = compress;
-    if (defragTriggerSupplier == null)
-      this.defragTrigger = () -> 90;
+    if (compactionTriggerSupplier == null)
+      this.compactionTrigger = () -> 90;
     else
-      this.defragTrigger = defragTriggerSupplier;
+      this.compactionTrigger = compactionTriggerSupplier;
     this.captureWrite = captureWrite;
     // Load all columns
     List<ColumnFileWriter> columnWriters = store.loadColumnWriters(shardId.getTenant(), shardId.getTable(), shardId.getShardNum());
@@ -144,12 +144,12 @@ public class ShardWriter {
     }
   }
 
-  public void delete(String transaction, Object entity) {
+  public void delete(String transaction, Object entity, long version, String instanceId) {
     // Remove from list
     if (captureWrite != null && captureWrite.test(shardId, ShardWriter.class.getSimpleName()))
       store.captureWrites(transaction, shardId, null, null, entity);
     for (ColumnFileWriter writer : columnFileWriters.values())
-      writer.delete(transaction, entity);
+      writer.delete(transaction, entity, version, instanceId);
   }
 
   public void write(String transaction, ColumnId columnId, List<WriteRequest> writeRequests) throws IOException {
@@ -176,15 +176,15 @@ public class ShardWriter {
    * is to build a "entity id" column derived from the consistency check.
    */
   private ColumnMetadata consistencyCheck(String transaction, String entityIdColumn, DataType entityIdType) throws IOException {
-    // First for all columns do check a do a defrag before continuing.
+    // First for all columns do check a do a compaction before continuing.
     for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
       ColumnFileWriter cw = columnFileWriters.get(entry.getKey());
       ColumnMetadata md = cw.getMetadata();
-      if (md.getFragmentationLevel() > defragTrigger.get()) {
+      if (md.getFragmentationLevel() > compactionTrigger.get()) {
         Instant mark = Instant.now();
-        cw.defrag();
+        cw.compact();
         LOGGER.info("The column fragment level for {} is at {} which is over {}, took {}",
-            cw.getColumnShardId().alternateString(), md.getFragmentationLevel(), defragTrigger.get(), Duration.between(mark, Instant.now()));
+            cw.getColumnShardId().alternateString(), md.getFragmentationLevel(), compactionTrigger.get(), Duration.between(mark, Instant.now()));
       }
     }
 
@@ -219,7 +219,7 @@ public class ShardWriter {
       }
     } else {
 
-      // Once baseline is established, find the ones that need to be defragged.
+      // Once baseline is established, find the ones that need to be compacted.
       otherEntitiesList.remove(baselineColumn);
       // For the ones that have the same number of entities, do a check to make sure
       // a) In the right order
@@ -242,7 +242,7 @@ public class ShardWriter {
     for (ColumnShardId column : otherEntitiesList.keySet()) {
       LOGGER.info("The column {} needs to be resync according to the baseline, this may be expected if its a new column", column);
       ColumnFileWriter cw = columnFileWriters.get(column);
-      cw.defrag(baselineSummaries == null ? new ArrayList<>() : baselineSummaries);
+      cw.compact(baselineSummaries == null ? new ArrayList<>() : baselineSummaries);
     }
 
     // To be extra careful, do another check with these left over columns

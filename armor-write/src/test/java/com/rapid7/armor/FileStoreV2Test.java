@@ -280,18 +280,16 @@ public class FileStoreV2Test {
 
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10)) {
       String xact = writer.startTransaction();
-      writer.write(xact, TENANT, TABLE, Arrays.asList(e1, e2));
-      writer.delete(xact, TENANT, TABLE, e1.getEntityId());
-      writer.write(xact, TENANT, TABLE, Arrays.asList(e1, e2));
+      writer.write(xact, TENANT, TABLE, Arrays.asList(e1));
+      new Thread(new Runnable() {
+        @Override
+        public void run() {
+          writer.delete(xact, TENANT, TABLE, e1.getEntityId(), 3, "test");
+        }
+      }).start();
+      writer.write(xact, TENANT, TABLE, Arrays.asList(e2));
       writer.commit(xact, TENANT, TABLE);
-
-      //String xact2 = writer.startTransaction();
-      //writer.commit(xact2, TENANT, TABLE);
     }
-    
-     // Delete the asset
-    
-     // Add it back
   }
   
   @Test
@@ -418,7 +416,7 @@ public class FileStoreV2Test {
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
       String xact = writer.startTransaction();
       for (int i = 0; i < 1000; i++) {
-        writer.delete(xact, TENANT, TABLE, i);
+        writer.delete(xact, TENANT, TABLE, i, 100, null);
       }
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(0, testDirectory, 0);
@@ -475,7 +473,7 @@ public class FileStoreV2Test {
       writer = new ArmorWriter("aw1", store, Compression.ZSTD, numShards, null, null);
       xact = writer.startTransaction();
       for (int i = 0; i < 1000; i++) {
-        writer.delete(xact, TENANT, TABLE, i);
+        writer.delete(xact, TENANT, TABLE, i, Integer.MAX_VALUE, null);
       }
       writer.commit(xact, TENANT, TABLE);
       writer.close();

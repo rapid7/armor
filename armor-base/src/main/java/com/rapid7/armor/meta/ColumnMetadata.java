@@ -25,7 +25,7 @@ public class ColumnMetadata {
   private int numRows = 0;
   private int numEntities = 0;
   private int cardinaility = 0;
-  private String lastDefrag;
+  private String lastCompaction;
 
   public void setEntityId(boolean entityId) {
     this.entityId = entityId;
@@ -35,12 +35,12 @@ public class ColumnMetadata {
     return entityId;
   }
 
-  public String getLastDefrag() {
-    return lastDefrag;
+  public String getLastCompaction() {
+    return lastCompaction;
   }
 
-  public void setLastDefrag(String lastDefrag) {
-    this.lastDefrag = lastDefrag;
+  public void setLastCompaction(String lastCompaction) {
+    this.lastCompaction = lastCompaction;
   }
 
   public int getCardinality() {
