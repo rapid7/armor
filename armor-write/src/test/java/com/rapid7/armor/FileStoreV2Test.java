@@ -271,6 +271,30 @@ public class FileStoreV2Test {
   }
   
   @Test
+  public void deleteOutOfOrder() throws IOException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    Row[] rows2 = new Row[] { texasVuln, caliVuln };
+    Entity e1 = generateEntity("firstEntity", 1, rows2);
+    Entity e2 = generateEntity("firstEntity", 2, rows2);
+
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10)) {
+      String xact = writer.startTransaction();
+      writer.write(xact, TENANT, TABLE, Arrays.asList(e1, e2));
+      writer.delete(xact, TENANT, TABLE, e1.getEntityId());
+      writer.write(xact, TENANT, TABLE, Arrays.asList(e1, e2));
+      writer.commit(xact, TENANT, TABLE);
+
+      //String xact2 = writer.startTransaction();
+      //writer.commit(xact2, TENANT, TABLE);
+    }
+    
+     // Delete the asset
+    
+     // Add it back
+  }
+  
+  @Test
   public void newColumn() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
