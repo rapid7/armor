@@ -447,4 +447,29 @@ public class S3WriteStore implements WriteStore {
   public String rootDirectory() {
     return bucket;
   }
+
+  @Override
+  public void deleteTenant(String tenant) {
+    try {
+      String toDelete = tenant + "/";
+      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+          .withBucketName(bucket)
+          .withPrefix(toDelete);
+      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+      while (true) {
+        for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
+          s3Client.deleteObject(bucket, objectSummary.getKey());
+        }
+        if (objectListing.isTruncated()) {
+          objectListing = s3Client.listNextBatchOfObjects(objectListing);
+        } else {
+          break;
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+      throw e;
+    }
+    
+  }
 }

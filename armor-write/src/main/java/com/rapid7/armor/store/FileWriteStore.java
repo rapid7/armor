@@ -366,4 +366,17 @@ public class FileWriteStore implements WriteStore {
   public String rootDirectory() {
     return basePath.toString();
   }
+
+  @Override
+  public void deleteTenant(String tenant) {
+    try {
+      Path toDelete = basePath.resolve(Paths.get(tenant));
+      Files.walk(toDelete)
+          .sorted(Comparator.reverseOrder())
+          .map(Path::toFile)
+          .forEach(File::delete);
+    } catch (Exception e) {
+      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+    }
+  }
 }

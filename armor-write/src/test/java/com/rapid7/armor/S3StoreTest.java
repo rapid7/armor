@@ -65,10 +65,6 @@ public class S3StoreTest {
     assertEquals(nullLength, eir.getNullLength());
     assertEquals(deleted, eir.getDeleted());
   }
-  
-  private void cleanup() {
-    
-  }
 
   @Test
   public void writeSchemaShardDiscovery() throws SdkClientException, JsonProcessingException {
@@ -334,7 +330,7 @@ public class S3StoreTest {
     
         amrorWriter2.close(); // Close this FS and open a new one to test the load.
       } finally {
-        
+        writeStore.deleteTenant(myorg);
       }
     }
   }
