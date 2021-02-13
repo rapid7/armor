@@ -235,8 +235,9 @@ public class S3WriteStore implements WriteStore {
       try {
         String payload = OBJECT_MAPPER.writeValueAsString(shardMetadata);
         s3Client.putObject(bucket, shardIdPath, payload);
+        break;
       } catch (Exception ioe) {
-        if (i + 1 == 5)
+        if (i + 1 == 10)
           throw new RuntimeException(ioe);
         else {
           try {
