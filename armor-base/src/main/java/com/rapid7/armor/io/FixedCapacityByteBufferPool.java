@@ -24,6 +24,11 @@ public class FixedCapacityByteBufferPool {
   }
 
   public synchronized void release(ByteBuffer buffer) {
-    pool.addLast(buffer);
+    try {
+      buffer.clear();
+      pool.addLast(buffer);
+    } catch (Exception e) {
+      
+    }
   }
 }
