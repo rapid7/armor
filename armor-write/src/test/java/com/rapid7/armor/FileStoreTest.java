@@ -21,12 +21,14 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.rapid7.armor.Constants.MAX_INTERVAL;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -76,15 +78,15 @@ public class FileStoreTest {
     try {
       try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, Compression.NONE, 10, null, null)) {
         String transaction = armorWriter.startTransaction();
-        armorWriter.write(transaction, "myorg", "testtable", Arrays.asList(e1, e2, e3, e4, e5, e6, e7));
-        armorWriter.columnEntityRecords("myorg", "testtable", "vuln", 0);
+        armorWriter.write(transaction, "myorg", "testtable", MAX_INTERVAL, Instant.now(), Arrays.asList(e1, e2, e3, e4, e5, e6, e7));
+        armorWriter.columnEntityRecords("myorg", "testtable", MAX_INTERVAL, Instant.now(), "vuln", 0);
         armorWriter.commit(transaction, "myorg", "testtable");
       }
   
       try (ArmorWriter armorWriter2 = new ArmorWriter("test", fileStore, Compression.NONE, 10, null, null)) {
         String transaction = armorWriter2.startTransaction();
         Entity e8 = Entity.buildEntity("asset", 8, 1, null, vuln);
-        armorWriter2.write(transaction, "myorg", "testtable", Collections.singletonList(e8));
+        armorWriter2.write(transaction, "myorg", "testtable", MAX_INTERVAL, Instant.now(), Collections.singletonList(e8));
         armorWriter2.commit(transaction, "myorg", "testtable");
       }
     } finally {
@@ -144,19 +146,19 @@ public class FileStoreTest {
           3L, null,
           2L, 5,
           null, 6);
-      String transction = armorWriter.startTransaction();
-      armorWriter.write(transction, myorg, table, Arrays.asList(e11, e12, e10, e20));
-      armorWriter.commit(transction, myorg, table);
-      transction = armorWriter.startTransaction();
+      String transaction = armorWriter.startTransaction();
+      armorWriter.write(transaction, myorg, table, MAX_INTERVAL, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+      armorWriter.commit(transaction, myorg, table);
+      transaction = armorWriter.startTransaction();
       // Verify store/shard stuff
-      List<ShardId> shardIds = fileStore.findShardIds(myorg, table, "vuln");
+      List<ShardId> shardIds = fileStore.findShardIds(myorg, table, MAX_INTERVAL, Instant.now(), "vuln");
       assertFalse(shardIds.isEmpty());
       ShardId shardId = shardIds.get(0);
       assertEquals(Sets.newHashSet(name, asset, vuln, time), Sets.newHashSet(fileStore.getColumnIds(shardId)));
 
       // 12 rows, 2 entities 1 and 2, freebytes 0
-      Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata cmd1 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+      ColumnMetadata cmd1 = armorWriter.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
       assertEquals(2, vulnEntityRecords1.size());
       assertEquals(Integer.valueOf(0), Integer.valueOf(cmd1.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), cmd1.getMaxValue());
@@ -168,13 +170,13 @@ public class FileStoreTest {
       checkEntityIndexRecord(vulnEntityRecords1.get(2), 24, 24, 15, (byte) 0);
 
       // Delete the entity 1
-      armorWriter.delete(transction, myorg, table, 1, 1000l, "test");
+      armorWriter.delete(transaction, myorg, table, MAX_INTERVAL, Instant.now(), 1, 1000l, "test");
 
-      armorWriter.commit(transction, myorg, table);
-      transction = armorWriter.startTransaction();
+      armorWriter.commit(transaction, myorg, table);
+      transaction = armorWriter.startTransaction();
 
-      Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+      ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
       assertEquals(2, vulnEntityRecords2.size());
       assertEquals(Integer.valueOf(50), Integer.valueOf(cmd2.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), cmd2.getMaxValue());
@@ -195,12 +197,12 @@ public class FileStoreTest {
           "1", 2L, 5,
           "1", null, 6);
 
-      armorWriter.write(transction, myorg, table, Collections.singletonList(e21));
-      armorWriter.commit(transction, myorg, table);
-      transction = armorWriter.startTransaction();
+      armorWriter.write(transaction, myorg, table, MAX_INTERVAL, Instant.now(), Collections.singletonList(e21));
+      armorWriter.commit(transaction, myorg, table);
+      transaction = armorWriter.startTransaction();
 
-      Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata cmd3 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+      ColumnMetadata cmd3 = armorWriter.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
       assertEquals(1, vulnEntityRecords3.size());
       assertEquals(Integer.valueOf(0), Integer.valueOf(cmd3.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), cmd3.getMaxValue());
@@ -221,12 +223,12 @@ public class FileStoreTest {
       e31.addRow("1", null, 2);
       e31.addRow("1", null, -1);
 
-      armorWriter.write(transction, myorg, table, Arrays.asList(e23, e31));
-      armorWriter.commit(transction, myorg, table);
-      transction = armorWriter.startTransaction();
+      armorWriter.write(transaction, myorg, table, MAX_INTERVAL, Instant.now(), Arrays.asList(e23, e31));
+      armorWriter.commit(transaction, myorg, table);
+      transaction = armorWriter.startTransaction();
 
-      Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+      ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
       assertEquals(2, records4.size());
       assertEquals(Integer.valueOf(58), Integer.valueOf(md4.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), md4.getMaxValue());
@@ -244,12 +246,12 @@ public class FileStoreTest {
 
       ArmorWriter amrorWriter2 = new ArmorWriter("test", fileStore, Compression.NONE, 10, null, null);
 
-      amrorWriter2.write(transction, myorg, table, Collections.singletonList(e32));
-      amrorWriter2.commit(transction, myorg, table);
-      transction = armorWriter.startTransaction();
+      amrorWriter2.write(transaction, myorg, table, MAX_INTERVAL, Instant.now(), Collections.singletonList(e32));
+      amrorWriter2.commit(transaction, myorg, table);
+      transaction = armorWriter.startTransaction();
 
-      Map<Integer, EntityRecord> records5 = amrorWriter2.columnEntityRecords(myorg, table, "vuln", 0);
-      ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, "vuln", 0);
+      Map<Integer, EntityRecord> records5 = amrorWriter2.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+      ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
       assertEquals(2, records5.size());
       assertEquals(Integer.valueOf(0), Integer.valueOf(md5.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), md5.getMaxValue());
@@ -262,7 +264,7 @@ public class FileStoreTest {
       amrorWriter2.close(); // Close this FS and open a new one to test the load.
 
       SlowArmorReader armorReader = new SlowArmorReader(fileReadStore);
-      ColumnMetadata aShard = armorReader.getColumnMetadata(myorg, table, "vuln", 0);
+      ColumnMetadata aShard = armorReader.getColumnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
       assertEquals(DataType.INTEGER, aShard.getDataType());
       assertEquals(Integer.valueOf(0), Integer.valueOf(aShard.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), aShard.getMaxValue());
@@ -270,15 +272,15 @@ public class FileStoreTest {
       assertEquals(8, aShard.getNumRows());
       assertEquals(2, aShard.getNumEntities());
 
-      armorReader.getColumn(myorg, table, "assetid");
+      armorReader.getColumn(myorg, table, MAX_INTERVAL, Instant.now(), "assetid");
 
-      Column<?> vulnInts = armorReader.getColumn(myorg, table, "vuln");
+      Column<?> vulnInts = armorReader.getColumn(myorg, table, MAX_INTERVAL, Instant.now(), "vuln");
       assertArrayEquals(
           new Integer[] {null, null, null, null, 6, 6, -1, null},
           vulnInts.asObjectArray());
 
       FastArmorReader fastArmorReader = new FastArmorReader(fileReadStore);
-      ColumnMetadata rShard = armorReader.getColumnMetadata(myorg, table, "vuln", 0);
+      ColumnMetadata rShard = armorReader.getColumnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
       assertEquals(DataType.INTEGER, rShard.getDataType());
       assertEquals(Integer.valueOf(0), Integer.valueOf(rShard.getFragmentationLevel()));
       assertEquals(Double.valueOf(6.0), rShard.getMaxValue());
@@ -297,7 +299,7 @@ public class FileStoreTest {
       //"1", null, 6
       //"1", null, -1
       //null, null, null
-      FastArmorBlockReader fastReader1 = fastArmorReader.getColumn(myorg, table, "vuln", 0);
+      FastArmorBlockReader fastReader1 = fastArmorReader.getColumn(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
       FastArmorBlock a1a = fastReader1.getIntegerBlock(1);
       assertTrue(fastReader1.hasNext());
       FastArmorBlock a2a = fastReader1.getIntegerBlock(1);
@@ -315,14 +317,14 @@ public class FileStoreTest {
       FastArmorBlock a8a = fastReader1.getIntegerBlock(1);
       assertFalse(fastReader1.hasNext());
 
-      FastArmorBlockReader fastReader1a = fastArmorReader.getColumn(myorg, table, "vuln", 0);
+      FastArmorBlockReader fastReader1a = fastArmorReader.getColumn(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
       FastArmorBlock a1aa = fastReader1a.getIntegerBlock(2);
       assertTrue(fastReader1a.hasNext());
       FastArmorBlock a2aa = fastReader1a.getIntegerBlock(10);
       assertFalse(fastReader1a.hasNext());
 
 
-      FastArmorBlockReader fastReader2 = fastArmorReader.getColumn(myorg, table, "name", 0);
+      FastArmorBlockReader fastReader2 = fastArmorReader.getColumn(myorg, table, MAX_INTERVAL, Instant.now(), "name", 0);
       FastArmorBlock a1b = fastReader2.getStringBlock(1);
       assertTrue(fastReader2.hasNext());
       FastArmorBlock a2b = fastReader2.getStringBlock(1);
@@ -340,7 +342,7 @@ public class FileStoreTest {
       FastArmorBlock a8b = fastReader2.getStringBlock(1);
       assertFalse(fastReader2.hasNext());
 
-      FastArmorBlockReader fastReader2aa = fastArmorReader.getColumn(myorg, table, "name", 0);
+      FastArmorBlockReader fastReader2aa = fastArmorReader.getColumn(myorg, table, MAX_INTERVAL, Instant.now(), "name", 0);
       FastArmorBlock a1ba = fastReader2aa.getStringBlock(2);
       assertTrue(fastReader2aa.hasNext());
       FastArmorBlock a2ba = fastReader2aa.getStringBlock(10);

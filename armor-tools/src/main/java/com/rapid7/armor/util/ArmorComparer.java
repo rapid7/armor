@@ -32,8 +32,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rapid7.armor.entity.EntityRecord;
-import com.rapid7.armor.entity.EntityRecordSummary;
-import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
@@ -80,14 +78,16 @@ public class ArmorComparer {
     Map<ColumnId, ColumnMinMax> detectedColumns = new HashMap<>();  
     for (Path p : paths) {
       ColumnId columnId = null;
+      ShardId shardId = null;
       try {
-        columnId = new ColumnId(p.getFileName().toString());
+        columnId = new ColumnId(p);
+        shardId = new ShardId(p);
       } catch (Exception e) {
         // No valid so just skip.
         continue;
       }
       try (ColumnFileWriter writer = 
-          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnId))) {
+          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(shardId, columnId))) {
          // Its valid, extract the date
         String lastUpdate = writer.getMetadata().getLastUpdate();
         SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
@@ -96,7 +96,7 @@ public class ArmorComparer {
         ColumnMinMax minMax = detectedColumns.get(columnId);
         if (minMax == null) {
           minMax = new ColumnMinMax();
-          minMax.columnId = columnId;
+          minMax.columnShardId = new ColumnShardId(shardId, columnId);
           minMax.max = date.toInstant();
           minMax.min = date.toInstant();
           minMax.maxPath = p;
@@ -121,7 +121,7 @@ public class ArmorComparer {
     for (ColumnMinMax columnMinMax : columns) {
       Path maxPath = columnMinMax.maxPath;
       Path minPath = columnMinMax.minPath;
-      ColumnShardId dummyShard = new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnMinMax.columnId);
+      ColumnShardId dummyShard = new ColumnShardId(columnMinMax.columnShardId.getShardId(), columnMinMax.columnShardId.getColumnId());
       try (ColumnFileWriter maxWriter = new ColumnFileWriter(new DataInputStream(Files.newInputStream(maxPath, StandardOpenOption.READ)), dummyShard);
            ColumnFileWriter minWriter = new ColumnFileWriter(new DataInputStream(Files.newInputStream(minPath, StandardOpenOption.READ)), dummyShard)) {
         Map<Integer, EntityRecord> minRecords = minWriter.getEntites();
@@ -205,15 +205,15 @@ public class ArmorComparer {
         ObjectMapper objectMapper = new ObjectMapper();
         Files.copy(
             new ByteArrayInputStream(objectMapper.writeValueAsBytes(removeEntities)),
-            targetPath.resolve(columnMinMax.columnId.getName() + "-removed-entities.json"),
+            targetPath.resolve(columnMinMax.columnShardId.getColumnId().getName() + "-removed-entities.json"),
             StandardCopyOption.REPLACE_EXISTING);
         Files.copy(
             new ByteArrayInputStream(objectMapper.writeValueAsBytes(addedEntities)),
-            targetPath.resolve(columnMinMax.columnId.getName() + "-added-entities.json"),
+            targetPath.resolve(columnMinMax.columnShardId.getColumnId().getName() + "-added-entities.json"),
             StandardCopyOption.REPLACE_EXISTING);
         Files.copy(
             new ByteArrayInputStream(objectMapper.writeValueAsBytes(changedEntities)),
-            targetPath.resolve(columnMinMax.columnId.getName() + "-changed-entities.json"),
+            targetPath.resolve(columnMinMax.columnShardId.getColumnId().getName() + "-changed-entities.json"),
             StandardCopyOption.REPLACE_EXISTING);
       }
     }    
@@ -252,7 +252,7 @@ public class ArmorComparer {
     }
   }
   private static class ColumnMinMax {
-     public ColumnId columnId;
+     public ColumnShardId columnShardId;
      public Instant max;
      public Instant min;
      public Path maxPath;

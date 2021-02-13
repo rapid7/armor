@@ -1,5 +1,6 @@
 package com.rapid7.armor;
 
+import static com.rapid7.armor.Constants.MAX_INTERVAL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.File;
@@ -7,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -65,6 +67,8 @@ public class FileStoreV2Test {
 
   private static final String TENANT = "united_states";
   private static final String TABLE = "state_vulns";
+  private static final long INTERVAL = MAX_INTERVAL;
+  private static final Instant TIMESTAMP = Instant.now();
   private static String TEST_UUID = UUID.randomUUID().toString();
   private static final String ASSET_ID = "assetId";
   private static final Random RANDOM = new Random();
@@ -184,14 +188,14 @@ public class FileStoreV2Test {
   private void verifyEntityDeletedReaderPOV(Entity entity, Path path) {
     FileReadStore readStore = new FileReadStore(path);
     SlowArmorReader reader = new SlowArmorReader(readStore);
-    Table entityTable = reader.getEntity(TENANT, TABLE, entity.getEntityId());
+    Table entityTable = reader.getEntity(TENANT, TABLE, INTERVAL, TIMESTAMP, entity.getEntityId());
     assertEquals(0, entityTable.rowCount());
   }
   
   private String printTable(Path path) {
     FileReadStore readStore = new FileReadStore(path);
     SlowArmorReader reader = new SlowArmorReader(readStore);
-    Table entityTable = reader.getTable(TENANT, TABLE);
+    Table entityTable = reader.getTable(TENANT, TABLE, INTERVAL, TIMESTAMP);
     return entityTable.print();
   }
   
@@ -199,7 +203,7 @@ public class FileStoreV2Test {
     FileReadStore readStore = new FileReadStore(path);
     Table checkEntity = entityToTableSawRow(entity);
     SlowArmorReader reader = new SlowArmorReader(readStore);
-    Table entityTable = reader.getEntity(TENANT, TABLE, entity.getEntityId());
+    Table entityTable = reader.getEntity(TENANT, TABLE, INTERVAL, TIMESTAMP, entity.getEntityId());
     entityTable = entityTable.sortAscendingOn("vuln").select("assetId", "vuln", "time", "status");
     checkEntity = checkEntity.sortAscendingOn("vuln").select("assetId", "vuln", "time", "status");
     assertTableEquals(checkEntity, entityTable);
@@ -207,12 +211,12 @@ public class FileStoreV2Test {
   
   private void verifyColumn(int expectedNumberRows, ColumnId column, Path path, int numShards) throws IOException {
     FileReadStore readStore = new FileReadStore(path);
-    List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE);
+    List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE, INTERVAL, TIMESTAMP);
     assertEquals(numShards, shardIds.size());
     int totalRows = 0;
     FastArmorReader reader = new FastArmorReader(readStore);
     for (ShardId shardId : shardIds) {
-      FastArmorBlockReader far = reader.getColumn(TENANT, TABLE, column.getName(), shardId.getShardNum());
+      FastArmorBlockReader far = reader.getColumn(TENANT, TABLE, INTERVAL, TIMESTAMP, column.getName(), shardId.getShardNum());
       
       FastArmorBlock fab = null;
       switch (column.dataType()) {
@@ -235,7 +239,7 @@ public class FileStoreV2Test {
 
   private void verifyTableReaderPOV(int expectedNumberRows, Path path, int numShards) {
     FileReadStore readStore = new FileReadStore(path);
-    List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE);
+    List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE, INTERVAL, TIMESTAMP);
     assertEquals(numShards, shardIds.size());
     int totalRows = 0;
     for (ShardId shardId : shardIds) {
@@ -280,14 +284,14 @@ public class FileStoreV2Test {
 
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10)) {
       String xact = writer.startTransaction();
-      writer.write(xact, TENANT, TABLE, Arrays.asList(e1));
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e1));
       new Thread(new Runnable() {
         @Override
         public void run() {
-          writer.delete(xact, TENANT, TABLE, e1.getEntityId(), 3, "test");
+          writer.delete(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, e1.getEntityId(), 3, "test");
         }
       }).start();
-      writer.write(xact, TENANT, TABLE, Arrays.asList(e2));
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e2));
       writer.commit(xact, TENANT, TABLE);
     }
   }
@@ -306,21 +310,20 @@ public class FileStoreV2Test {
       List<Entity> entities1 = new ArrayList<>();
       Entity entity1 = generateEntity("firstEntity", 1, rows2);
       entities1.add(entity1);
-      writer.write(xact, TENANT, TABLE, entities1);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities1);
  
       // Add a column called city to the mix.
       Row texasVulnExtra = new Row(1, 101l, "texas", "houston");
       Entity entity2 = Entity.buildEntity(ASSET_ID, "secondEntity", 1, TEST_UUID, EXTRA_COLUMNS, texasVulnExtra);
       List<Entity> entities2 = new ArrayList<>();
       entities2.add(entity2);
-      writer.write(xact, TENANT, TABLE, entities2);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities2);
       writer.commit(xact, TENANT, TABLE);
 
       System.out.println(printTable(testDirectory));
       verifyTableReaderPOV(3, testDirectory, 2);
       verifyColumn(3, newColumn, testDirectory, 2);
     }
-
   }
   
   
@@ -335,7 +338,7 @@ public class FileStoreV2Test {
         String xact = writer.startTransaction();
         int randomRows = RANDOM.nextInt(5000);
         Entity entity = randomEntity(1, randomRows);
-        writer.write(xact, TENANT, TABLE, Arrays.asList(entity));
+        writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(entity));
         writer.commit(xact, TENANT, TABLE);
       }
     }
@@ -358,7 +361,7 @@ public class FileStoreV2Test {
         entities4.add(random4);
       }
       
-      writer.write(xact, TENANT, TABLE, entities4);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities4);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(numEntities*4, testDirectory, 10);
       int random = RANDOM.nextInt(999);
@@ -372,7 +375,7 @@ public class FileStoreV2Test {
       }
       
       xact = writer.startTransaction();
-      writer.write(xact, TENANT, TABLE, entities6);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities6);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(numEntities*6, testDirectory, 10);
       random = RANDOM.nextInt(999);
@@ -386,7 +389,7 @@ public class FileStoreV2Test {
       }
       
       xact = writer.startTransaction();
-      writer.write(xact, TENANT, TABLE, entities2);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities2);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(numEntities*2, testDirectory, 10);
       random = RANDOM.nextInt(999);
@@ -400,7 +403,7 @@ public class FileStoreV2Test {
       }
       
       xact = writer.startTransaction();
-      writer.write(xact, TENANT, TABLE, entitiesNull3);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entitiesNull3);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(numEntities*3, testDirectory, 10);
       random = RANDOM.nextInt(999);
@@ -416,7 +419,7 @@ public class FileStoreV2Test {
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
       String xact = writer.startTransaction();
       for (int i = 0; i < 1000; i++) {
-        writer.delete(xact, TENANT, TABLE, i, 100, null);
+        writer.delete(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, i, 100, null);
       }
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV(0, testDirectory, 0);
@@ -433,9 +436,9 @@ public class FileStoreV2Test {
         Entity random = generateEntity("same", 1, null);
         entities.add(random);
         String xact = writer.startTransaction();
-        writer.write(xact, TENANT, TABLE, entities);
+        writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
         writer.commit(xact, TENANT, TABLE);
-        writer.write(xact, TENANT, TABLE, entities);
+        writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
         writer.commit(xact, TENANT, TABLE);
       } finally {
         removeDirectory(testDirectory);
@@ -461,7 +464,7 @@ public class FileStoreV2Test {
         entities.add(random);
       }
       
-      writer.write(xact, TENANT, TABLE, entities);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
       writer.commit(xact, TENANT, TABLE);
       writer.close();
       
@@ -473,7 +476,7 @@ public class FileStoreV2Test {
       writer = new ArmorWriter("aw1", store, Compression.ZSTD, numShards, null, null);
       xact = writer.startTransaction();
       for (int i = 0; i < 1000; i++) {
-        writer.delete(xact, TENANT, TABLE, i, Integer.MAX_VALUE, null);
+        writer.delete(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, i, Integer.MAX_VALUE, null);
       }
       writer.commit(xact, TENANT, TABLE);
       writer.close();
@@ -484,7 +487,7 @@ public class FileStoreV2Test {
       // Add it back
       writer = new ArmorWriter("aw1", store, Compression.ZSTD, numShards, null, null);
       xact = writer.startTransaction();      
-      writer.write(xact, TENANT, TABLE, entities);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
       writer.commit(xact, TENANT, TABLE);
       
       verifyTableReaderPOV(numEntities*2, testDirectory, numShards);
@@ -500,8 +503,8 @@ public class FileStoreV2Test {
 
       xact = writer.startTransaction();
       // Attempt to also try and double count it shouldn't double count.
-      writer.write(xact, TENANT, TABLE, entities1);
-      writer.write(xact, TENANT, TABLE, entities1);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities1);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities1);
 
       writer.commit(xact, TENANT, TABLE);
       
@@ -527,8 +530,8 @@ public class FileStoreV2Test {
       }
       
       // Make it out of order with respect to the enityIds.
-      writer.write(xact, TENANT, TABLE, entities3);
-      writer.write(xact, TENANT, TABLE, entities2);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities3);
+      writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities2);
       writer.commit(xact, TENANT, TABLE);
       verifyTableReaderPOV((4*numEntities)*2, testDirectory, numShards);
       random = RANDOM.nextInt(999);

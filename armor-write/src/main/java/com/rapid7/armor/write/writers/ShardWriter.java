@@ -70,7 +70,7 @@ public class ShardWriter {
       this.compactionTrigger = compactionTriggerSupplier;
     this.captureWrite = captureWrite;
     // Load all columns
-    List<ColumnFileWriter> columnWriters = store.loadColumnWriters(shardId.getTenant(), shardId.getTable(), shardId.getShardNum());
+    List<ColumnFileWriter> columnWriters = store.loadColumnWriters(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum());
     columnFileWriters = columnWriters.stream().collect(Collectors.toMap(ColumnFileWriter::getColumnShardId, w -> w));
   }
 
@@ -134,13 +134,13 @@ public class ShardWriter {
       columnMetadata.add(entityColumnMetadata);
       ShardMetadata smd = new ShardMetadata();
       smd.setColumnMetadata(columnMetadata);
-      store.saveShardMetadata(transaction, shardId.getTenant(), shardId.getTable(), shardId.getShardNum(), smd);
-      store.commit(transaction, shardId.getTenant(), shardId.getTable(), shardId.getShardNum());
+      store.saveShardMetadata(transaction, shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum(), smd);
+      store.commit(transaction, shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum());
       committed = true;
       return smd;
     } finally {
       if (!committed)
-        store.rollback(transaction, shardId.getTenant(), shardId.getTable(), shardId.getShardNum());
+        store.rollback(transaction, shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum());
     }
   }
 

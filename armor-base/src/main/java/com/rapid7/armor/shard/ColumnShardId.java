@@ -2,6 +2,7 @@ package com.rapid7.armor.shard;
 
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
+import java.time.Instant;
 import java.util.Objects;
 
 public class ColumnShardId {
@@ -18,16 +19,20 @@ public class ColumnShardId {
     this.columnId = columnId;
   }
 
-  public ShardId shardId() {
-    return shardId;
-  }
-
   public String getTenant() {
     return shardId.getTenant();
   }
 
   public String getTable() {
     return shardId.getTable();
+  }
+
+  public long getInterval() {
+    return shardId.getInterval();
+  }
+
+  public Instant getIntervalStart() {
+    return shardId.getIntervalStart();
   }
 
   public ColumnId getColumnId() {

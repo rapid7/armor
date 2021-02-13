@@ -10,6 +10,7 @@ import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
 
 import java.io.InputStream;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -17,43 +18,43 @@ public interface WriteStore {
   String rootDirectory();
 
   // Loading from store
-  List<ColumnFileWriter> loadColumnWriters(String tenant, String table, int shardNum);
+  List<ColumnFileWriter> loadColumnWriters(String tenant, String table, long interval, Instant timestamp, int shardNum);
 
   ColumnFileWriter loadColumnWriter(ColumnShardId columnShard);
 
-  ShardMetadata loadShardMetadata(String tenant, String table, int shardNum);
+  ShardMetadata loadShardMetadata(String tenant, String table, long interval, Instant timestamp, int shardNum);
 
   TableMetadata loadTableMetadata(String tenant, String table);
 
   // Get style methods
   int findShardNum(Object entityId);
 
-  ShardId findShardId(String tenant, String table, Object entityId);
+  ShardId findShardId(String tenant, String table, long interval, Instant timestamp, Object entityId);
 
-  ShardId buildShardId(String tenant, String table, int shardNum);
+  ShardId buildShardId(String tenant, String table, long interval, Instant timestamp, int shardNum);
 
-  List<ShardId> findShardIds(String tenant, String table);
+  List<ShardId> findShardIds(String tenant, String table, long interval, Instant timestamp);
 
   List<ColumnId> getColumnIds(ShardId shardId);
 
-  List<ShardId> findShardIds(String tenant, String table, String columnId);
+  List<ShardId> findShardIds(String tenant, String table, long interval, Instant timestamp, String columnId);
 
-  String resolveCurrentPath(String tenant, String table, int shardNum);
+  String resolveCurrentPath(String tenant, String table, long interval, Instant timestamp, int shardNum);
 
-  Map<String, String> getCurrentValues(String tenant, String table, int shardNum);
+  Map<String, String> getCurrentValues(String tenant, String table, long interval, Instant timestamp, int shardNum);
 
   // Write to store
-  void saveCurrentValues(String tenant, String table, int shardNum, String currentTransaction, String previousTransaction);
+  void saveCurrentValues(String tenant, String table, long interval, Instant timestamp, int shardNum, String currentTransaction, String previousTransaction);
 
-  void saveShardMetadata(String transaction, String tenant, String table, int shardNum, ShardMetadata shardMetadata);
+  void saveShardMetadata(String transaction, String tenant, String table, long interval, Instant timestamp, int shardNum, ShardMetadata shardMetadata);
 
   void saveTableMetadata(String transaction, String tenant, String table, TableMetadata tableMetadata);
 
   void saveColumn(String transaction, ColumnShardId columnShardId, int size, InputStream inputStream);
 
-  void commit(String transaction, String tenant, String table, int shardNum);
+  void commit(String transaction, String tenant, String table, long interval, Instant timestamp, int shardNum);
 
-  void rollback(String transaction, String tenant, String table, int shardNum);
+  void rollback(String transaction, String tenant, String table, long interval, Instant timestamp, int shardNum);
 
   /**
    * Captures write activity either at the entity or write request level. This is useful for debugging issues and replaying

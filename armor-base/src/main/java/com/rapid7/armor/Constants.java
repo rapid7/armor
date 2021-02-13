@@ -42,4 +42,7 @@ public final class Constants {
 
   public final static String TABLE_METADATA = "table-metadata";
   public final static String SHARD_METADATA = "shard-metadata";
+
+  public static final long INTERVAL_UNITS = 60 * 1000;
+  public static final long MAX_INTERVAL = Long.MAX_VALUE / INTERVAL_UNITS;
 }

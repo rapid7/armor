@@ -1,6 +1,7 @@
 package com.rapid7.armor.read.slow;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -38,24 +39,24 @@ public class SlowArmorReader extends BaseArmorReader {
     super(store);
   }
 
-  public Column<?> getColumn(String tenant, String table, String columnId, int shardNum) throws IOException {
-    ShardId shardId = store.findShardId(tenant, table, shardNum);
+  public Column<?> getColumn(String tenant, String table, long interval, Instant timestamp, String columnId, int shardNum) throws IOException {
+    ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
     if (shardId == null)
       return null;
     SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnId);
     return armorShard.getColumn();
   }
 
-  public Column<?> getColumn(String tenant, String table, String columnId, int limit, int shardNum) throws IOException {
-    ShardId shardId = store.findShardId(tenant, table, shardNum);
+  public Column<?> getColumn(String tenant, String table, long interval, Instant timestamp, String columnId, int limit, int shardNum) throws IOException {
+    ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
     if (shardId == null)
       return null;
     SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnId);
     return armorShard.getColumn().first(limit);
   }
 
-  public Column<?> getColumn(String tenant, String table, String columnId) throws IOException {
-    List<ShardId> shardIds = store.findShardIds(tenant, table, columnId).stream()
+  public Column<?> getColumn(String tenant, String table, long interval, Instant timestamp, String columnId) throws IOException {
+    List<ShardId> shardIds = store.findShardIds(tenant, table, interval, timestamp, columnId).stream()
         .sorted(Comparator.comparingInt(ShardId::getShardNum))
         .collect(Collectors.toList());
     Column<?> column = null;
@@ -69,10 +70,10 @@ public class SlowArmorReader extends BaseArmorReader {
     return column;
   }
   
-  public Table getTable(String tenant, String table) {
-    List<ColumnId> columnIds = store.getColumnIds(tenant, table);
+  public Table getTable(String tenant, String table, long interval, Instant timestamp) {
+    List<ColumnId> columnIds = store.getColumnIds(tenant, table, interval, timestamp);
     Map<String, Column<?>> columns = new HashMap<>();
-    for (ShardId shardId : store.findShardIds(tenant, table)) {
+    for (ShardId shardId : store.findShardIds(tenant, table, interval, timestamp)) {
       Set<ColumnId> nullColumns = new HashSet<>();
       int shardRows = -1;
       for (ColumnId columnId : columnIds) {
@@ -129,10 +130,10 @@ public class SlowArmorReader extends BaseArmorReader {
     return Table.create(table, columns.values());
   }
   
-  public Table getEntity(String tenant, String table, Object entity) {
-    List<ColumnId> columnIds = store.getColumnIds(tenant, table);
+  public Table getEntity(String tenant, String table, long interval, Instant timestamp, Object entity) {
+    List<ColumnId> columnIds = store.getColumnIds(tenant, table, interval, timestamp);
     Map<String, Column<?>> columns = new HashMap<>();
-    for (ShardId shardId : store.findShardIds(tenant, table)) {
+    for (ShardId shardId : store.findShardIds(tenant, table, interval, timestamp)) {
       for (ColumnId columnId : columnIds) {
         SlowArmorShardColumn sas = store.getSlowArmorShard(shardId, columnId.getName());
         Column<?> column = sas.getColumnByEntityId(entity);

@@ -49,15 +49,13 @@ public class TableWriter implements Closeable {
     }
   }
 
-  public synchronized void close(int shard) {
-    ShardId shardId = store.buildShardId(tenant, tableName, shard);
+  public synchronized void close(ShardId shardId) {
     ShardWriter sw = shards.get(shardId);
     if (sw != null)
       sw.close();
   }
 
-  public ShardWriter getShard(int shard) {
-    ShardId shardId = store.buildShardId(tenant, tableName, shard);
+  public ShardWriter getShard(ShardId shardId) {
     return shards.get(shardId);
   }
 

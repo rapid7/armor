@@ -1,5 +1,6 @@
 package com.rapid7.armor.schema;
 
+import java.nio.file.Path;
 import java.util.Objects;
 
 public class ColumnId {
@@ -20,6 +21,10 @@ public class ColumnId {
   public ColumnId(String name, String type) {
     this.name = name;
     this.type = type;
+  }
+
+  public ColumnId(Path columnFile) {
+    this(columnFile.getFileName().toString());
   }
 
   public DataType dataType() {
