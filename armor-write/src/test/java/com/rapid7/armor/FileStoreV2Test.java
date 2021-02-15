@@ -479,6 +479,86 @@ public class FileStoreV2Test {
       }
     }
   }
+  
+  @Test
+  public void switchCompression() throws IOException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    // Ensure we can switch between compression methods if we need to.
+    int numEntities = 10;
+    Row[] rows = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln};
+    Row[] rows2 = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln, nevadaVuln};
+
+    // First create armor files with zstd
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      for (int i = 0; i < 10; i++) {
+        Entity random = generateEntity(i, 1, rows);
+        entities.add(random);
+      }
+      writer.write(xact, TENANT, TABLE, entities);
+      writer.commit(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(numEntities*4, testDirectory, 10);
+      int random = RANDOM.nextInt(10);
+      verifyEntityReaderPOV(entities.get(random), testDirectory);
+    }
+    
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.NONE, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      for (int i = 0; i < 10; i++) {
+        Entity random = generateEntity(i, 2, null);
+        entities.add(random);
+      }
+      writer.write(xact, TENANT, TABLE, entities);
+      writer.commit(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(numEntities, testDirectory, 10);
+      int random = RANDOM.nextInt(10);
+      verifyEntityReaderPOV(entities.get(random), testDirectory);
+    }
+    
+    
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      for (int i = 0; i < 10; i++) {
+        Entity random = generateEntity(i, 3, rows);
+        entities.add(random);
+      }
+      writer.write(xact, TENANT, TABLE, entities);
+      writer.commit(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(numEntities*4, testDirectory, 10);
+      int random = RANDOM.nextInt(10);
+      verifyEntityReaderPOV(entities.get(random), testDirectory);
+    }
+    
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.NONE, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      for (int i = 0; i < 10; i++) {
+        Entity random = generateEntity(i, 4, rows2);
+        entities.add(random);
+      }
+      writer.write(xact, TENANT, TABLE, entities);
+      writer.commit(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(numEntities*5, testDirectory, 10);
+      int random = RANDOM.nextInt(10);
+      verifyEntityReaderPOV(entities.get(random), testDirectory);
+    }
+    
+  }
+  
+  
+  @Test
+  public void mixCompression() {
+    // Ensure shards with different compression methods can still be read
+    // with no problem.
+  }
 
   @Test
   public void burstCheck() throws IOException {
