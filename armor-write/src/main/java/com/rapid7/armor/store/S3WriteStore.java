@@ -14,7 +14,6 @@ import com.amazonaws.ResetException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
-import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.ListObjectsRequest;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
@@ -38,7 +37,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static com.rapid7.armor.Constants.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.timestampToIntervalStart;
 
 public class S3WriteStore implements WriteStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3WriteStore.class);
@@ -459,10 +459,6 @@ public class S3WriteStore implements WriteStore {
 
   private String getIntervalPrefix(String tenant, String table, long interval, Instant timestamp) {
     return tenant + "/" + table + "/" + interval + "/" + timestampToIntervalStart(interval, timestamp);
-  }
-
-  private Instant timestampToIntervalStart(long interval, Instant timestamp) {
-    return Instant.ofEpochMilli(timestamp.toEpochMilli() / (interval * INTERVAL_UNITS));
   }
 
   @Override

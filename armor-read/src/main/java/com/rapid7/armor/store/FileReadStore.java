@@ -26,7 +26,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import static com.rapid7.armor.Constants.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.timestampToIntervalStart;
 
 public class FileReadStore implements ReadStore {
   private final Path basePath;
@@ -230,9 +231,5 @@ public class FileReadStore implements ReadStore {
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
-  }
-
-  private Instant timestampToIntervalStart(long interval, Instant timestamp) {
-    return Instant.ofEpochMilli(timestamp.toEpochMilli() / (interval * INTERVAL_UNITS));
   }
 }

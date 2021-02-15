@@ -29,7 +29,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import static com.rapid7.armor.Constants.MAX_INTERVAL;
+import static com.rapid7.armor.schema.Interval.MAX_INTERVAL;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

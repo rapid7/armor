@@ -27,7 +27,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static com.rapid7.armor.Constants.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.timestampToIntervalStart;
 
 public class S3ReadStore implements ReadStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3ReadStore.class);
@@ -238,9 +239,5 @@ public class S3ReadStore implements ReadStore {
 
   private String getIntervalPrefix(String tenant, String table, long interval, Instant timestamp) {
     return tenant + "/" + table + "/" + interval + "/" + timestampToIntervalStart(interval, timestamp);
-  }
-
-  private Instant timestampToIntervalStart(long interval, Instant timestamp) {
-    return Instant.ofEpochMilli(timestamp.toEpochMilli() / (interval * INTERVAL_UNITS));
   }
 }

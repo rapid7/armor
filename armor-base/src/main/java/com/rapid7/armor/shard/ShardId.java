@@ -3,7 +3,7 @@ package com.rapid7.armor.shard;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Objects;
-import static com.rapid7.armor.Constants.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.INTERVAL_UNITS;
 
 public class ShardId {
 
