@@ -33,7 +33,8 @@ import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static com.rapid7.armor.Constants.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.timestampToIntervalStart;
 
 public class FileWriteStore implements WriteStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileWriteStore.class);
@@ -370,10 +371,6 @@ public class FileWriteStore implements WriteStore {
   @Override
   public String rootDirectory() {
     return basePath.toString();
-  }
-
-  private Instant timestampToIntervalStart(long interval, Instant timestamp) {
-    return Instant.ofEpochMilli(timestamp.toEpochMilli() / (interval * INTERVAL_UNITS));
   }
 
   @Override

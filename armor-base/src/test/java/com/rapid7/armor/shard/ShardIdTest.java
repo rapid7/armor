@@ -4,10 +4,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
-
-import com.rapid7.armor.Constants;
-
-import static com.rapid7.armor.Constants.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.DAILY_INTERVAL;
+import static com.rapid7.armor.schema.Interval.INTERVAL_UNITS;
+import static com.rapid7.armor.schema.Interval.MAX_INTERVAL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ShardIdTest {
@@ -46,7 +45,7 @@ public class ShardIdTest {
     Clock clock = Clock.fixed(Instant.parse("2021-01-01T00:15:00Z"), ZoneId.of("UTC"));
     String tenant = "myorg";
     String table = "vulntable";
-    long interval = (24 * 60 * 60 * 1000) / INTERVAL_UNITS; // 24 hours
+    long interval = DAILY_INTERVAL;
     Instant timestamp = Instant.now(clock);
     int shardNum = 0;
 
@@ -73,10 +72,9 @@ public class ShardIdTest {
   
   @Test
   public void testShardIdConstructorCurrentInterval() {
-    Clock clock = Clock.fixed(Instant.parse("2021-01-01T00:15:00Z"), ZoneId.of("UTC"));
     String tenant = "myorg";
     String table = "vulntable";
-    long interval = Constants.MAX_INTERVAL; // 24 hours
+    long interval = MAX_INTERVAL;
     Instant timestamp = Instant.now();
     int shardNum = 0;
 
