@@ -32,7 +32,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import static com.rapid7.armor.schema.Interval.MAX_INTERVAL;
+import static com.rapid7.armor.interval.Interval.SINGLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -82,34 +82,34 @@ public class S3StoreTest {
     currentValue2.put("current", current2);
 
     client.putObject(TEST_BUCKET, "org1/table1/table-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
 
-    client.putObject(TEST_BUCKET, "org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/1/" + Constants.CURRENT, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + Constants.CURRENT, mapper.writeValueAsString(currentValue2));
 
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(2));
-    ShardId shard0 = writeStore.findShardId("org1", "table1", MAX_INTERVAL, Instant.now(), 0);
+    ShardId shard0 = writeStore.findShardId("org1", "table1", SINGLE, Instant.now(), 0);
     assertEquals(0, shard0.getShardNum());
-    assertEquals("org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/0", shard0.getShardId());
-    ShardId shard1 = writeStore.findShardId("org1", "table1", MAX_INTERVAL, Instant.now(), 1);
+    assertEquals("org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0", shard0.getShardId());
+    ShardId shard1 = writeStore.findShardId("org1", "table1", SINGLE, Instant.now(), 1);
     assertEquals(1, shard1.getShardNum());
-    assertEquals("org1/table1/" + MAX_INTERVAL + "/" + Instant.ofEpochMilli(0) + "/1", shard1.getShardId());
+    assertEquals("org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1", shard1.getShardId());
 
 
-    List<ShardId> shardIds = writeStore.findShardIds("org1", "table1", MAX_INTERVAL, Instant.now());
+    List<ShardId> shardIds = writeStore.findShardIds("org1", "table1", SINGLE, Instant.now());
     assertTrue(shardIds.contains(shard0));
     assertTrue(shardIds.contains(shard1));
 
-    List<ShardId> nameShardIds = writeStore.findShardIds("org1", "table1", MAX_INTERVAL, Instant.now(), "name");
+    List<ShardId> nameShardIds = writeStore.findShardIds("org1", "table1", SINGLE, Instant.now(), "name");
     assertTrue(nameShardIds.contains(shard0));
     assertTrue(nameShardIds.contains(shard1));
 
-    List<ShardId> levelShardIds = writeStore.findShardIds("org1", "table1", MAX_INTERVAL, Instant.now(), "level");
+    List<ShardId> levelShardIds = writeStore.findShardIds("org1", "table1", SINGLE, Instant.now(), "level");
     assertTrue(levelShardIds.contains(shard0));
     assertTrue(levelShardIds.contains(shard1));
 
@@ -124,23 +124,23 @@ public class S3StoreTest {
     assertTrue(shard1columnIds.contains(nameColumn));
     assertTrue(shard1columnIds.contains(levelColumn));
 
-    assertEquals(shard0, writeStore.buildShardId("org1", "table1", MAX_INTERVAL, Instant.now(), 0));
-    assertEquals(shard1, writeStore.buildShardId("org1", "table1", MAX_INTERVAL, Instant.now(), 1));
+    assertEquals(shard0, writeStore.buildShardId("org1", "table1", SINGLE, Instant.now(), 0));
+    assertEquals(shard1, writeStore.buildShardId("org1", "table1", SINGLE, Instant.now(), 1));
 
     S3ReadStore readStore = new S3ReadStore(client, TEST_BUCKET);
-    assertEquals(shard0, readStore.findShardId("org1", "table1", MAX_INTERVAL, Instant.now(), 0));
-    assertEquals(shard1, readStore.findShardId("org1", "table1", MAX_INTERVAL, Instant.now(), 1));
-    assertNull(readStore.findShardId("org1", "table1", MAX_INTERVAL, Instant.now(), 100));
+    assertEquals(shard0, readStore.findShardId("org1", "table1", SINGLE, Instant.now(), 0));
+    assertEquals(shard1, readStore.findShardId("org1", "table1", SINGLE, Instant.now(), 1));
+    assertNull(readStore.findShardId("org1", "table1", SINGLE, Instant.now(), 100));
 
-    List<ShardId> readShardIds = readStore.findShardIds("org1", "table1", MAX_INTERVAL, Instant.now());
+    List<ShardId> readShardIds = readStore.findShardIds("org1", "table1", SINGLE, Instant.now());
     assertTrue(readShardIds.contains(shard0));
     assertTrue(readShardIds.contains(shard1));
 
-    List<ShardId> readNameShardIds = readStore.findShardIds("org1", "table1", MAX_INTERVAL, Instant.now(), "name");
+    List<ShardId> readNameShardIds = readStore.findShardIds("org1", "table1", SINGLE, Instant.now(), "name");
     assertTrue(readNameShardIds.contains(shard0));
     assertTrue(readNameShardIds.contains(shard1));
 
-    List<ShardId> levelNameShardIds = readStore.findShardIds("org1", "table1", MAX_INTERVAL, Instant.now(), "level");
+    List<ShardId> levelNameShardIds = readStore.findShardIds("org1", "table1", SINGLE, Instant.now(), "level");
     assertTrue(levelNameShardIds.contains(shard0));
     assertTrue(levelNameShardIds.contains(shard1));
 
@@ -152,7 +152,7 @@ public class S3StoreTest {
     assertTrue(shard1Columns.contains(nameColumn));
     assertTrue(shard1Columns.contains(levelColumn));
 
-    List<ColumnId> tableColumns = readStore.getColumnIds("org1", "table1", MAX_INTERVAL, Instant.now());
+    List<ColumnId> tableColumns = readStore.getColumnIds("org1", "table1", SINGLE, Instant.now());
     assertTrue(tableColumns.contains(nameColumn));
     assertTrue(tableColumns.contains(levelColumn));
 
@@ -215,19 +215,19 @@ public class S3StoreTest {
               2L, 5,
               null, 6);
 
-          armorWriter.write(transaction, myorg, table, MAX_INTERVAL, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
           armorWriter.commit(transaction, myorg, table);
           transaction = armorWriter.startTransaction();
 
           // Verify store/shard stuff
-          List<ShardId> shardIds = writeStore.findShardIds(myorg, table, MAX_INTERVAL, Instant.now(), "vuln");
+          List<ShardId> shardIds = writeStore.findShardIds(myorg, table, SINGLE, Instant.now(), "vuln");
           assertFalse(shardIds.isEmpty());
           ShardId shardId = shardIds.get(0);
           assertEquals(Sets.newHashSet(name, asset, vuln, time), Sets.newHashSet(writeStore.getColumnIds(shardId)));
 
           // 12 rows, 2 entities 1 and 2, freebytes 0
-          Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
-          ColumnMetadata cmd1 = armorWriter.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+          Map<Integer, EntityRecord> vulnEntityRecords1 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ColumnMetadata cmd1 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(2, vulnEntityRecords1.size());
           assertEquals(Integer.valueOf(0), Integer.valueOf(cmd1.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), cmd1.getMaxValue());
@@ -239,11 +239,11 @@ public class S3StoreTest {
           checkEntityIndexRecord(vulnEntityRecords1.get(2), 24, 24, 15, (byte) 0);
 
           // Delete the entity 1
-          armorWriter.delete(transaction, myorg, table, MAX_INTERVAL, Instant.now(), 1, Integer.MAX_VALUE, "dkfjd;kfd");
+          armorWriter.delete(transaction, myorg, table, SINGLE, Instant.now(), 1, Integer.MAX_VALUE, "dkfjd;kfd");
           armorWriter.commit(transaction, myorg, table);
           transaction = armorWriter.startTransaction();
-          Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
-          ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+          Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(2, vulnEntityRecords2.size());
           assertEquals(Integer.valueOf(50), Integer.valueOf(cmd2.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), cmd2.getMaxValue());
@@ -264,16 +264,16 @@ public class S3StoreTest {
               "1", 2L, 5,
               "1", null, 6);
 
-          armorWriter.write(transaction, myorg, table, MAX_INTERVAL, Instant.now(), Collections.singletonList(e21));
-          Map<Integer, EntityRecord> test1 = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "time", 0);
+          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Collections.singletonList(e21));
+          Map<Integer, EntityRecord> test1 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "time", 0);
 
           armorWriter.commit(transaction, myorg, table);
           transaction = armorWriter.startTransaction();
 
-          Map<Integer, EntityRecord> test = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "time", 0);
+          Map<Integer, EntityRecord> test = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "time", 0);
 
-          Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
-          ColumnMetadata cmd3 = armorWriter.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+          Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ColumnMetadata cmd3 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(1, vulnEntityRecords3.size());
           assertEquals(Integer.valueOf(0), Integer.valueOf(cmd3.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), cmd3.getMaxValue());
@@ -294,12 +294,12 @@ public class S3StoreTest {
           e31.addRow("1", null, 2);
           e31.addRow("1", null, -1);
 
-          armorWriter.write(transaction, myorg, table, MAX_INTERVAL, Instant.now(), Arrays.asList(e23, e31));
+          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Arrays.asList(e23, e31));
           armorWriter.commit(transaction, myorg, table);
           transaction = armorWriter.startTransaction();
 
-          Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
-          ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+          Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(2, records4.size());
           assertEquals(Integer.valueOf(58), Integer.valueOf(md4.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), md4.getMaxValue());
@@ -316,14 +316,14 @@ public class S3StoreTest {
           e32.addRow(null, null, null);
 
           ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, compression, 10, () -> 1, null);
-          Map<Integer, EntityRecord> records5a = amrorWriter2.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+          Map<Integer, EntityRecord> records5a = amrorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
 
-          amrorWriter2.write(transaction, myorg, table, MAX_INTERVAL, Instant.now(), Collections.singletonList(e32));
+          amrorWriter2.write(transaction, myorg, table, SINGLE, Instant.now(), Collections.singletonList(e32));
           amrorWriter2.commit(transaction, myorg, table);
           transaction = armorWriter.startTransaction();
 
-          Map<Integer, EntityRecord> records5 = amrorWriter2.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
-          ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
+          Map<Integer, EntityRecord> records5 = amrorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(2, records5.size());
           assertEquals(Integer.valueOf(0), Integer.valueOf(md5.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), md5.getMaxValue());

@@ -1,6 +1,6 @@
 package com.rapid7.armor;
 
-import static com.rapid7.armor.schema.Interval.MAX_INTERVAL;
+import static com.rapid7.armor.interval.Interval.SINGLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.File;
@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.Row;
+import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.read.fast.FastArmorBlock;
 import com.rapid7.armor.read.fast.FastArmorBlockReader;
@@ -68,7 +69,7 @@ public class FileStoreV2Test {
 
   private static final String TENANT = "united_states";
   private static final String TABLE = "state_vulns";
-  private static final long INTERVAL = MAX_INTERVAL;
+  private static final Interval INTERVAL = SINGLE;
   private static final Instant TIMESTAMP = Instant.now();
   private static String TEST_UUID = UUID.randomUUID().toString();
   private static final String ASSET_ID = "assetId";

@@ -3,6 +3,7 @@ package com.rapid7.armor.write.writers;
 import com.rapid7.armor.entity.Column;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
@@ -105,13 +106,13 @@ public class ArmorWriter implements Closeable {
     return UUID.randomUUID().toString();
   }
 
-  public Map<Integer, EntityRecord> columnEntityRecords(String tenant, String table, long interval, Instant timestamp, String columnId, int shard) {
+  public Map<Integer, EntityRecord> columnEntityRecords(String tenant, String table, Interval interval, Instant timestamp, String columnId, int shard) {
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter == null) {
         return null;
     } else {
-      ShardWriter sw = tableWriter.getShard(new ShardId(tenant, table, interval, timestamp, shard));
+      ShardWriter sw = tableWriter.getShard(new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shard));
       if (sw == null)
         return null;
       else 
@@ -130,13 +131,13 @@ public class ArmorWriter implements Closeable {
    * @param columnId The id of the column.
    * @param shard The shard number.
    */
-  public ColumnMetadata columnMetadata(String tenant, String table, long interval, Instant timestamp, String columnId, int shard) {
+  public ColumnMetadata columnMetadata(String tenant, String table, Interval interval, Instant timestamp, String columnId, int shard) {
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter == null) {
       return null;
     } else {
-      ShardWriter sw = tableWriter.getShard(new ShardId(tenant, table, interval, timestamp, shard));
+      ShardWriter sw = tableWriter.getShard(new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shard));
       if (sw == null)
         return null;
       else
@@ -156,7 +157,7 @@ public class ArmorWriter implements Closeable {
     }
   }
 
-  public void delete(String transaction, String tenant, String table, long interval, Instant timestamp, Object entityId, long version, String instanceId) {
+  public void delete(String transaction, String tenant, String table, Interval interval, Instant timestamp, Object entityId, long version, String instanceId) {
     ShardId shardId = store.findShardId(tenant, table, interval, timestamp, entityId);
     if (captureWrites != null && captureWrites.test(shardId, ArmorWriter.class.getSimpleName()))
       store.captureWrites(transaction, shardId, null, null, entityId);
@@ -187,7 +188,7 @@ public class ArmorWriter implements Closeable {
 
     ShardWriter sw = tableWriter.getShard(shardId);
     if (sw == null) {
-      sw = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
+      sw = new ShardWriter(shardId, interval, timestamp, store, compress, compactionTrigger, captureWrites);
       sw = tableWriter.addShard(sw);
     }
     sw.delete(transaction, entityId, version, instanceId);
@@ -222,11 +223,11 @@ public class ArmorWriter implements Closeable {
     return new ColumnId(tableMetadata.getEntityColumnId(), tableMetadata.getEntityColumnIdType());
   }
 
-  public void write(String transaction, String tenant, String table, long interval, Instant timestamp, List<Entity> entities) {
+  public void write(String transaction, String tenant, String table, Interval interval, Instant timestamp, List<Entity> entities) {
     if (entities == null || entities.isEmpty())
       return;
-    if (captureWrites != null && captureWrites.test(new ShardId(tenant, table, interval, timestamp, -1), ArmorWriter.class.getSimpleName()))
-      store.captureWrites(transaction, new ShardId(tenant, table, interval, timestamp, -1), entities, null, null);
+    if (captureWrites != null && captureWrites.test(new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), -1), ArmorWriter.class.getSimpleName()))
+      store.captureWrites(transaction, new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), -1), entities, null, null);
 
 
     HashMap<ShardId, List<Entity>> shardToUpdates = new HashMap<>();
@@ -264,7 +265,7 @@ public class ArmorWriter implements Closeable {
               ShardWriter shardWriter = tableWriter.getShard(shardId);
               Thread.currentThread().setName(originalThreadName + "(" + shardId.toString() + ")");
               if (shardWriter == null) {
-                shardWriter = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
+                shardWriter = new ShardWriter(shardId, interval, timestamp, store, compress, compactionTrigger, captureWrites);
                 shardWriter = tableWriter.addShard(shardWriter);
               }
 

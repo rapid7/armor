@@ -5,6 +5,7 @@ import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnId;
+import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.shard.ShardId;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
@@ -27,8 +28,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static com.rapid7.armor.schema.Interval.INTERVAL_UNITS;
-import static com.rapid7.armor.schema.Interval.timestampToIntervalStart;
 
 public class S3ReadStore implements ReadStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3ReadStore.class);
@@ -41,8 +40,8 @@ public class S3ReadStore implements ReadStore {
     this.bucket = bucket;
   }
 
-  private ShardId buildShardId(String tenant, String table, long interval, Instant timestamp, int shardNum) {
-    return new ShardId(tenant, table, interval, timestamp, shardNum);
+  private ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
+    return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
   }
 
   @Override
@@ -59,7 +58,7 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, long interval, Instant timestamp) {
+  public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
@@ -70,14 +69,14 @@ public class S3ReadStore implements ReadStore {
     return rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(Collectors.toList());
   }
 
-  private ShardId toShardId(String tenant, String table, long interval, Instant timestamp, String rawShard) {
+  private ShardId toShardId(String tenant, String table, Interval interval, Instant timestamp, String rawShard) {
     String shardName = Paths.get(rawShard).getFileName().toString();
     int shardNum = Integer.parseInt(shardName);
     return buildShardId(tenant, table, interval, timestamp, shardNum);
   }
 
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, long interval, Instant timestamp, String columnId) {
+  public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp, String columnId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
@@ -89,7 +88,7 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public ShardId findShardId(String tenant, String table, long interval, Instant timestamp, int shardNum) {
+  public ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
@@ -142,7 +141,7 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public List<ColumnId> getColumnIds(String tenant, String table, long interval, Instant timestamp) {
+  public List<ColumnId> getColumnIds(String tenant, String table, Interval interval, Instant timestamp) {
     List<ShardId> shardIds = findShardIds(tenant, table, interval, timestamp);
     if (shardIds.isEmpty())
       return new ArrayList<>();
@@ -157,29 +156,6 @@ public class S3ReadStore implements ReadStore {
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<String> commonPrefixes = ol.getCommonPrefixes();
     return commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).map(cp -> cp.replace(tenant + "/", "")).collect(Collectors.toList());
-  }
-
-  @Override
-  public String resolveCurrentPath(String tenant, String table, long interval, Instant timestamp, int shardNum) {
-    Map<String, String> values = getCurrentValues(tenant, table, interval, timestamp, shardNum);
-    String current = values.get("current");
-    if (current == null)
-      return null;
-    return getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + current;
-  }
-
-  @Override
-  public Map<String, String> getCurrentValues(String tenant, String table, long interval, Instant timestamp, int shardNum) {
-    String key = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + Constants.CURRENT;
-    if (!doesObjectExist(this.bucket, key))
-      return new HashMap<>();
-    else {
-      try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
-      }
-    }
   }
 
   /**
@@ -213,15 +189,15 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public ColumnId findColumnId(String tenant, String table, long interval, Instant timestamp, String columnName) {
+  public ColumnId findColumnId(String tenant, String table, Interval interval, Instant timestamp, String columnName) {
     List<ColumnId> columnIds = getColumnIds(tenant, table, interval, timestamp);
     Optional<ColumnId> first = columnIds.stream().filter(c -> c.getName().equalsIgnoreCase(columnName)).findFirst();
     return first.orElse(null);
   }
 
   @Override
-  public ShardMetadata getShardMetadata(String tenant, String table, long interval, Instant timestamp, int shardNum) {
-    String shardIdPath = resolveCurrentPath(tenant, table, interval, timestamp, shardNum) + "/" + Constants.SHARD_METADATA + ".armor";
+  public ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
+    String shardIdPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum) + "/" + Constants.SHARD_METADATA + ".armor";
 
     if (s3Client.doesObjectExist(bucket, shardIdPath)) {
       try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
@@ -237,7 +213,32 @@ public class S3ReadStore implements ReadStore {
       return null;
   }
 
-  private String getIntervalPrefix(String tenant, String table, long interval, Instant timestamp) {
-    return tenant + "/" + table + "/" + interval + "/" + timestampToIntervalStart(interval, timestamp);
+  private String getIntervalPrefix(String tenant, String table, Interval interval, Instant timestamp) {
+    return getIntervalPrefix(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp));
+  }
+
+  private String getIntervalPrefix(String tenant, String table, String interval, String intervalStart) {
+    return tenant + "/" + table + "/" + interval + "/" + intervalStart;
+  }
+
+  private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
+    Map<String, String> values = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+    String current = values.get("current");
+    if (current == null)
+      return null;
+    return getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + current;
+  }
+
+  private Map<String, String> getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
+    String key = getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + Constants.CURRENT;
+    if (!doesObjectExist(this.bucket, key))
+      return new HashMap<>();
+    else {
+      try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
+        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
+      } catch (IOException ioe) {
+        throw new RuntimeException(ioe);
+      }
+    }
   }
 }

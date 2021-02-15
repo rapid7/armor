@@ -6,6 +6,7 @@ import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.read.BaseArmorReader;
 import com.rapid7.armor.shard.ShardId;
@@ -22,7 +23,7 @@ public class FastArmorReader extends BaseArmorReader {
     super(store);
   }
 
-  public FastArmorBlockReader getColumn(String tenant, String table, long interval, Instant timestamp, String columnName, int shardNum) throws IOException {
+  public FastArmorBlockReader getColumn(String tenant, String table, Interval interval, Instant timestamp, String columnName, int shardNum) throws IOException {
     ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
     if (shardId == null)
       return null;

@@ -2,6 +2,7 @@ package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.entity.Entity;
+import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
@@ -37,8 +38,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static com.rapid7.armor.schema.Interval.INTERVAL_UNITS;
-import static com.rapid7.armor.schema.Interval.timestampToIntervalStart;
 
 public class S3WriteStore implements WriteStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3WriteStore.class);
@@ -54,12 +53,12 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public ShardId buildShardId(String tenant, String table, long interval, Instant timestamp, int shardNum) {
-    return new ShardId(tenant, table, interval, timestamp, shardNum);
+  public ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
+    return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
   }
 
   @Override
-  public ShardId findShardId(String tenant, String table, long interval, Instant timestamp, Object entityId) {
+  public ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, Object entityId) {
     int shardNum = shardStrategy.shardNum(entityId);
     return buildShardId(tenant, table, interval, timestamp, shardNum);
   }
@@ -114,7 +113,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, long interval, Instant timestamp) {
+  public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
@@ -126,7 +125,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, long interval, Instant timestamp, String columnId) {
+  public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp, String columnId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
@@ -143,12 +142,12 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public List<ColumnFileWriter> loadColumnWriters(String tenant, String table, long interval, Instant timestamp, int shardNum) {
+  public List<ColumnFileWriter> loadColumnWriters(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
     List<ColumnId> columnIds = getColumnIds(buildShardId(tenant, table, interval, timestamp, shardNum));
     List<ColumnFileWriter> writers = new ArrayList<>();
     for (ColumnId columnId : columnIds) {
-      String shardIdPath = resolveCurrentPath(tenant, table, interval, timestamp, shardId.getShardNum()) + "/" + columnId.fullName();
+      String shardIdPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardId.getShardNum()) + "/" + columnId.fullName();
       try {
         if (doesObjectExist(bucket, shardIdPath)) {
           S3ObjectInputStream s3InputStream = null;
@@ -209,8 +208,8 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public ShardMetadata loadShardMetadata(String tenant, String table, long interval, Instant timestamp, int shardNum) {
-    String shardIdPath = resolveCurrentPath(tenant, table, interval, timestamp, shardNum) + "/" + Constants.SHARD_METADATA + ".armor";
+  public ShardMetadata loadShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
+    String shardIdPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum) + "/" + Constants.SHARD_METADATA + ".armor";
 
     if (s3Client.doesObjectExist(bucket, shardIdPath)) {
       try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
@@ -227,7 +226,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void saveShardMetadata(String transactionId, String tenant, String table, long interval, Instant timestamp, int shardNum, ShardMetadata shardMetadata) {
+  public void saveShardMetadata(String transactionId, String tenant, String table, Interval interval, Instant timestamp, int shardNum, ShardMetadata shardMetadata) {
     ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
     String shardIdPath = shardId.getShardId() + "/" + transactionId + "/" + Constants.SHARD_METADATA + ".armor";
     for (int i = 0; i < 10; i++) {
@@ -250,8 +249,8 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void commit(String transaction, String tenant, String table, long interval, Instant timestamp, int shardNum) {
-    Map<String, String> currentValues = getCurrentValues(tenant, table, interval, timestamp, shardNum);
+  public void commit(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
+    Map<String, String> currentValues = getCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
     String oldCurrent = null;
     String oldPrevious = null;
     if (currentValues != null) {
@@ -260,7 +259,7 @@ public class S3WriteStore implements WriteStore {
     }
     if (oldCurrent != null && oldCurrent.equalsIgnoreCase(transaction))
       throw new RuntimeException("Create another transaction");
-    saveCurrentValues(tenant, table, interval, timestamp, shardNum, transaction, oldCurrent);
+    saveCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum, transaction, oldCurrent);
     try {
       String toDelete = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + oldPrevious;
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
@@ -279,44 +278,6 @@ public class S3WriteStore implements WriteStore {
       }
     } catch (Exception e) {
       LOGGER.warn("Unable to previous shard version under {}", oldPrevious, e);
-    }
-  }
-
-  @Override
-  public String resolveCurrentPath(String tenant, String table, long interval, Instant timestamp, int shardNum) {
-    Map<String, String> values = getCurrentValues(tenant, table, interval, timestamp, shardNum);
-    String current = values.get("current");
-    if (current == null)
-      return null;
-    return getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + current;
-  }
-
-  @Override
-  public Map<String, String> getCurrentValues(String tenant, String table, long interval, Instant timestamp, int shardNum) {
-    String key = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + Constants.CURRENT;
-    if (!doesObjectExist(this.bucket, key))
-      return new HashMap<>();
-    else {
-      try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
-      }
-    }
-  }
-
-  @Override
-  public void saveCurrentValues(String tenant, String table, long interval, Instant timestamp, int shardNum, String current, String previous) {
-    String key = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + Constants.CURRENT;
-    try {
-      HashMap<String, String> currentValues = new HashMap<>();
-      currentValues.put("current", current);
-      if (previous != null)
-        currentValues.put("previous", previous);
-      String payload = OBJECT_MAPPER.writeValueAsString(currentValues);
-      s3Client.putObject(bucket, key, payload);
-    } catch (IOException ioe) {
-      throw new RuntimeException(ioe);
     }
   }
 
@@ -343,7 +304,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void rollback(String transaction, String tenant, String table, long interval, Instant timestamp, int shardNum) {
+  public void rollback(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     String toDelete = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + transaction;
     try {
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
@@ -447,18 +408,10 @@ public class S3WriteStore implements WriteStore {
     return bucket;
   }
 
-  private ShardId toShardId(String tenant, String table, long interval, Instant timestamp, String rawShard) {
+  private ShardId toShardId(String tenant, String table, Interval interval, Instant timestamp, String rawShard) {
     String shardName = Paths.get(rawShard).getFileName().toString();
     int shardNum = Integer.parseInt(shardName.replace("shard-", ""));
     return buildShardId(tenant, table, interval, timestamp, shardNum);
-  }
-
-  private String getIntervalPrefix(ShardId shardId) {
-    return shardId.getTenant() + "/" + shardId.getTable() + "/" + shardId.getInterval() + "/" + shardId.getIntervalStart();
-  }
-
-  private String getIntervalPrefix(String tenant, String table, long interval, Instant timestamp) {
-    return tenant + "/" + table + "/" + interval + "/" + timestampToIntervalStart(interval, timestamp);
   }
 
   @Override
@@ -483,5 +436,52 @@ public class S3WriteStore implements WriteStore {
       LOGGER.warn("Unable completely remove tenant {}", tenant, e);
       throw e;
     }    
+  }
+
+  private String getIntervalPrefix(ShardId shardId) {
+    return shardId.getTenant() + "/" + shardId.getTable() + "/" + shardId.getInterval() + "/" + shardId.getIntervalStart();
+  }
+
+  private String getIntervalPrefix(String tenant, String table, Interval interval, Instant timestamp) {
+    return tenant + "/" + table + "/" + interval.getInterval() + "/" + interval.getIntervalStart(timestamp);
+  }
+
+  private String getIntervalPrefix(String tenant, String table, String interval, String intervalStart) {
+    return tenant + "/" + table + "/" + interval + "/" + intervalStart;
+  }
+
+  private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
+    Map<String, String> values = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+    String current = values.get("current");
+    if (current == null)
+      return null;
+    return getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + current;
+  }
+
+  private Map<String, String> getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
+    String key = getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + Constants.CURRENT;
+    if (!doesObjectExist(this.bucket, key))
+      return new HashMap<>();
+    else {
+      try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
+        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
+      } catch (IOException ioe) {
+        throw new RuntimeException(ioe);
+      }
+    }
+  }
+
+  private void saveCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum, String current, String previous) {
+    String key = getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + Constants.CURRENT;
+    try {
+      HashMap<String, String> currentValues = new HashMap<>();
+      currentValues.put("current", current);
+      if (previous != null)
+        currentValues.put("previous", previous);
+      String payload = OBJECT_MAPPER.writeValueAsString(currentValues);
+      s3Client.putObject(bucket, key, payload);
+    } catch (IOException ioe) {
+      throw new RuntimeException(ioe);
+    }
   }
 }

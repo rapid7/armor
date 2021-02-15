@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.read.BaseArmorReader;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
@@ -39,7 +40,7 @@ public class SlowArmorReader extends BaseArmorReader {
     super(store);
   }
 
-  public Column<?> getColumn(String tenant, String table, long interval, Instant timestamp, String columnId, int shardNum) throws IOException {
+  public Column<?> getColumn(String tenant, String table, Interval interval, Instant timestamp, String columnId, int shardNum) throws IOException {
     ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
     if (shardId == null)
       return null;
@@ -47,7 +48,7 @@ public class SlowArmorReader extends BaseArmorReader {
     return armorShard.getColumn();
   }
 
-  public Column<?> getColumn(String tenant, String table, long interval, Instant timestamp, String columnId, int limit, int shardNum) throws IOException {
+  public Column<?> getColumn(String tenant, String table, Interval interval, Instant timestamp, String columnId, int limit, int shardNum) throws IOException {
     ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
     if (shardId == null)
       return null;
@@ -55,7 +56,7 @@ public class SlowArmorReader extends BaseArmorReader {
     return armorShard.getColumn().first(limit);
   }
 
-  public Column<?> getColumn(String tenant, String table, long interval, Instant timestamp, String columnId) throws IOException {
+  public Column<?> getColumn(String tenant, String table, Interval interval, Instant timestamp, String columnId) throws IOException {
     List<ShardId> shardIds = store.findShardIds(tenant, table, interval, timestamp, columnId).stream()
         .sorted(Comparator.comparingInt(ShardId::getShardNum))
         .collect(Collectors.toList());
@@ -70,7 +71,7 @@ public class SlowArmorReader extends BaseArmorReader {
     return column;
   }
   
-  public Table getTable(String tenant, String table, long interval, Instant timestamp) {
+  public Table getTable(String tenant, String table, Interval interval, Instant timestamp) {
     List<ColumnId> columnIds = store.getColumnIds(tenant, table, interval, timestamp);
     Map<String, Column<?>> columns = new HashMap<>();
     for (ShardId shardId : store.findShardIds(tenant, table, interval, timestamp)) {
@@ -130,7 +131,7 @@ public class SlowArmorReader extends BaseArmorReader {
     return Table.create(table, columns.values());
   }
   
-  public Table getEntity(String tenant, String table, long interval, Instant timestamp, Object entity) {
+  public Table getEntity(String tenant, String table, Interval interval, Instant timestamp, Object entity) {
     List<ColumnId> columnIds = store.getColumnIds(tenant, table, interval, timestamp);
     Map<String, Column<?>> columns = new HashMap<>();
     for (ShardId shardId : store.findShardIds(tenant, table, interval, timestamp)) {

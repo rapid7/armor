@@ -27,11 +27,11 @@ public class ColumnShardId {
     return shardId.getTable();
   }
 
-  public long getInterval() {
+  public String getInterval() {
     return shardId.getInterval();
   }
 
-  public Instant getIntervalStart() {
+  public String getIntervalStart() {
     return shardId.getIntervalStart();
   }
 
