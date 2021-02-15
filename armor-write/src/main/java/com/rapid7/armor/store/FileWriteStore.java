@@ -375,4 +375,17 @@ public class FileWriteStore implements WriteStore {
   private Instant timestampToIntervalStart(long interval, Instant timestamp) {
     return Instant.ofEpochMilli(timestamp.toEpochMilli() / (interval * INTERVAL_UNITS));
   }
+
+  @Override
+  public void deleteTenant(String tenant) {
+    try {
+      Path toDelete = basePath.resolve(Paths.get(tenant));
+      Files.walk(toDelete)
+          .sorted(Comparator.reverseOrder())
+          .map(Path::toFile)
+          .forEach(File::delete);
+    } catch (Exception e) {
+      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+    }
+  }
 }

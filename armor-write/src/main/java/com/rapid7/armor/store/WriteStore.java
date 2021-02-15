@@ -16,6 +16,7 @@ import java.util.Map;
 
 public interface WriteStore {
   String rootDirectory();
+  void deleteTenant(String tenant);
 
   // Loading from store
   List<ColumnFileWriter> loadColumnWriters(String tenant, String table, long interval, Instant timestamp, int shardNum);

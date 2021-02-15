@@ -37,6 +37,7 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.FileReadStore;
 import com.rapid7.armor.store.FileWriteStore;
 import com.rapid7.armor.store.WriteTranscationError;
+import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.writers.ArmorWriter;
 
 import tech.tablesaw.api.IntColumn;
@@ -48,10 +49,10 @@ public class FileStoreV2Test {
 
   // The table schema we will be working with
   private static List<ColumnId> COLUMNS = Arrays.asList(
-    new ColumnId("status", DataType.INTEGER.getCode()),
-    new ColumnId("time", DataType.LONG.getCode()),
-    new ColumnId("vuln", DataType.STRING.getCode()));
-  
+      new ColumnId("status", DataType.INTEGER.getCode()),
+      new ColumnId("time", DataType.LONG.getCode()),
+      new ColumnId("vuln", DataType.STRING.getCode()));
+
   // List of vuln we will be working with by states
   private static Row texasVuln = new Row(1, 101l, "texas");
   private static Row caliVuln = new Row(2, 102l, "cali");
@@ -72,33 +73,33 @@ public class FileStoreV2Test {
   private static String TEST_UUID = UUID.randomUUID().toString();
   private static final String ASSET_ID = "assetId";
   private static final Random RANDOM = new Random();
-  
+
   private void checkEntityIndexRecord(EntityRecord eir, int rowGroupOffset, int valueLength, int nullLength, byte deleted) {
     assertEquals(valueLength, eir.getValueLength());
     assertEquals(rowGroupOffset, eir.getRowGroupOffset());
     assertEquals(nullLength, eir.getNullLength());
     assertEquals(deleted, eir.getDeleted());
   }
-  
+
   private Entity generateEntity(String entityId, long version, Row... rows) {
     return Entity.buildEntity(ASSET_ID, entityId, version, TEST_UUID, COLUMNS, rows);
   }
-  
+
   private Entity generateEntity(Integer entityId, long version, Row... rows) {
     return Entity.buildEntity(ASSET_ID, entityId, version, TEST_UUID, COLUMNS, rows);
   }
-  
+
   private Entity randomEntity(long version, Row... rows) {
     return Entity.buildEntity(ASSET_ID, UUID.randomUUID().toString(), version, TEST_UUID, COLUMNS, rows);
   }
-  
+
   private Entity randomEntity(long version, int numRows) {
     List<Row> rows = new ArrayList<>();
     for (int i = 0; i < numRows; i++)
       rows.add(generateRandomRow());
     return Entity.buildEntity(ASSET_ID, UUID.randomUUID().toString(), version, TEST_UUID, COLUMNS, rows);
   }
-  
+
   private Row generateRandomRow() {
     int randomInt = RANDOM.nextInt();
     long randomLong = RANDOM.nextLong();
@@ -107,7 +108,7 @@ public class FileStoreV2Test {
     String generatedString = new String(array, Charset.forName("UTF-8"));
     return new Row(randomInt, randomLong, generatedString);
   }
-  
+
   private List<Row> generateRandomRowsFromSet() {
     int grab = RANDOM.nextInt(7);
     List<Row> rows = new ArrayList<>();
@@ -120,12 +121,12 @@ public class FileStoreV2Test {
   private void removeDirectory(Path removeDirectory) throws IOException {
     Files.walk(removeDirectory).filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
     Files.walk(removeDirectory)
-      .sorted(Comparator.reverseOrder())
-      .map(Path::toFile)
-      .filter(File::isDirectory)
-      .forEach(File::delete);
+    .sorted(Comparator.reverseOrder())
+    .map(Path::toFile)
+    .filter(File::isDirectory)
+    .forEach(File::delete);
   }
-  
+
   private Table entityToTableSawRow(Entity entity) {
     Table smallTable = Table.create("");
     for (com.rapid7.armor.entity.Column column : entity.columns()) {
@@ -184,21 +185,21 @@ public class FileStoreV2Test {
       }
     }
   }
-  
+
   private void verifyEntityDeletedReaderPOV(Entity entity, Path path) {
     FileReadStore readStore = new FileReadStore(path);
     SlowArmorReader reader = new SlowArmorReader(readStore);
     Table entityTable = reader.getEntity(TENANT, TABLE, INTERVAL, TIMESTAMP, entity.getEntityId());
     assertEquals(0, entityTable.rowCount());
   }
-  
+
   private String printTable(Path path) {
     FileReadStore readStore = new FileReadStore(path);
     SlowArmorReader reader = new SlowArmorReader(readStore);
     Table entityTable = reader.getTable(TENANT, TABLE, INTERVAL, TIMESTAMP);
     return entityTable.print();
   }
-  
+
   private void verifyEntityReaderPOV(Entity entity, Path path) {
     FileReadStore readStore = new FileReadStore(path);
     Table checkEntity = entityToTableSawRow(entity);
@@ -208,7 +209,7 @@ public class FileStoreV2Test {
     checkEntity = checkEntity.sortAscendingOn("vuln").select("assetId", "vuln", "time", "status");
     assertTableEquals(checkEntity, entityTable);
   }
-  
+
   private void verifyColumn(int expectedNumberRows, ColumnId column, Path path, int numShards) throws IOException {
     FileReadStore readStore = new FileReadStore(path);
     List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE, INTERVAL, TIMESTAMP);
@@ -217,20 +218,19 @@ public class FileStoreV2Test {
     FastArmorReader reader = new FastArmorReader(readStore);
     for (ShardId shardId : shardIds) {
       FastArmorBlockReader far = reader.getColumn(TENANT, TABLE, INTERVAL, TIMESTAMP, column.getName(), shardId.getShardNum());
-      
       FastArmorBlock fab = null;
       switch (column.dataType()) {
-        case INTEGER:
-          fab = far.getIntegerBlock(5000);
-          break;
-        case LONG:
-          fab = far.getLongBlock(5000);
-          break;
-        case STRING:
-          fab = far.getStringBlock(5000);
-          break;
-          default:
-            throw new RuntimeException("Unsupported data type" + column);
+      case INTEGER:
+        fab = far.getIntegerBlock(5000);
+        break;
+      case LONG:
+        fab = far.getLongBlock(5000);
+        break;
+      case STRING:
+        fab = far.getStringBlock(5000);
+        break;
+      default:
+        throw new RuntimeException("Unsupported data type" + column);
       }
       totalRows += fab.getNumRows();
     }
@@ -259,10 +259,10 @@ public class FileStoreV2Test {
         case STRING:
           fab = far.getStringBlock(5000);
           break;
-          default:
-            throw new RuntimeException("Unsupported");
+        default:
+          throw new RuntimeException("Unsupported");
         }
-        
+
         if (shardRows == null) {
           shardRows = fab.getNumRows();
         } else if (shardRows != fab.getNumRows()) {
@@ -273,7 +273,7 @@ public class FileStoreV2Test {
     }
     assertEquals(expectedNumberRows, totalRows);
   }
-  
+
   @Test
   public void deleteOutOfOrder() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
@@ -282,6 +282,10 @@ public class FileStoreV2Test {
     Entity e1 = generateEntity("firstEntity", 1, rows2);
     Entity e2 = generateEntity("firstEntity", 2, rows2);
 
+    for (int i = 0; i < 2; i++) {
+      if (i == 1)
+        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
+      for (Compression compression : Compression.values()) {
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10)) {
       String xact = writer.startTransaction();
       writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e1));
@@ -295,7 +299,9 @@ public class FileStoreV2Test {
       writer.commit(xact, TENANT, TABLE);
     }
   }
-  
+    }
+  }
+
   @Test
   public void newColumn() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
@@ -305,6 +311,10 @@ public class FileStoreV2Test {
     ColumnId newColumn = new ColumnId("city", DataType.STRING.getCode());
     EXTRA_COLUMNS.add(newColumn);
 
+    for (int i = 0; i < 2; i++) {
+      if (i == 1)
+        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
+      for (Compression compression : Compression.values()) {
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10)) {
       String xact = writer.startTransaction();
       List<Entity> entities1 = new ArrayList<>();
@@ -325,14 +335,20 @@ public class FileStoreV2Test {
       verifyColumn(3, newColumn, testDirectory, 2);
     }
   }
-  
-  
+    }
+  }
+
+
   @Test
   public void completelyRandomWrites() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
-    
+
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
-    int numTries = RANDOM.nextInt(200);
+    for (int ii = 0; ii < 2; ii++) {
+      if (ii == 1)
+        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
+      for (Compression compression : Compression.values()) {
+    int numTries = RANDOM.nextInt(50);
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
       for (int i = 0; i < numTries; i++) {
         String xact = writer.startTransaction();
@@ -343,7 +359,9 @@ public class FileStoreV2Test {
       }
     }
   }
-  
+    }
+  }
+
   @Test
   public void entitesRowContentsChange() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
@@ -353,6 +371,10 @@ public class FileStoreV2Test {
     Row[] rows6 = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln, nevadaVuln, oregonVuln};
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
     int numEntities = 1000;
+    for (int ii = 0; ii < 2; ii++) {
+      if (ii == 1)
+        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
+      for (Compression compression : Compression.values()) {
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
       String xact = writer.startTransaction();
       List<Entity> entities4 = new ArrayList<>();
@@ -411,47 +433,60 @@ public class FileStoreV2Test {
     }
 
   }
-  
+    }
+  }
+
   @Test
   public void deleteOnly() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
+    for (int ii = 0; ii < 2; ii++) {
+      if (ii == 1)
+        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
       String xact = writer.startTransaction();
       for (int i = 0; i < 1000; i++) {
         writer.delete(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, i, 100, null);
       }
-      writer.commit(xact, TENANT, TABLE);
-      verifyTableReaderPOV(0, testDirectory, 0);
+    }
     }
   }
   
+
   @Test
   public void verifySameXactError() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
-    Assertions.assertThrows(WriteTranscationError.class, () -> {
-      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
-        List<Entity> entities = new ArrayList<>();
-        Entity random = generateEntity("same", 1, null);
-        entities.add(random);
-        String xact = writer.startTransaction();
-        writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
-        writer.commit(xact, TENANT, TABLE);
-        writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
-        writer.commit(xact, TENANT, TABLE);
-      } finally {
-        removeDirectory(testDirectory);
-      }
-    });
+    for (int i = 0; i < 2; i++) {
+      if (i == 1)
+        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
+      Assertions.assertThrows(WriteTranscationError.class, () -> {
+        try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+          List<Entity> entities = new ArrayList<>();
+          Entity random = generateEntity("same", 1, null);
+          entities.add(random);
+          String xact = writer.startTransaction();
+          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
+          writer.commit(xact, TENANT, TABLE);
+          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
+          writer.commit(xact, TENANT, TABLE);
+        } finally {
+          removeDirectory(testDirectory);
+        }
+      });
+    }
   }
-  
+
   @Test
   public void burstCheck() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
     int numShards = 10;
     int numEntities = 1000;
     Row[] rows = new Row[] {texasVuln, caliVuln};
+    for (int ii = 0; ii < 2; ii++) {
+      if (ii == 1)
+        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
+      for (Compression compression : Compression.values()) {
     try {
       // Test with 10 shards
       FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
@@ -544,5 +579,7 @@ public class FileStoreV2Test {
     } finally {
       removeDirectory(testDirectory);
     }
+  }
+}
   }
 }
