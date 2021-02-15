@@ -349,7 +349,7 @@ public class FileStoreV2Test {
         RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
       for (Compression compression : Compression.values()) {
         int numTries = RANDOM.nextInt(50);
-        try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
           for (int i = 0; i < numTries; i++) {
             String xact = writer.startTransaction();
             int randomRows = RANDOM.nextInt(5000);
@@ -460,20 +460,22 @@ public class FileStoreV2Test {
     for (int i = 0; i < 2; i++) {
       if (i == 1)
         RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
-      Assertions.assertThrows(WriteTranscationError.class, () -> {
-        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
-          List<Entity> entities = new ArrayList<>();
-          Entity random = generateEntity("same", 1, null);
-          entities.add(random);
-          String xact = writer.startTransaction();
-          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
-          writer.commit(xact, TENANT, TABLE);
-          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
-          writer.commit(xact, TENANT, TABLE);
-        } finally {
-          removeDirectory(testDirectory);
-        }
-      });
+      for (Compression compression : Compression.values()) {
+        Assertions.assertThrows(WriteTranscationError.class, () -> {
+          try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
+            List<Entity> entities = new ArrayList<>();
+            Entity random = generateEntity("same", 1, null);
+            entities.add(random);
+            String xact = writer.startTransaction();
+            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
+            writer.commit(xact, TENANT, TABLE);
+            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
+            writer.commit(xact, TENANT, TABLE);
+          } finally {
+            removeDirectory(testDirectory);
+          }
+        });
+      }
     }
   }
 
