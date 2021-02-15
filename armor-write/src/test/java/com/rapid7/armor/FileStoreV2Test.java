@@ -286,7 +286,7 @@ public class FileStoreV2Test {
       if (i == 1)
         RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
       for (Compression compression : Compression.values()) {
-        try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10)) {
+        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10)) {
           String xact = writer.startTransaction();
           writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e1));
           new Thread(new Runnable() {
@@ -315,7 +315,7 @@ public class FileStoreV2Test {
       if (i == 1)
         RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
       for (Compression compression : Compression.values()) {
-        try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10)) {
+        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10)) {
           String xact = writer.startTransaction();
           List<Entity> entities1 = new ArrayList<>();
           Entity entity1 = generateEntity("firstEntity", 1, rows2);
@@ -375,7 +375,7 @@ public class FileStoreV2Test {
       if (ii == 1)
         RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
       for (Compression compression : Compression.values()) {
-        try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
           String xact = writer.startTransaction();
           List<Entity> entities4 = new ArrayList<>();
           for (int i = 0; i < 1000; i++) {
@@ -461,7 +461,7 @@ public class FileStoreV2Test {
       if (i == 1)
         RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
       Assertions.assertThrows(WriteTranscationError.class, () -> {
-        try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
           List<Entity> entities = new ArrayList<>();
           Entity random = generateEntity("same", 1, null);
           entities.add(random);
@@ -491,7 +491,7 @@ public class FileStoreV2Test {
           // Test with 10 shards
           FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
 
-          ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, numShards, null, null);
+          ArmorWriter writer = new ArmorWriter("aw1", store, compression, numShards, null, null);
           String xact = writer.startTransaction();
           List<Entity> entities = new ArrayList<>();
           for (int i = 0; i < 1000; i++) {
