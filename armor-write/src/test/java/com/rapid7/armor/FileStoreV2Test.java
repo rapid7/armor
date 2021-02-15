@@ -13,8 +13,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -482,6 +489,48 @@ public class FileStoreV2Test {
           }
         });
       }
+    }
+  }
+ 
+  // Write 10 times over the same entity over many threads. The end result should be the highest version entity is stored with no errors.
+  // Should prove this writer is thread safe.
+  @Test
+  public void threadSafety() throws IOException, InterruptedException, ExecutionException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    ModShardStrategy shardStrategy = new ModShardStrategy(10);
+    FileWriteStore store = new FileWriteStore(testDirectory, shardStrategy);
+    Row[] rows = new Row[] {texasVuln, caliVuln};
+    long highestVersion = -1;
+    Executor threadPool = Executors.newFixedThreadPool(100);
+    CompletionService<Void> completionService = new ExecutorCompletionService<>(threadPool);
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+      String xact = writer.startTransaction();
+      for (int i = 0; i < 100; i++) {
+        int randomVersion = RANDOM.nextInt(100);
+        if (randomVersion > highestVersion)
+          highestVersion = randomVersion;
+        completionService.submit(new Callable<Void>() {
+          @Override
+          public Void call() {
+            Entity random = generateEntity("thread", randomVersion, rows);
+            List<Entity> entities = new ArrayList<>();
+            entities.add(random);
+            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
+            return null;
+          }
+        });
+      }
+      for (int i = 0; i < 100; i++) {
+        completionService.take().get();
+      }
+      writer.commit(xact, TENANT, TABLE);
+      int shardNum = shardStrategy.shardNum("thread");
+      Map<Integer, EntityRecord> records = writer.columnEntityRecords(TENANT, TABLE, MAX_INTERVAL, Instant.now(), "vuln", shardNum);
+      // Only one so just get the record.
+      EntityRecord er = records.values().iterator().next();
+      assertEquals(highestVersion, er.getVersion());
+      Entity expected = generateEntity("thread", highestVersion, rows);
+      verifyEntityReaderPOV(expected, testDirectory);
     }
   }
 

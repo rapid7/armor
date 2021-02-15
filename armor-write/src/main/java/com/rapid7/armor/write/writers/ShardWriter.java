@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -38,7 +39,7 @@ import org.slf4j.LoggerFactory;
 public class ShardWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShardWriter.class);
 
-  private Map<ColumnShardId, ColumnFileWriter> columnFileWriters = new HashMap<>();
+  private Map<ColumnShardId, ColumnFileWriter> columnFileWriters = new ConcurrentHashMap<>();
   private final WriteStore store;
   private final ShardId shardId;
   private final BiPredicate<ShardId, String> captureWrite;
