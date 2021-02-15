@@ -2,6 +2,7 @@ package com.rapid7.armor.write.component;
 
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.io.FixedCapacityByteBufferPool;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ColumnShardId;
@@ -35,6 +36,18 @@ public class RowGroupWriter extends FileComponent {
   private final DictionaryWriter dictionaryWriter;
   private final DataType dataType;
   private final static String ROWGROUP_COMPACTION_SUFFIX = "_rowgroup_compaction-";
+  private final static int DEFAULT_BYTEBUFFER_SIZE = 128000;
+  private static FixedCapacityByteBufferPool BYTE_BUFFER_POOL = new FixedCapacityByteBufferPool(DEFAULT_BYTEBUFFER_SIZE);
+
+  /**
+   * Readjusts the fixed capacity size, this is to be primarily used for testing.
+   *
+   * @param fixedSize The size in bytes to setup the bytebuffer pool.
+   */
+  public static void setupFixedCapacityBufferPoolSize(int fixedSize) {
+    BYTE_BUFFER_POOL = new FixedCapacityByteBufferPool(fixedSize);
+  }
+
   public RowGroupWriter(Path path, ColumnShardId columnShardId, DictionaryWriter dictionary) {
     super(path);
     this.dictionaryWriter = dictionary;
@@ -54,17 +67,16 @@ public class RowGroupWriter extends FileComponent {
    */
   public void customExtractValues(EntityRecord er, Consumer<List<Object>> consumer) throws IOException {
     long previousPosition = position();
-    int currentAlloc = 4096;
-    ByteBuffer valBuf = ByteBuffer.allocate(currentAlloc);
-    int nilByteAlloc = 4096;
-    ByteBuffer nilBuf = ByteBuffer.allocate(nilByteAlloc);
+    ByteBuffer valBorrow = BYTE_BUFFER_POOL.get();
+    ByteBuffer nilBorrow = BYTE_BUFFER_POOL.get();
     try {
+      ByteBuffer valBuf = valBorrow;
+      ByteBuffer nilBuf = nilBorrow;
       int offset = er.getRowGroupOffset();
       position(offset);
       int valueLength = er.getValueLength();
-      if (valueLength > currentAlloc) {
+      if (valueLength > valBuf.capacity()) {
         valBuf = ByteBuffer.allocate(valueLength);
-        currentAlloc = valueLength;
       } else {
         valBuf.clear();
         valBuf.limit(valueLength);
@@ -73,9 +85,8 @@ public class RowGroupWriter extends FileComponent {
       int nullLength = er.getNullLength();
       final RoaringBitmap nilRb;
       if (nullLength > 0) {
-        if (nullLength > nilByteAlloc) {
+        if (nullLength > nilBuf.capacity()) {
           nilBuf = ByteBuffer.allocate(nullLength);
-          nilByteAlloc = nullLength;
         } else {
           nilBuf.clear();
           nilBuf.limit(nullLength);
@@ -89,6 +100,8 @@ public class RowGroupWriter extends FileComponent {
       List<Object> values = dataType.traverseByteBufferToList(valBuf, er.getValueLength());
       consumer.accept(Arrays.asList(er, values, nilRb));
     } finally {
+      BYTE_BUFFER_POOL.release(valBorrow);
+      BYTE_BUFFER_POOL.release(nilBorrow);
       position(previousPosition);
     }
   }
@@ -101,21 +114,21 @@ public class RowGroupWriter extends FileComponent {
    */
   public void customTraverseThoughValues(List<EntityRecord> records, Consumer<List<Object>> consumer) throws IOException {
     long previousPosition = position();
-    int currentAlloc = 4096;
-    ByteBuffer valBuf = ByteBuffer.allocate(currentAlloc);
-    int nilByteAlloc = 4096;
-    ByteBuffer nilBuf = ByteBuffer.allocate(nilByteAlloc);
     int current = 0;
+    ByteBuffer valBorrow = BYTE_BUFFER_POOL.get();
+    ByteBuffer nilBorrow = BYTE_BUFFER_POOL.get();
     try {
+      ByteBuffer valBuf = valBorrow;
+      ByteBuffer nilBuf = nilBorrow;
+
       for (EntityRecord er : records) {
         int offset = er.getRowGroupOffset();
         if (current < offset)
           consumer.accept(Arrays.asList(true, current, offset));
         position(offset);
         int valueLength = er.getValueLength();
-        if (valueLength > currentAlloc) {
+        if (valueLength > valBuf.capacity()) {
           valBuf = ByteBuffer.allocate(valueLength);
-          currentAlloc = valueLength;
         } else {
           valBuf.clear();
           valBuf.limit(valueLength);
@@ -126,9 +139,8 @@ public class RowGroupWriter extends FileComponent {
         int nullLength = er.getNullLength();
         final RoaringBitmap nilRb;
         if (nullLength > 0) {
-          if (nullLength > nilByteAlloc) {
+          if (nullLength > nilBuf.capacity()) {
             nilBuf = ByteBuffer.allocate(nullLength);
-            nilByteAlloc = nullLength;
           } else {
             nilBuf.clear();
             nilBuf.limit(nullLength);
@@ -145,6 +157,8 @@ public class RowGroupWriter extends FileComponent {
         consumer.accept(Arrays.asList(false, er, values, nilRb));
       }
     } finally {
+      BYTE_BUFFER_POOL.release(valBorrow);
+      BYTE_BUFFER_POOL.release(nilBorrow);
       position(previousPosition);
     }
   }
@@ -160,13 +174,13 @@ public class RowGroupWriter extends FileComponent {
     Double prevMax = metadata.getMaxValue();
     Double prevMin = metadata.getMinValue();
 
-    int currentAlloc = 4096;
-    ByteBuffer valBuf = ByteBuffer.allocate(currentAlloc);
-    int nilByteAlloc = 4096;
-    ByteBuffer nilBuf = ByteBuffer.allocate(nilByteAlloc);
     Set<Object> cardinality = new HashSet<>();
     boolean success = false;
+    ByteBuffer valBorrow = BYTE_BUFFER_POOL.get();
+    ByteBuffer nilBorrow = BYTE_BUFFER_POOL.get();
     try {
+      ByteBuffer valBuf = valBorrow;
+      ByteBuffer nilBuf = nilBorrow;
       metadata.resetMinMax();
       for (EntityRecord eir : records) {
         if (eir.getDeleted() == 1)
@@ -174,9 +188,8 @@ public class RowGroupWriter extends FileComponent {
         int offset = eir.getRowGroupOffset();
         position(offset);
         int valueLength = eir.getValueLength();
-        if (valueLength > currentAlloc) {
+        if (valueLength > valBuf.capacity()) {
           valBuf = ByteBuffer.allocate(valueLength);
-          currentAlloc = valueLength;
         } else {
           valBuf.clear();
           valBuf.limit(valueLength);
@@ -186,9 +199,8 @@ public class RowGroupWriter extends FileComponent {
         int nullLength = eir.getNullLength();
         final RoaringBitmap nilRb;
         if (nullLength > 0) {
-          if (nullLength > nilByteAlloc) {
+          if (nullLength > nilBuf.capacity()) {
             nilBuf = ByteBuffer.allocate(nullLength);
-            nilByteAlloc = nullLength;
           } else {
             nilBuf.clear();
             nilBuf.limit(nullLength);
@@ -210,6 +222,8 @@ public class RowGroupWriter extends FileComponent {
       metadata.setCardinality(cardinality.size());
       success = true;
     } finally {
+      BYTE_BUFFER_POOL.release(valBorrow);
+      BYTE_BUFFER_POOL.release(nilBorrow);
       if (!success) {
         metadata.setMaxValue(prevMax);
         metadata.setMinValue(prevMin);
@@ -228,8 +242,14 @@ public class RowGroupWriter extends FileComponent {
     int totalRequiredBytes = dataType.determineByteLength(totalNumRows) * 2; // Start off by doubling the bytebuffer alloc.
     long beforeAppendPosition = position();
     boolean reallocaed = false;
+    ByteBuffer outBorrow = BYTE_BUFFER_POOL.get();
     try {
-      ByteBuffer output = ByteBuffer.allocate(totalRequiredBytes);
+      ByteBuffer output = null;
+      if (outBorrow.capacity() < totalRequiredBytes)
+        output = ByteBuffer.allocate(totalRequiredBytes);
+      else {
+        output = outBorrow;
+      }
       List<RgOffsetWriteResult> positions = new ArrayList<>();
       RgOffsetWriteResult previous = null;
       for (Object[] values : valueArray) {
@@ -238,10 +258,11 @@ public class RowGroupWriter extends FileComponent {
           if (previous.valueLength > 0) {
             long testPosition = beforeAppendPosition + output.position();
             if (testPosition <= previous.rowGroupOffset) {
+              // If it falls into this error here, then we have an offset error. Print out the information for debugging.
               LOGGER.error("Preiouvs offset is {}", offsetResult);
               LOGGER.error("Before possition {}", beforeAppendPosition);
               LOGGER.error("Output position {}", output.position());
-              LOGGER.error("Reallocat {}", reallocaed);
+              LOGGER.error("Reallocated {}", reallocaed);
               throw new RuntimeException("ERROR!!!!!!");
             }
           }
@@ -308,11 +329,13 @@ public class RowGroupWriter extends FileComponent {
         positions.add(offsetResult);
       }
       output.flip();
-      write(output); // NOTE: This approach has a max of Integer.MAX bytes due to bytebuffer limitation.
+      int written = write(output); // NOTE: This approach has a max of Integer.MAX bytes due to bytebuffer limitation.
       return positions;
     } catch (OutOfMemoryError e) {
       LOGGER.error("Unable to allocate {} bytes", totalRequiredBytes);
       throw e;
+    } finally {
+      BYTE_BUFFER_POOL.release(outBorrow);
     }
   }
 
