@@ -438,15 +438,19 @@ public class FileStoreV2Test {
 
   @Test
   public void deleteOnly() throws IOException {
-    Path testDirectory = Files.createTempDirectory("filestore");
     for (int ii = 0; ii < 2; ii++) {
       if (ii == 1)
         RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
-      FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
-      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
-        String xact = writer.startTransaction();
-        for (int i = 0; i < 1000; i++) {
-          writer.delete(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, i, 100, null);
+      for (Compression compression : Compression.values()) {
+        Path testDirectory = Files.createTempDirectory("filestore");
+        FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
+          String xact = writer.startTransaction();
+          for (int i = 0; i < 1000; i++) {
+            writer.delete(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, i, 100, null);
+          }
+        } finally {
+          removeDirectory(testDirectory);
         }
       }
     }

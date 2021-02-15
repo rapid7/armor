@@ -174,7 +174,7 @@ public class S3StoreTest {
         RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
       for (Compression compression : Compression.values()) {
         S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
-        try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, Compression.NONE, 10, () -> 1, null)) {
+        try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, compression, 10, () -> 1, null)) {
           String transaction = armorWriter.startTransaction();
           Entity e11 = Entity.buildEntity("asset", 1, 1, null, name, time, vuln);
           e11.addRows(
@@ -315,7 +315,7 @@ public class S3StoreTest {
           e32.addRow("1", null, -1);
           e32.addRow(null, null, null);
 
-          ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, Compression.NONE, 10, () -> 1, null);
+          ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, compression, 10, () -> 1, null);
           Map<Integer, EntityRecord> records5a = amrorWriter2.columnEntityRecords(myorg, table, MAX_INTERVAL, Instant.now(), "vuln", 0);
 
           amrorWriter2.write(transaction, myorg, table, MAX_INTERVAL, Instant.now(), Collections.singletonList(e32));
