@@ -449,6 +449,8 @@ public class FileStoreV2Test {
           for (int i = 0; i < 1000; i++) {
             writer.delete(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, i, 100, null);
           }
+          writer.commit(xact, TENANT, TABLE);
+          verifyTableReaderPOV(0, testDirectory, 0);
         } finally {
           removeDirectory(testDirectory);
         }
@@ -526,7 +528,7 @@ public class FileStoreV2Test {
           verifyEntityDeletedReaderPOV(entities.get(random), testDirectory);
 
           // Add it back
-          writer = new ArmorWriter("aw1", store, Compression.ZSTD, numShards, null, null);
+          writer = new ArmorWriter("aw1", store, compression, numShards, null, null);
           xact = writer.startTransaction();      
           writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities);
           writer.commit(xact, TENANT, TABLE);
@@ -556,7 +558,7 @@ public class FileStoreV2Test {
           writer.close();
 
           // Finally lets add more entites to the table in 2 valid batch before we save and finish this test.
-          writer = new ArmorWriter("aw1", store, Compression.ZSTD, numShards, null, null);
+          writer = new ArmorWriter("aw1", store, compression, numShards, null, null);
           xact = writer.startTransaction();      
           List<Entity> entities2 = new ArrayList<>();
           for (int i = 2000; i < 3000; i++) {
