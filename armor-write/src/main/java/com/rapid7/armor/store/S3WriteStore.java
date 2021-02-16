@@ -1,8 +1,10 @@
 package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
+import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.interval.Interval;
+import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
@@ -436,6 +438,28 @@ public class S3WriteStore implements WriteStore {
       LOGGER.warn("Unable completely remove tenant {}", tenant, e);
       throw e;
     }    
+  }
+
+  @Override
+  public ColumnMetadata columnMetadata(String tenant, String table, ColumnShardId columnShardId) {
+    String shardIdPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getInterval(), columnShardId.getIntervalStart(), columnShardId.getShardNum()) + "/" + columnShardId.getColumnId().fullName();
+    try {
+      if (!s3Client.doesObjectExist(bucket, shardIdPath)) {
+        return null;
+      } else {
+        try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputSTream = s3Object.getObjectContent()) {
+          try {
+            ColumnFileReader reader = new ColumnFileReader();
+            reader.read(new DataInputStream(s3Object.getObjectContent()), null);
+            return reader.getColumnMetadata();
+          } finally {
+            com.amazonaws.util.IOUtils.drainInputStream(s3ObjectInputSTream);
+          }
+        }
+      }
+    } catch (IOException ioe) {
+      throw new RuntimeException(ioe);
+    }
   }
 
   private String getIntervalPrefix(ShardId shardId) {
