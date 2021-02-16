@@ -526,7 +526,7 @@ public class FileStoreV2Test {
       }
       writer.commit(xact, TENANT, TABLE);
       int shardNum = shardStrategy.shardNum("thread");
-      Map<Integer, EntityRecord> records = writer.columnEntityRecords(TENANT, TABLE, MAX_INTERVAL, Instant.now(), "vuln", shardNum);
+      Map<Integer, EntityRecord> records = writer.columnEntityRecords(TENANT, TABLE, SINGLE, Instant.now(), "vuln", shardNum);
       // Only one so just get the record.
       EntityRecord er = records.values().iterator().next();
       assertEquals(highestVersion, er.getVersion());
