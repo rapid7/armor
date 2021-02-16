@@ -35,9 +35,18 @@ public class FastArmorReader extends BaseArmorReader {
       int numRows = metadata.getColumnMetadata().get(0).getNumRows();
       // If its null, then we assume the column does exist but perhaps another shard has that column, in that case we should return
       // a block of null values.
-      NullArmorBlockReader nabr = new NullArmorBlockReader(numRows);      
-      return nabr;
+      return new NullArmorBlockReader(numRows);
     }
     return armorShard.getFastArmorColumnReader();
+  }
+
+  public FastArmorBlockReader getFixedValueColumn(String tenant, String table, Interval interval, Instant timestamp, int shardNum, Object fixedValue) throws IOException {
+    ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
+    if (shardId == null)
+      return null;
+    ShardMetadata metadata = store.getShardMetadata(tenant, table, interval, timestamp, shardNum);
+    int numRows = metadata.getColumnMetadata().get(0).getNumRows();
+
+    return new FixedValueArmorBlockReader(fixedValue, numRows);
   }
 }

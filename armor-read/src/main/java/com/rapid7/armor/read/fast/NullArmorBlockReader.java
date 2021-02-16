@@ -1,7 +1,5 @@
 package com.rapid7.armor.read.fast;
 
-import com.rapid7.armor.schema.DataType;
-
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 
@@ -21,7 +19,7 @@ public class NullArmorBlockReader extends FastArmorBlockReader {
       return new FastArmorBlock(new long[0], null, 0, batchNum);
     }
     
-    int end = (rowCounterIndex + batchRows) > this.numRows ? this.numRows : rowCounterIndex + batchRows;
+    int end = Math.min((rowCounterIndex + batchRows), this.numRows);
     int allocate = end - rowCounterIndex;
     
     long[] values = new long[allocate];
@@ -39,7 +37,7 @@ public class NullArmorBlockReader extends FastArmorBlockReader {
       return new FastArmorBlock(new long[0], null, 0, batchNum);
     }
     
-    int end = (rowCounterIndex + batchRows) > this.numRows ? this.numRows : rowCounterIndex + batchRows;
+    int end = Math.min((rowCounterIndex + batchRows), this.numRows);
     int allocate = end - rowCounterIndex;
     
     int[] values = new int[allocate];
@@ -58,7 +56,7 @@ public class NullArmorBlockReader extends FastArmorBlockReader {
     }
     Slice slice = Slices.allocate(0);
     
-    int end = (rowCounterIndex + batchRows) > this.numRows ? this.numRows : rowCounterIndex + batchRows;
+    int end = Math.min((rowCounterIndex + batchRows), this.numRows);
     int allocate = end - rowCounterIndex;
     
     int[] sliceOffsets = new int[allocate];
