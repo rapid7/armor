@@ -46,15 +46,17 @@ public class ArmorSplitter {
     
     for (Path p : findAllFiles(path)) {
       ColumnId columnId = null;
+      ShardId shardId = null;
       try {
-        columnId = new ColumnId(p.getFileName().toString());
+        columnId = new ColumnId(p);
+        shardId = new ShardId(p);
       } catch (Exception e) {
         // No valid so just skip.
         continue;
       }
       ObjectMapper om = new ObjectMapper();
       try (ColumnFileWriter writer = 
-          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnId))) {
+          new ColumnFileWriter(new DataInputStream(Files.newInputStream(p, StandardOpenOption.READ)), new ColumnShardId(shardId, columnId))) {
         writer.getRowGroupWriter();
         writer.getMetadata();
         writer.getEntityRecordWriter();

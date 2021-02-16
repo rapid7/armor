@@ -57,14 +57,20 @@ public class ArmorAnalyzer {
       
       for (Path columnFile : listFiles(path)) {
         ColumnId columnId = null;
+        ShardId shardId = null;
         try {
-          columnId = new ColumnId(columnFile.getFileName().toString());
+          columnId = new ColumnId(columnFile);
+          shardId = new ShardId(columnFile);
         } catch (Exception e) {
           continue;
           // Just skip
         }
-        try (ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(Files.newInputStream(columnFile, StandardOpenOption.READ)),
-            new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnId))) {
+        try (
+            ColumnFileWriter writer = new ColumnFileWriter(
+                new DataInputStream(Files.newInputStream(columnFile, StandardOpenOption.READ)),
+                new ColumnShardId(shardId, columnId)
+            )
+        ) {
           ObjectMapper objectMapper = new ObjectMapper();
           Files.copy(
               new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getMetadata())),

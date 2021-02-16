@@ -83,15 +83,17 @@ public class ArmorEntityAnalyzer {
     
     for (Path c : findAllFiles(path)) {
       ColumnId columnId = null;
+      ShardId shardId = null;
       try {
-        columnId = new ColumnId(c.getFileName().toString());
+        columnId = new ColumnId(c);
+        shardId = new ShardId(c);
       } catch (Exception e) {
         // No valid so just skip.
         continue;
       }
       ObjectMapper om = new ObjectMapper();
       try (ColumnFileWriter writer = 
-          new ColumnFileWriter(new DataInputStream(Files.newInputStream(c, StandardOpenOption.READ)), new ColumnShardId(new ShardId(1, "dummy", "dummy"), columnId))) {
+          new ColumnFileWriter(new DataInputStream(Files.newInputStream(c, StandardOpenOption.READ)), new ColumnShardId(shardId, columnId))) {
         DictionaryWriter dw = writer.getEntityDictionary();
         if (dw == null) {
           if (isNumeric) {
