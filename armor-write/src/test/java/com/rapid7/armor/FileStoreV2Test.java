@@ -555,9 +555,68 @@ public class FileStoreV2Test {
   
   
   @Test
-  public void mixCompression() {
+  public void mixCompression() throws IOException {
     // Ensure shards with different compression methods can still be read
     // with no problem.
+    Path testDirectory = Files.createTempDirectory("filestore");
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    // Shard 1
+    Entity entity1 =  generateEntity(1, 1, null);
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.NONE, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      entities.add(entity1);
+      writer.write(xact, TENANT, TABLE, entities);
+      writer.commit(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(1, testDirectory, 1);
+      verifyEntityReaderPOV(entity1, testDirectory);
+    }
+    
+    Entity entity2 =  generateEntity(2, 2, null);
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      entities.add(entity2);
+      writer.write(xact, TENANT, TABLE, entities);
+      writer.commit(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(2, testDirectory, 2);
+      verifyEntityReaderPOV(entity1, testDirectory);
+      verifyEntityReaderPOV(entity2, testDirectory);
+
+    }
+    
+    Entity entity3 =  generateEntity(3, 3, null);
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.NONE, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      entities.add(entity1);
+      entities.add(entity2);
+      entities.add(entity3);
+      writer.write(xact, TENANT, TABLE, entities);
+      writer.commit(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(3, testDirectory, 3);
+      verifyEntityReaderPOV(entity1, testDirectory);
+      verifyEntityReaderPOV(entity2, testDirectory);
+      verifyEntityReaderPOV(entity3, testDirectory);
+    }
+    
+    Entity entity4 =  generateEntity(4, 4, null);
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      entities.add(entity4);
+      writer.write(xact, TENANT, TABLE, entities);
+      writer.commit(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(4, testDirectory, 4);
+      verifyEntityReaderPOV(entity1, testDirectory);
+      verifyEntityReaderPOV(entity2, testDirectory);
+      verifyEntityReaderPOV(entity3, testDirectory);
+      verifyEntityReaderPOV(entity4, testDirectory);
+    }
   }
 
   @Test
