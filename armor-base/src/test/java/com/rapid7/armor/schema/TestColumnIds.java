@@ -11,12 +11,12 @@ public class TestColumnIds {
     assertEquals("asset", cn.getName());
     assertEquals("I", cn.getType());
     
-    ColumnId cn1 = new ColumnId("asset_I_A");
-    assertEquals("asset", cn1.getName());
+    ColumnId cn1 = new ColumnId("asset_A_I");
+    assertEquals("asset_A", cn1.getName());
     assertEquals("I", cn1.getType());
     
     ColumnId cn3 = new ColumnId("asset_I_A88888_333_asset_S");
-    assertEquals("asset", cn3.getName());
-    assertEquals("I", cn3.getType());
+    assertEquals("asset_I_A88888_333_asset", cn3.getName());
+    assertEquals("S", cn3.getType());
   }
 }

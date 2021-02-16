@@ -12,10 +12,9 @@ public class ColumnId {
   }
 
   public ColumnId(String fullName) {
-    String[] parts = fullName.split(SEPERATOR);
-    this.name = parts[0];
-    DataType dt = DataType.getDataType(parts[parts.length - 1]);
-    this.type = dt.getCode();  
+    int lastUnderscore = fullName.lastIndexOf(SEPERATOR);
+    this.name = fullName.substring(0, lastUnderscore);
+    this.type = DataType.getDataType(fullName.substring(lastUnderscore + 1)).getCode();
   }
 
   public ColumnId(String name, String type) {
