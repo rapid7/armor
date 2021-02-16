@@ -2,6 +2,7 @@ package com.rapid7.armor.read.fast;
 
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
+import java.util.Arrays;
 
 /**
  * A null based armor block reader. This is used to return only null values for a column. This
@@ -28,6 +29,9 @@ public class NullArmorBlockReader extends FastArmorBlockReader {
     rowCounterIndex += allocate;
     if (rowCounterIndex >= this.numRows)
       hasNext = false;
+
+    Arrays.fill(valueIsNull, true);
+
     return new FastArmorBlock(values, valueIsNull, allocate, batchNum);
   }
   
@@ -46,6 +50,9 @@ public class NullArmorBlockReader extends FastArmorBlockReader {
     rowCounterIndex += allocate;
     if (rowCounterIndex >= this.numRows)
       hasNext = false;
+
+    Arrays.fill(valueIsNull, true);
+
     return new FastArmorBlock(values, valueIsNull, allocate, batchNum);
   }
   
@@ -59,11 +66,14 @@ public class NullArmorBlockReader extends FastArmorBlockReader {
     int end = Math.min((rowCounterIndex + batchRows), this.numRows);
     int allocate = end - rowCounterIndex;
     
-    int[] sliceOffsets = new int[allocate];
+    int[] sliceOffsets = new int[allocate + 1];
     boolean[] valueIsNull = new boolean[allocate];
     rowCounterIndex += allocate;
     if (rowCounterIndex >= this.numRows)
       hasNext = false;
+
+    Arrays.fill(valueIsNull, true);
+
     return new FastArmorBlock(slice, sliceOffsets, valueIsNull, allocate, batchNum);
   }
 

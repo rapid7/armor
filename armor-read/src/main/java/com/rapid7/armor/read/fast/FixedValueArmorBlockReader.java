@@ -41,7 +41,7 @@ public class FixedValueArmorBlockReader extends FastArmorBlockReader {
     int end = Math.min((rowCounterIndex + batchRows), this.numRows);
     int allocate = end - rowCounterIndex;
 
-    int[] sliceOffsets = new int[allocate];
+    int[] sliceOffsets = new int[allocate + 1];
     boolean[] valueIsNull = new boolean[allocate];
     rowCounterIndex += allocate;
     if (rowCounterIndex >= this.numRows)
@@ -57,6 +57,7 @@ public class FixedValueArmorBlockReader extends FastArmorBlockReader {
       sliceOffsets[i] = i * fixedValuedLength;
       slice.setBytes(sliceOffsets[i], fixedValueBytes);
     }
+    sliceOffsets[allocate] = allocate * fixedValuedLength;
 
     return new FastArmorBlock(slice, sliceOffsets, valueIsNull, allocate, batchNum);
   }
