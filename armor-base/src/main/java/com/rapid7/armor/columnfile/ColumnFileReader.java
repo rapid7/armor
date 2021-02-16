@@ -42,8 +42,11 @@ public class ColumnFileReader {
     // Load entity dictionary
     int entityDictCompressed = dataInputStream.readInt();
     int entityDictOriginal = dataInputStream.readInt();
-    int readBytes = listener.columnFileSection(
-       ColumnFileSection.ENTITY_DICTIONARY, metadata, dataInputStream, entityDictCompressed, entityDictOriginal);
+    int readBytes = 0;
+    if (listener != null) {
+      readBytes = listener.columnFileSection(
+         ColumnFileSection.ENTITY_DICTIONARY, metadata, dataInputStream, entityDictCompressed, entityDictOriginal);
+    }
     int shouldHaveRead = shouldHaveRead(entityDictCompressed, entityDictOriginal);
     if (readBytes < shouldHaveRead) {
        int remainingBytes = shouldHaveRead - readBytes;
@@ -51,7 +54,9 @@ public class ColumnFileReader {
     }
     int valueDictCompressed = dataInputStream.readInt();
     int valueDictOriginal = dataInputStream.readInt();
-    readBytes = listener.columnFileSection(ColumnFileSection.VALUE_DICTIONARY, metadata, dataInputStream, valueDictCompressed, valueDictOriginal);
+    if (listener != null) {
+      readBytes = listener.columnFileSection(ColumnFileSection.VALUE_DICTIONARY, metadata, dataInputStream, valueDictCompressed, valueDictOriginal);
+    }
     shouldHaveRead = shouldHaveRead(valueDictCompressed, valueDictOriginal);
     if (readBytes < shouldHaveRead) {
       int remainingBytes = shouldHaveRead - readBytes;
@@ -59,7 +64,9 @@ public class ColumnFileReader {
     }
     int eiCompressed = dataInputStream.readInt();
     int eiOriginal = dataInputStream.readInt();
-    readBytes = listener.columnFileSection(ColumnFileSection.ENTITY_INDEX, metadata, dataInputStream, eiCompressed, eiOriginal);
+    if (listener != null) {
+      readBytes = listener.columnFileSection(ColumnFileSection.ENTITY_INDEX, metadata, dataInputStream, eiCompressed, eiOriginal);
+    }
     shouldHaveRead = shouldHaveRead(eiCompressed, eiOriginal);
     if (readBytes < shouldHaveRead) {
       int remainingBytes = shouldHaveRead - readBytes;
@@ -67,7 +74,9 @@ public class ColumnFileReader {
     }
     int rgCompressed = dataInputStream.readInt();
     int rgOriginal = dataInputStream.readInt();
-    readBytes = listener.columnFileSection(ColumnFileSection.ROWGROUP, metadata, dataInputStream, rgCompressed, rgOriginal);
+    if (listener != null) {
+      readBytes = listener.columnFileSection(ColumnFileSection.ROWGROUP, metadata, dataInputStream, rgCompressed, rgOriginal);
+    }
     shouldHaveRead = shouldHaveRead(rgCompressed, rgOriginal);
     if (readBytes < shouldHaveRead) {
       int remainingBytes = shouldHaveRead - readBytes;

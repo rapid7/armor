@@ -1,6 +1,7 @@
 package com.rapid7.armor.store;
 
 import com.rapid7.armor.entity.Entity;
+import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
@@ -16,6 +17,7 @@ import java.util.Map;
 public interface WriteStore {
   String rootDirectory();
   void deleteTenant(String tenant);
+  ColumnMetadata columnMetadata(String tenant, String table, ColumnShardId columnShard);
 
   // Loading from store
   List<ColumnFileWriter> loadColumnWriters(String tenant, String table, int shardNum);

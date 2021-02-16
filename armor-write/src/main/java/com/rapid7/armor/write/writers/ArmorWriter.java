@@ -118,29 +118,6 @@ public class ArmorWriter implements Closeable {
     }
   }
 
-  /**
-   * Returns the columnMetadata IF it was already loaded. If it hasn't been loaded by the writer, it will
-   * simply return null;
-   * 
-   * @param tenant The tenant.
-   * @param table The table in question.
-   * @param columnId The id of the column.
-   * @param shard The shard number.
-   */
-  public ColumnMetadata columnMetadata(String tenant, String table, String columnId, int shard) {
-    TableId tableId = new TableId(tenant, table);
-    TableWriter tableWriter = tableWriters.get(tableId);
-    if (tableWriter == null) {
-      return null;
-    } else {
-      ShardWriter sw = tableWriter.getShard(shard);
-      if (sw == null)
-        return null;
-      else
-        return sw.getMetadata(columnId);
-    }
-  }
-
   public void close() {
     if (selfPool)
       threadPool.shutdown();

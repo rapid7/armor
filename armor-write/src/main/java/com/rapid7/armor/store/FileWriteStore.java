@@ -1,7 +1,9 @@
 package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
+import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.Entity;
+import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
@@ -377,6 +379,25 @@ public class FileWriteStore implements WriteStore {
           .forEach(File::delete);
     } catch (Exception e) {
       LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+    }
+  }
+
+  @Override
+  public ColumnMetadata columnMetadata(String tenant, String table, ColumnShardId columnShardId) {
+    String currentPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getShardNum());
+    if (currentPath == null)
+      return null;
+    Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnShardId.getColumnId().fullName()));
+    try {
+      if (!Files.exists(shardIdPath)) {
+        return null;
+      } else {
+        ColumnFileReader reader = new ColumnFileReader();
+        reader.read(new DataInputStream(Files.newInputStream(shardIdPath, StandardOpenOption.READ)), null);
+        return reader.getColumnMetadata();
+      }
+    } catch (IOException ioe) {
+      throw new RuntimeException(ioe);
     }
   }
 }

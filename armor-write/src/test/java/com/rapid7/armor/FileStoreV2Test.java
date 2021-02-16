@@ -23,6 +23,7 @@ import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.Row;
 import com.rapid7.armor.io.Compression;
+import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.read.fast.FastArmorBlock;
 import com.rapid7.armor.read.fast.FastArmorBlockReader;
 import com.rapid7.armor.read.fast.FastArmorReader;
@@ -30,6 +31,7 @@ import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorReader;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
+import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.FileReadStore;
@@ -559,9 +561,12 @@ public class FileStoreV2Test {
     // Ensure shards with different compression methods can still be read
     // with no problem.
     Path testDirectory = Files.createTempDirectory("filestore");
+    ModShardStrategy shardStrategy = new ModShardStrategy(10);
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
     // Shard 1
     Entity entity1 =  generateEntity(1, 1, null);
+    int entity1Shard = shardStrategy.shardNum(1);
+    ColumnId testColumn = new ColumnId("vuln", DataType.STRING.getCode());
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.NONE, 10, null, null)) {
       String xact = writer.startTransaction();
       List<Entity> entities = new ArrayList<>();
@@ -571,9 +576,14 @@ public class FileStoreV2Test {
       
       verifyTableReaderPOV(1, testDirectory, 1);
       verifyEntityReaderPOV(entity1, testDirectory);
+      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity1Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
+
     }
     
     Entity entity2 =  generateEntity(2, 2, null);
+    int entity2Shard = shardStrategy.shardNum(2);
+
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
       String xact = writer.startTransaction();
       List<Entity> entities = new ArrayList<>();
@@ -584,15 +594,20 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(2, testDirectory, 2);
       verifyEntityReaderPOV(entity1, testDirectory);
       verifyEntityReaderPOV(entity2, testDirectory);
-
+      
+      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity1Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity2Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.ZSTD.toString(), md.getCompressionAlgorithm());
     }
     
     Entity entity3 =  generateEntity(3, 3, null);
+    int entity3Shard = shardStrategy.shardNum(3);
+
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.NONE, 10, null, null)) {
       String xact = writer.startTransaction();
       List<Entity> entities = new ArrayList<>();
-      entities.add(entity1);
-      entities.add(entity2);
       entities.add(entity3);
       writer.write(xact, TENANT, TABLE, entities);
       writer.commit(xact, TENANT, TABLE);
@@ -601,9 +616,20 @@ public class FileStoreV2Test {
       verifyEntityReaderPOV(entity1, testDirectory);
       verifyEntityReaderPOV(entity2, testDirectory);
       verifyEntityReaderPOV(entity3, testDirectory);
+      
+      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity1Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity2Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.ZSTD.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity3Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
     }
     
     Entity entity4 =  generateEntity(4, 4, null);
+    int entity4Shard = shardStrategy.shardNum(4);
+
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
       String xact = writer.startTransaction();
       List<Entity> entities = new ArrayList<>();
@@ -616,6 +642,60 @@ public class FileStoreV2Test {
       verifyEntityReaderPOV(entity2, testDirectory);
       verifyEntityReaderPOV(entity3, testDirectory);
       verifyEntityReaderPOV(entity4, testDirectory);
+      
+      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity1Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity2Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.ZSTD.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity3Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity4Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.ZSTD.toString(), md.getCompressionAlgorithm());
+    }
+    
+    // Final one change them all to no compression.
+    entity1 =  generateEntity(1, 5, null);
+    entity2 =  generateEntity(2, 5, null);
+    entity3 =  generateEntity(3, 5, null);
+    entity4 =  generateEntity(4, 5, null);
+    Entity entity5 =  generateEntity(5, 5, null);
+    int entity5Shard = shardStrategy.shardNum(5);
+    
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.NONE, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities = new ArrayList<>();
+      entities.add(entity1);
+      entities.add(entity2);
+      entities.add(entity3);
+      entities.add(entity4);
+      entities.add(entity5);
+      writer.write(xact, TENANT, TABLE, entities);
+      writer.commit(xact, TENANT, TABLE);
+      
+      verifyTableReaderPOV(5, testDirectory, 5);
+      verifyEntityReaderPOV(entity1, testDirectory);
+      verifyEntityReaderPOV(entity2, testDirectory);
+      verifyEntityReaderPOV(entity3, testDirectory);
+      verifyEntityReaderPOV(entity4, testDirectory);
+      verifyEntityReaderPOV(entity5, testDirectory);
+
+      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity1Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity2Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity3Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity4Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
+      
+      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(entity5Shard, TENANT, TABLE), testColumn));
+      assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
     }
   }
 
