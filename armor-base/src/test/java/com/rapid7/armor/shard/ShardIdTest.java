@@ -1,6 +1,9 @@
 package com.rapid7.armor.shard;
 
 import com.rapid7.armor.interval.Interval;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -86,5 +89,18 @@ public class ShardIdTest {
     assertEquals(interval.getInterval(), shardId.getInterval());
     assertEquals(interval.getIntervalStart(timestamp), shardId.getIntervalStart());
     assertEquals(expectedShardPath, shardId.getShardId());
+  }
+  
+  @Test
+  public void relativeShardId() {
+    Path root = Paths.get("/a/b");
+    Path columFile = Paths.get("/a/b/tenant/table/interaval/startInterval/0/trans/columnFile");
+    ShardId test = ShardId.parse(columFile, root);
+    assertEquals("tenant", test.getTenant());
+    assertEquals("table", test.getTable());
+    assertEquals("interaval", test.getInterval());
+    assertEquals("startInterval", test.getIntervalStart());
+    assertEquals(0, test.getShardNum());
+
   }
 }

@@ -3,11 +3,15 @@ package com.rapid7.armor.util;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -44,17 +48,19 @@ public class ArmorAnalyzer {
       formatter.printHelp("armor-tools", options );
       return;
     }
-      
+
     CommandLineParser parser = new DefaultParser();
     CommandLine cmd = parser.parse(options, args);
 
     Path path = Paths.get(cmd.getOptionValue("p"));
     Path targetPath = Paths.get(cmd.getOptionValue("d"));
-    if (!Files.isDirectory(targetPath))
+    if (!Files.exists(targetPath))
+      Files.createDirectories(targetPath);
+    else if (Files.exists(targetPath) && !Files.isDirectory(targetPath))
       throw new RuntimeException("Target should be a directory");
+
     String mode = cmd.getOptionValue("m");
     if (mode.equals("write")) {
-      
       for (Path columnFile : listFiles(path)) {
         ColumnId columnId = null;
         ShardId shardId = null;
@@ -62,6 +68,8 @@ public class ArmorAnalyzer {
           columnId = new ColumnId(columnFile);
           shardId = new ShardId(columnFile);
         } catch (Exception e) {
+          e.printStackTrace();
+          System.out.println("The file " + columnFile.toString() + " isn't a column file skipping");
           continue;
           // Just skip
         }
@@ -132,10 +140,30 @@ public class ArmorAnalyzer {
   }
   
   public static Set<Path> listFiles(Path dir) throws IOException {
-    try (Stream<Path> stream = Files.list(dir)) {
-        return stream
-          .filter(file -> !Files.isDirectory(file))
-          .collect(Collectors.toSet());
-    }
+    Set<Path> files = new HashSet<>();
+    Files.walkFileTree(dir, new FileVisitor<Path>() {
+      @Override
+      public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+        return FileVisitResult.CONTINUE;
+      }
+
+      @Override
+      public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+        files.add(file);
+        return FileVisitResult.CONTINUE;
+      }
+
+      @Override
+      public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+        return FileVisitResult.CONTINUE;
+      }
+
+      @Override
+      public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+        return FileVisitResult.CONTINUE;
+      }
+    });
+    System.out.println("Detected " + files.size() + " in the directory, will attempt to load");
+    return files;
   }
 }

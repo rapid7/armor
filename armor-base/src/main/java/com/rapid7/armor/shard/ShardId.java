@@ -20,11 +20,15 @@ public class ShardId {
   }
 
   public ShardId(Path columnFile) {
-    this.tenant = columnFile.getParent().getParent().getParent().getParent().getParent().getFileName().toString();
-    this.table = columnFile.getParent().getParent().getParent().getParent().getFileName().toString();
-    this.interval = columnFile.getParent().getParent().getParent().getFileName().toString();
-    this.intervalStart = columnFile.getParent().getParent().getFileName().toString();
-    this.shardNum = Integer.parseInt(columnFile.getParent().getFileName().toString());
+    this.tenant = columnFile.getParent().getParent().getParent().getParent().getParent().getParent().getFileName().toString();
+    this.table = columnFile.getParent().getParent().getParent().getParent().getParent().getFileName().toString();
+    this.interval = columnFile.getParent().getParent().getParent().getParent().getFileName().toString();
+    this.intervalStart = columnFile.getParent().getParent().getParent().getFileName().toString();
+    this.shardNum = Integer.parseInt(columnFile.getParent().getParent().getFileName().toString());
+  }
+  
+  public static ShardId parse(Path columFile, Path base) {
+    return new ShardId(base.relativize(columFile));
   }
 
   public String getTable() {
