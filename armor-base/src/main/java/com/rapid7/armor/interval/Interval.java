@@ -27,6 +27,10 @@ public enum Interval {
     return intervalStrategy.getIntervalStart(timestamp);
   }
 
+  public String getIntervalStart(Instant timestamp, int offset) {
+    return intervalStrategy.getIntervalStart(timestamp, offset);
+  }
+
   public static Interval toInterval(String interval) {
     for (Interval value : REGISTERED_INTERVALS) {
       if (value.intervalStrategy.supports(interval)) {

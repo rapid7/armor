@@ -24,7 +24,6 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -34,8 +33,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 public class FileWriteStore implements WriteStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileWriteStore.class);
@@ -103,7 +105,7 @@ public class FileWriteStore implements WriteStore {
     Path shardIdPath = basePath.resolve(Paths.get(columnShardId.getShardId().getShardId(), transaction, columnShardId.getColumnId().fullName()));
     try {
       Files.createDirectories(shardIdPath.getParent());
-      long copied = Files.copy(inputStream, shardIdPath, StandardCopyOption.REPLACE_EXISTING);
+      long copied = Files.copy(inputStream, shardIdPath, REPLACE_EXISTING);
       if (copied != byteSize) {
         LOGGER.warn("Expected to write {} but confirmed only {} bytes were copied", byteSize, copied);
       }
@@ -239,9 +241,43 @@ public class FileWriteStore implements WriteStore {
     try {
       Files.createDirectories(shardIdPath.getParent());
       byte[] payload = OBJECT_MAPPER.writeValueAsBytes(shardMetadata);
-      Files.copy(new ByteArrayInputStream(payload), shardIdPath, StandardCopyOption.REPLACE_EXISTING);
+      Files.copy(new ByteArrayInputStream(payload), shardIdPath, REPLACE_EXISTING);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
+    }
+  }
+
+  @Override
+  public void copyShard(ShardId shardIdDst, ShardId shardIdSrc) {
+    if (shardIdDst.equals(shardIdSrc)) {
+      return;
+    }
+
+    File shardIdDstDirectory = new File(basePath.resolve(Paths.get(shardIdDst.getShardId())).toString());
+    if (shardIdDstDirectory.exists()) {
+      return;
+    }
+
+    File shardIdSrcDirectory = new File(basePath.resolve(Paths.get(shardIdSrc.getShardId())).toString());
+    if (!shardIdSrcDirectory.exists() || !shardIdSrcDirectory.isDirectory()) {
+      return;
+    }
+
+    File copying = new File(basePath.resolve(Paths.get(shardIdDst.getShardId(), "COPYING")).toString());
+    try {
+      Files.createDirectories(shardIdDstDirectory.toPath());
+      copying.createNewFile();
+      copyDirectory(shardIdSrcDirectory.toPath(), shardIdDstDirectory.toPath());
+    } catch (Exception exception) {
+      if (shardIdDstDirectory.exists()) {
+        deleteDirectory(shardIdDstDirectory.toPath());
+      }
+
+      throw new RuntimeException(exception);
+    } finally {
+      if (copying.exists()) {
+        copying.delete();
+      }
     }
   }
 
@@ -318,7 +354,7 @@ public class FileWriteStore implements WriteStore {
         columnShardId.getColumnId().fullName()));
     try {
       Files.createDirectories(shardIdPath.getParent());
-      long copied = Files.copy(inputStream, shardIdPath, StandardCopyOption.REPLACE_EXISTING);
+      long copied = Files.copy(inputStream, shardIdPath, REPLACE_EXISTING);
       if (copied != size) {
         LOGGER.warn("Expected to write {} but confirmed only {} bytes were copied", size, copied);
       }
@@ -400,6 +436,46 @@ public class FileWriteStore implements WriteStore {
       Files.write(searchPath, OBJECT_MAPPER.writeValueAsBytes(currentValues), StandardOpenOption.CREATE);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
+    }
+  }
+
+  private void copyDirectory(Path src, Path dst) {
+    try (Stream<Path> paths = Files.walk(src)) {
+      AtomicReference<Path> current = new AtomicReference<>();
+      paths.filter(file -> !src.equals(file)).forEach(
+          file -> {
+            try {
+              if (file.endsWith("CURRENT")) {
+                current.set(file);
+              } else {
+                Files.copy(file, dst.resolve(src.relativize(file)), REPLACE_EXISTING);
+              }
+            } catch (IOException exception) {
+              throw new RuntimeException(exception);
+            }
+          }
+      );
+      if (current.get() != null) {
+        Files.copy(current.get(), dst.resolve(src.relativize(current.get())), REPLACE_EXISTING);
+      }
+    } catch (IOException exception) {
+      throw new RuntimeException(exception);
+    }
+  }
+
+  private void deleteDirectory(Path directory) {
+    try (Stream<Path> paths = Files.walk(directory)) {
+      paths.forEach(
+          source -> {
+            try {
+              Files.delete(source);
+            } catch (IOException exception) {
+              throw new RuntimeException(exception);
+            }
+          }
+      );
+    } catch (IOException exception) {
+      throw new RuntimeException(exception);
     }
   }
 }

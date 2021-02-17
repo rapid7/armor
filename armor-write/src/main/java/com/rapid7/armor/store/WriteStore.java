@@ -14,7 +14,6 @@ import com.rapid7.armor.write.writers.ColumnFileWriter;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 public interface WriteStore {
   String rootDirectory();
@@ -47,6 +46,8 @@ public interface WriteStore {
   void saveShardMetadata(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum, ShardMetadata shardMetadata);
 
   void saveTableMetadata(String transaction, String tenant, String table, TableMetadata tableMetadata);
+
+  void copyShard(ShardId shardIdDst, ShardId shardIdSrc);
 
   void saveColumn(String transaction, ColumnShardId columnShardId, int size, InputStream inputStream);
 

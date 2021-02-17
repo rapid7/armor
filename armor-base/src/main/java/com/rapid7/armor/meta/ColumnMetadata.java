@@ -24,7 +24,7 @@ public class ColumnMetadata {
   private Double maxValue;
   private int numRows = 0;
   private int numEntities = 0;
-  private int cardinaility = 0;
+  private int cardinality = 0;
   private String lastCompaction;
 
   public void setEntityId(boolean entityId) {
@@ -44,11 +44,11 @@ public class ColumnMetadata {
   }
 
   public int getCardinality() {
-    return cardinaility;
+    return cardinality;
   }
 
   public void setCardinality(int cardinality) {
-    this.cardinaility = cardinality;
+    this.cardinality = cardinality;
   }
 
   public int getNumRows() {
