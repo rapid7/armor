@@ -268,6 +268,15 @@ public class ShardWriter {
       }
     }
 
+    return buildStoreEntityIdColumn(transaction, baselineSummaries, entityIdColumn, entityIdType);
+  }
+  
+  /**
+   * Builds and store the entity id column. This entity id column is based off a given baseline. The baseline should be checked for consistency before
+   * it passed into this method.
+   */
+  private ColumnMetadata buildStoreEntityIdColumn(String transaction, List<EntityRecordSummary> baselineSummaries, String entityIdColumn, DataType entityIdType)
+    throws IOException {
     ColumnId cn = new ColumnId(entityIdColumn, entityIdType.getCode());
     String randomId = UUID.randomUUID().toString();
     try (ColumnFileWriter cw = new ColumnFileWriter(new ColumnShardId(shardId, cn))) {
