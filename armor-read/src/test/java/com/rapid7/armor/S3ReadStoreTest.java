@@ -11,7 +11,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
 import java.text.ParseException;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -55,31 +57,32 @@ public class S3ReadStoreTest {
     currentValue2.put("current", current2);
 
     client.putObject(TEST_BUCKET, "org1/table1/table-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/0/" + current1 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/0/" + current1 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org1/table1/all/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/all/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/all/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/all/1970-01-01T00:00:00Z/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
 
 
-    client.putObject(TEST_BUCKET, "org1/table1/1/" + current2 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/1/" + current2 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/1/" + Constants.CURRENT, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org1/table1/all/1970-01-01T00:00:00Z/1/" + current2 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/all/1970-01-01T00:00:00Z/1/" + current2 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/all/1970-01-01T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/all/1970-01-01T00:00:00Z/1/" + Constants.CURRENT, mapper.writeValueAsString(currentValue2));
 
     client.putObject(TEST_BUCKET, "org2/table1/table-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/0/" + current1 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/0/" + current1 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org2/table1/all/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/all/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/all/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/all/1970-01-01T00:00:00Z/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
 
 
-    client.putObject(TEST_BUCKET, "org2/table1/1/" + current2 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/1/" + current2 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/1/" + Constants.CURRENT, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org2/table1/all/1970-01-01T00:00:00Z/1/" + current2 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/all/1970-01-01T00:00:00Z/1/" + current2 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/all/1970-01-01T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/all/1970-01-01T00:00:00Z/1/" + Constants.CURRENT, mapper.writeValueAsString(currentValue2));
 
     S3ReadStore readStore = new S3ReadStore(client, TEST_BUCKET);
     assertEquals(Sets.newHashSet("org1", "org2"), Sets.newHashSet(readStore.getTenants()));
-    readStore.getTables("org2");
+    assertEquals(Arrays.asList("table1"), readStore.getTables("org2"));
+    assertEquals(Arrays.asList("table1"), readStore.getTables("org1"));
   }
 }
