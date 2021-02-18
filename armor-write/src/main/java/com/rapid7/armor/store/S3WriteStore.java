@@ -24,12 +24,16 @@ import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.ObjectTagging;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.Tag;
+import com.amazonaws.util.StringUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,9 +44,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static java.util.stream.Collectors.toList;
 
 public class S3WriteStore implements WriteStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3WriteStore.class);
@@ -75,9 +80,7 @@ public class S3WriteStore implements WriteStore {
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(byteSize);
     try {
-      PutObjectRequest por = new PutObjectRequest(bucket, key, inputStream, omd);
-      por.getRequestClientOptions().setReadLimit(byteSize);
-      s3Client.putObject(por);
+      putObject(key, inputStream, omd, columnShardId.getInterval());
     } catch (ResetException e) {
       LOGGER.error("Detected a reset exception, the number of bytes is {}: {}", byteSize, e.getExtraInfo());
       throw e;
@@ -114,7 +117,7 @@ public class S3WriteStore implements WriteStore {
     return summaries.stream()
         .map(s -> Paths.get(s.getKey()).getFileName().toString())
         .filter(n -> !n.contains(Constants.SHARD_METADATA))
-        .map(ColumnId::new).collect(Collectors.toList());
+        .map(ColumnId::new).collect(toList());
   }
 
   @Override
@@ -125,8 +128,8 @@ public class S3WriteStore implements WriteStore {
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<String> commonPrefixes = ol.getCommonPrefixes();
     // Remove trailing /
-    List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(Collectors.toList());
-    return rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(Collectors.toList());
+    List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
+    return rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toList());
   }
 
   @Override
@@ -137,8 +140,8 @@ public class S3WriteStore implements WriteStore {
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<String> commonPrefixes = ol.getCommonPrefixes();
     // Remove trailing /
-    List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(Collectors.toList());
-    return rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(Collectors.toList());
+    List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
+    return rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toList());
   }
 
   @Override
@@ -237,7 +240,7 @@ public class S3WriteStore implements WriteStore {
     for (int i = 0; i < 10; i++) {
       try {
         String payload = OBJECT_MAPPER.writeValueAsString(shardMetadata);
-        s3Client.putObject(bucket, shardIdPath, payload);
+        putObject(shardIdPath, payload, interval.getInterval());
         break;
       } catch (Exception ioe) {
         if (i + 1 == 10)
@@ -282,7 +285,9 @@ public class S3WriteStore implements WriteStore {
     }
 
     try {
-      s3Client.putObject(bucket, shardDstPath + "COPYING", "");
+      putObject(shardDstPath + "COPYING", "", shardIdDst.getInterval());
+
+      ObjectTagging objectTagging = createObjectTagging(shardIdDst.getInterval());
       S3ObjectSummary current = null;
       for (S3ObjectSummary objectSummary : ol.getObjectSummaries()) {
         if (objectSummary.getKey().endsWith("CURRENT")) {
@@ -294,7 +299,7 @@ public class S3WriteStore implements WriteStore {
                   objectSummary.getKey(),
                   bucket,
                   shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectSummary.getKey()))).toString()
-              )
+              ).withNewObjectTagging(objectTagging)
           );
         }
       }
@@ -305,7 +310,7 @@ public class S3WriteStore implements WriteStore {
                 current.getKey(),
                 bucket,
                 shardDstPath.resolve(shardSrcPath.relativize(Paths.get(current.getKey()))).toString()
-            )
+            ).withNewObjectTagging(objectTagging)
         );
       }
     } catch (Exception exception) {
@@ -430,17 +435,17 @@ public class S3WriteStore implements WriteStore {
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(size);
     try {
-      PutObjectRequest por = new PutObjectRequest(bucket, key, inputStream, omd);
-      por.getRequestClientOptions().setReadLimit(size);
-      s3Client.putObject(por);
+      putObject(key, inputStream, omd, columnShardId.getInterval());
       if (error != null) {
         String description =
           columnShardId.getTenant() + "/" +
           columnShardId.getTable() + "/" +
+          columnShardId.getInterval() + "/" +
+          columnShardId.getIntervalStart() + "/" +
           columnShardId.getShardNum() + "/" +
           Constants.LAST_ERROR + "/" +
           transaction + "/" + columnShardId.getColumnId().fullName() + "_msg";
-        s3Client.putObject(bucket, description, error);
+        putObject(description, error, columnShardId.getInterval());
       }
     } catch (ResetException e) {
       LOGGER.error("Detected a reset exception, the number of bytes is {}: {}", size, e.getExtraInfo());
@@ -455,7 +460,7 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
-    String key = shardId.getTenant() + "/" + Constants.CAPTURE + "/" + transaction + "/" + shardId.getTable();
+    String key = shardId.getTenant() + "/" + Constants.CAPTURE + "/" + transaction + "/" + shardId.getTable() + "/" + shardId.getInterval() + "/" + shardId.getIntervalStart();
     if (shardId.getShardNum() >= 0) {
       key = key + "/" + shardId.getShardNum();
     }
@@ -463,16 +468,16 @@ public class S3WriteStore implements WriteStore {
       if (entities != null) {
         String payloadName = key + "/" + "entities";
         String payload = OBJECT_MAPPER.writeValueAsString(entities);
-        s3Client.putObject(bucket, payloadName, payload);
+        putObject(payloadName, payload, shardId.getInterval());
       }
       if (requests != null) {
         String payloadName = key + "/" + "writeRequests";
         String payload = OBJECT_MAPPER.writeValueAsString(requests);
-        s3Client.putObject(bucket, payloadName, payload);
+        putObject(payloadName, payload, shardId.getInterval());
       }
       if (deleteEntity != null) {
         String payloadName = key + "/" + deleteEntity;
-        s3Client.putObject(bucket, payloadName, "deleted");
+        putObject(payloadName, "deleted", shardId.getInterval());
       }
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -581,5 +586,26 @@ public class S3WriteStore implements WriteStore {
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
+  }
+
+  private ObjectTagging createObjectTagging(String interval) {
+    Tag tag = new Tag("interval", interval);
+    return new ObjectTagging(Stream.of(tag).collect(toList()));
+  }
+
+  private void putObject(String key, String payload, String interval) {
+    byte[] contentBytes = payload.getBytes(StringUtils.UTF8);
+    InputStream is = new ByteArrayInputStream(contentBytes);
+    ObjectMetadata objectMetadata = new ObjectMetadata();
+    objectMetadata.setContentType("text/plain");
+    objectMetadata.setContentLength(contentBytes.length);
+
+    putObject(key, is, objectMetadata, interval);
+  }
+
+  private void putObject(String key, InputStream payload, ObjectMetadata objectMetadata, String interval) {
+    PutObjectRequest putObjectRequest = new PutObjectRequest(bucket, key, payload, objectMetadata).withTagging(createObjectTagging(interval));
+    putObjectRequest.getRequestClientOptions().setReadLimit((int) objectMetadata.getContentLength());
+    s3Client.putObject(putObjectRequest);
   }
 }
