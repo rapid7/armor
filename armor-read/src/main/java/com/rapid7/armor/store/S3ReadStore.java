@@ -22,9 +22,11 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -166,7 +168,7 @@ public class S3ReadStore implements ReadStore {
       try {
         return s3Client.doesObjectExist(bucket, key);
       } catch (AmazonS3Exception e) {
-        if (i == 2) {
+        if (i == 10) {
           throw e;
         }
         try {
@@ -183,9 +185,15 @@ public class S3ReadStore implements ReadStore {
   public List<String> getTenants() {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
-    ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
-    List<String> commonPrefixes = ol.getCommonPrefixes();
-    return commonPrefixes.stream().map(o -> o.replace("/", "")).collect(Collectors.toList());
+    
+    Set<String> allPrefixes = new HashSet<>();
+    ListObjectsV2Result result;
+    do {
+      result = s3Client.listObjectsV2(lor);
+      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace("/", "")).collect(Collectors.toList()));
+      lor.setContinuationToken(result.getNextContinuationToken());
+    } while (result.isTruncated());
+    return new ArrayList<>(allPrefixes);
   }
 
   @Override
