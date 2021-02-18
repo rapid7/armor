@@ -8,7 +8,7 @@
     <packaging>pom</packaging>
 
     <name>armor</name>
-    <description>A Java library that will help you create queries for Presto programmatically. This will help you test your code and create dynamic queries.</description>
+    <description>A entity based columnar storage format, optimized for use with distributed SQL systems like PrestoDB</description>
     <url>https://github.com/rapid7/armor</url>
 
     <organization>
