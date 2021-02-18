@@ -362,28 +362,6 @@ public class S3WriteStore implements WriteStore {
     }
   }
 
-  /**
-   * Attempts exists check, if its errors out it is most likely a slowdown error. So sleep for a second and retry again.
-   */
-  private boolean doesObjectExist(String bucket, String key) {
-    for (int i = 0; i < 10; i++) {
-      try {
-        return s3Client.doesObjectExist(bucket, key);
-      } catch (SdkClientException e) {
-        if (i == 10) {
-          LOGGER.error("Unable to execute existance check on {}:{}..quitting", bucket, key, e);
-          throw e;
-        }
-        try {
-          Thread.sleep((i + 1) * 1000);
-        } catch (InterruptedException ie) {
-          // do nothing
-        }
-      }
-    }
-    throw new IllegalStateException("Should not have dropped into this section");
-  }
-
   @Override
   public void rollback(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     String toDelete = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + transaction;
@@ -607,5 +585,27 @@ public class S3WriteStore implements WriteStore {
     PutObjectRequest putObjectRequest = new PutObjectRequest(bucket, key, payload, objectMetadata).withTagging(createObjectTagging(interval));
     putObjectRequest.getRequestClientOptions().setReadLimit((int) objectMetadata.getContentLength());
     s3Client.putObject(putObjectRequest);
+  }
+  
+  /**
+   * Attempts exists check, if its errors out it is most likely a slowdown error. So sleep for a second and retry again.
+   */
+  private boolean doesObjectExist(String bucket, String key) {
+    for (int i = 0; i < 10; i++) {
+      try {
+        return s3Client.doesObjectExist(bucket, key);
+      } catch (SdkClientException e) {
+        if (i == 10) {
+          LOGGER.error("Unable to execute existance check on {}:{}..quitting", bucket, key, e);
+          throw e;
+        }
+        try {
+          Thread.sleep((i + 1) * 1000);
+        } catch (InterruptedException ie) {
+          // do nothing
+        }
+      }
+    }
+    throw new IllegalStateException("Should not have dropped into this section");
   }
 }
