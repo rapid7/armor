@@ -16,6 +16,11 @@ public class IntervalStrategySingle implements IntervalStrategy {
   }
 
   @Override
+  public String getIntervalStart(Instant timestamp, int offset) {
+    return Instant.ofEpochMilli(0).toString();
+  }
+
+  @Override
   public boolean supports(String interval) {
     return INTERVAL.equals(interval);
   }

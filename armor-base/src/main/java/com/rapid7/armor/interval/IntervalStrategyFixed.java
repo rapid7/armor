@@ -24,6 +24,11 @@ public class IntervalStrategyFixed implements IntervalStrategy {
   }
 
   @Override
+  public String getIntervalStart(Instant timestamp, int offset) {
+    return Instant.ofEpochMilli(((timestamp.toEpochMilli() / interval) + offset) * interval).toString();
+  }
+
+  @Override
   public boolean supports(String interval) {
     return INTERVAL_PATTERN.matcher(interval).matches();
   }

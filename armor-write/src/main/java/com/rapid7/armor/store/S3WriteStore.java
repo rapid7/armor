@@ -17,6 +17,8 @@ import com.amazonaws.ResetException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
+import com.amazonaws.services.s3.model.CopyObjectRequest;
+import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.ListObjectsRequest;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
@@ -31,6 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -247,6 +250,77 @@ public class S3WriteStore implements WriteStore {
           }
         }
       }
+    }
+  }
+
+  @Override
+  public void copyShard(ShardId shardIdDst, ShardId shardIdSrc) {
+    if (shardIdDst.equals(shardIdSrc)) {
+      return;
+    }
+
+    Path shardDstPath = Paths.get(shardIdDst.getTenant(), shardIdDst.getTable(), shardIdDst.getInterval(), shardIdDst.getIntervalStart());
+    ListObjectsV2Result ol = s3Client.listObjectsV2(
+        new ListObjectsV2Request()
+            .withBucketName(bucket)
+            .withMaxKeys(10000)
+            .withPrefix(shardDstPath.toString() + "/")
+    );
+    if (!ol.getObjectSummaries().isEmpty()) {
+      return;
+    }
+
+    Path shardSrcPath = Paths.get(shardIdSrc.getTenant(), shardIdSrc.getTable(), shardIdSrc.getInterval(), shardIdSrc.getIntervalStart());
+    ol = s3Client.listObjectsV2(
+        new ListObjectsV2Request()
+            .withBucketName(bucket)
+            .withMaxKeys(10000)
+            .withPrefix(shardSrcPath.toString() + "/")
+    );
+    if (ol.getObjectSummaries().isEmpty()) {
+      return;
+    }
+
+    try {
+      s3Client.putObject(bucket, shardDstPath + "COPYING", "");
+      S3ObjectSummary current = null;
+      for (S3ObjectSummary objectSummary : ol.getObjectSummaries()) {
+        if (objectSummary.getKey().endsWith("CURRENT")) {
+          current = objectSummary;
+        } else {
+          s3Client.copyObject(
+              new CopyObjectRequest(
+                  bucket,
+                  objectSummary.getKey(),
+                  bucket,
+                  shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectSummary.getKey()))).toString()
+              )
+          );
+        }
+      }
+      if (current != null) {
+        s3Client.copyObject(
+            new CopyObjectRequest(
+                bucket,
+                current.getKey(),
+                bucket,
+                shardDstPath.resolve(shardSrcPath.relativize(Paths.get(current.getKey()))).toString()
+            )
+        );
+      }
+    } catch (Exception exception) {
+      s3Client.listObjectsV2(
+          new ListObjectsV2Request()
+              .withBucketName(bucket)
+              .withMaxKeys(10000)
+              .withPrefix(shardDstPath.toString() + "/")
+      ).getObjectSummaries().forEach(
+          s3ObjectSummary -> s3Client.deleteObject(new DeleteObjectRequest(bucket, s3ObjectSummary.getKey()))
+      );
+
+      throw new RuntimeException(exception);
+    } finally {
+      s3Client.deleteObject(new DeleteObjectRequest(bucket, shardDstPath + "COPYING"));
     }
   }
 

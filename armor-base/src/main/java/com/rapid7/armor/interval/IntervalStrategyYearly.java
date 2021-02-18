@@ -28,6 +28,22 @@ public class IntervalStrategyYearly implements IntervalStrategy {
   }
 
   @Override
+  public String getIntervalStart(Instant timestamp, int offset) {
+    ZonedDateTime dateTime = timestamp.atZone(ZoneId.of("UTC"));
+
+    return dateTime
+        .plusYears(offset)
+        .withMonth(1)
+        .withDayOfMonth(1)
+        .withHour(0)
+        .withMinute(0)
+        .withSecond(0)
+        .withNano(0)
+        .toInstant()
+        .toString();
+  }
+
+  @Override
   public boolean supports(String interval) {
     return INTERVAL.equals(interval);
   }
