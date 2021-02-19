@@ -222,6 +222,28 @@ public class ArmorWriter implements Closeable {
       return null;
     return new ColumnId(tableMetadata.getEntityColumnId(), tableMetadata.getEntityColumnIdType());
   }
+  
+  public void snapshotCurrentToInterval(String tenant, String table, Interval interval, Instant timestamp) {
+    List<ShardId> shardIdsSrc;
+    try {
+      shardIdsSrc = store.findShardIds(tenant, table, Interval.SINGLE, Instant.now());
+    } catch (Exception exception) {
+      return;
+    }
+
+    for (ShardId shardIdSrc : shardIdsSrc) {
+      store.copyShard(
+          new ShardId(
+              tenant,
+              table,
+              interval.getInterval(),
+              interval.getIntervalStart(timestamp),
+              shardIdSrc.getShardNum()
+          ),
+          shardIdSrc
+      );
+    }
+  }
 
   public void copyPreviousIntervalSliceIfNewDestination(String tenant, String table, Interval interval, Instant timestamp) {
     List<ShardId> shardIdsSrc;

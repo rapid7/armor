@@ -42,12 +42,16 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
 
 public class S3WriteStore implements WriteStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3WriteStore.class);
@@ -127,9 +131,17 @@ public class S3WriteStore implements WriteStore {
     lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
     ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
     List<String> commonPrefixes = ol.getCommonPrefixes();
-    // Remove trailing /
-    List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
-    return rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toList());
+
+    Set<ShardId> shardIds = new HashSet<>();
+    ListObjectsV2Result result;
+    do {
+      result = s3Client.listObjectsV2(lor);
+      // Remove trailing /
+      List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
+      shardIds.addAll(rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toSet()));
+      lor.setContinuationToken(result.getNextContinuationToken());
+    } while (result.isTruncated());
+    return new ArrayList<>(shardIds);
   }
 
   @Override

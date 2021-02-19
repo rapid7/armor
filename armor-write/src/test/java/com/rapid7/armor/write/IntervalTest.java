@@ -94,6 +94,24 @@ public class IntervalTest {
       armorWriter.copyPreviousIntervalSliceIfNewDestination(org, table, Interval.MONTHLY, ldt3.toInstant(ZoneOffset.UTC));
       shards = writeStore.findShardIds(org, table, Interval.MONTHLY, ldt3.toInstant(ZoneOffset.UTC));
       assertFalse(shards.isEmpty());
+      
+      // Now lets see about testing snapshotting current to a particular interval.
+      // First if no current exists.
+      LocalDateTime ldt4 = LocalDateTime.of(1999, 1, 12, 0, 0);
+      armorWriter.snapshotCurrentToInterval(org, table, Interval.WEEKLY, ldt4.toInstant(ZoneOffset.UTC));
+      shards = writeStore.findShardIds(org, table, Interval.WEEKLY, ldt4.toInstant(ZoneOffset.UTC));
+      assertTrue(shards.isEmpty());
+      
+      
+      // Now lets write to current
+      xact = armorWriter.startTransaction();
+      armorWriter.write(xact, org, table, Interval.SINGLE, Instant.now(), Arrays.asList(decEntity));
+      armorWriter.commit(xact, org, table);
+
+      // Ok snapshot now.
+      armorWriter.snapshotCurrentToInterval(org, table, Interval.WEEKLY, ldt4.toInstant(ZoneOffset.UTC));
+      shards = writeStore.findShardIds(org, table, Interval.WEEKLY, ldt4.toInstant(ZoneOffset.UTC));
+      assertFalse(shards.isEmpty());
     }
   }
 }
