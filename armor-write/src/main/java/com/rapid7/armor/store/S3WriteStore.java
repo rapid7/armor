@@ -30,6 +30,7 @@ import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.Tag;
+import com.amazonaws.util.StringInputStream;
 import com.amazonaws.util.StringUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,7 +47,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -572,7 +572,12 @@ public class S3WriteStore implements WriteStore {
       if (previous != null)
         currentValues.put("previous", previous);
       String payload = OBJECT_MAPPER.writeValueAsString(currentValues);
-      s3Client.putObject(bucket, key, payload);
+      ObjectMetadata objectMetadata = new ObjectMetadata();
+      objectMetadata.setContentType("text/plain");
+      objectMetadata.setContentLength(payload.length());
+      PutObjectRequest putObjectRequest = new PutObjectRequest(bucket, key, new StringInputStream(payload), objectMetadata);
+      putObjectRequest.withTagging(createObjectTagging(interval));
+      s3Client.putObject(putObjectRequest);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
