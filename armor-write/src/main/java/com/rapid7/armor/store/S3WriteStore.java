@@ -117,12 +117,18 @@ public class S3WriteStore implements WriteStore {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()) + "/");
-    ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
-    List<S3ObjectSummary> summaries = ol.getObjectSummaries();
-    return summaries.stream()
-        .map(s -> Paths.get(s.getKey()).getFileName().toString())
-        .filter(n -> !n.contains(Constants.SHARD_METADATA))
-        .map(ColumnId::new).collect(toList());
+    Set<ColumnId> columnIds = new HashSet<>();
+    ListObjectsV2Result ol;
+    do {
+      ol = s3Client.listObjectsV2(lor);
+      List<S3ObjectSummary> summaries = ol.getObjectSummaries();
+      columnIds.addAll(summaries.stream()
+          .map(s -> Paths.get(s.getKey()).getFileName().toString())
+          .filter(n -> !n.contains(Constants.SHARD_METADATA))
+          .map(ColumnId::new).collect(toList()));
+      lor.setContinuationToken(ol.getNextContinuationToken());
+    } while (ol.isTruncated());
+    return new ArrayList<>(columnIds);
   }
 
   @Override
@@ -130,18 +136,15 @@ public class S3WriteStore implements WriteStore {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
-    ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
-    List<String> commonPrefixes = ol.getCommonPrefixes();
-
+    ListObjectsV2Result ol;
     Set<ShardId> shardIds = new HashSet<>();
-    ListObjectsV2Result result;
     do {
-      result = s3Client.listObjectsV2(lor);
-      // Remove trailing /
+      ol = s3Client.listObjectsV2(lor);
+      List<String> commonPrefixes = ol.getCommonPrefixes();
       List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
       shardIds.addAll(rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toSet()));
-      lor.setContinuationToken(result.getNextContinuationToken());
-    } while (result.isTruncated());
+      lor.setContinuationToken(ol.getNextContinuationToken());
+    } while (ol.isTruncated());
     return new ArrayList<>(shardIds);
   }
 
@@ -150,11 +153,17 @@ public class S3WriteStore implements WriteStore {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
-    ListObjectsV2Result ol = s3Client.listObjectsV2(lor);
-    List<String> commonPrefixes = ol.getCommonPrefixes();
-    // Remove trailing /
-    List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
-    return rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toList());
+    ListObjectsV2Result ol;
+    Set<ShardId> shardIds = new HashSet<>();
+    do {
+      ol = s3Client.listObjectsV2(lor);
+      List<String> commonPrefixes = ol.getCommonPrefixes();
+      // Remove trailing /
+      List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
+      shardIds.addAll(rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toList()));
+      lor.setContinuationToken(ol.getNextContinuationToken());
+    } while (ol.isTruncated());
+    return new ArrayList<>(shardIds);
   }
 
   @Override
@@ -287,12 +296,11 @@ public class S3WriteStore implements WriteStore {
     }
 
     Path shardSrcPath = Paths.get(shardIdSrc.getTenant(), shardIdSrc.getTable(), shardIdSrc.getInterval(), shardIdSrc.getIntervalStart());
-    ol = s3Client.listObjectsV2(
-        new ListObjectsV2Request()
-            .withBucketName(bucket)
-            .withMaxKeys(10000)
-            .withPrefix(shardSrcPath.toString() + "/")
-    );
+    ListObjectsV2Request srcRequest = new ListObjectsV2Request()
+      .withBucketName(bucket)
+      .withMaxKeys(10000)
+      .withPrefix(shardSrcPath.toString() + "/");
+    ol = s3Client.listObjectsV2(srcRequest);
     if (ol.getObjectSummaries().isEmpty()) {
       return;
     }
@@ -302,20 +310,27 @@ public class S3WriteStore implements WriteStore {
 
       ObjectTagging objectTagging = createObjectTagging(shardIdDst.getInterval());
       S3ObjectSummary current = null;
-      for (S3ObjectSummary objectSummary : ol.getObjectSummaries()) {
-        if (objectSummary.getKey().endsWith("CURRENT")) {
-          current = objectSummary;
-        } else {
-          s3Client.copyObject(
-              new CopyObjectRequest(
-                  bucket,
-                  objectSummary.getKey(),
-                  bucket,
-                  shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectSummary.getKey()))).toString()
-              ).withNewObjectTagging(objectTagging)
-          );
+      boolean first = true;
+      do {
+        if (!first)
+          ol = s3Client.listObjectsV2(srcRequest);
+        for (S3ObjectSummary objectSummary : ol.getObjectSummaries()) {
+          if (objectSummary.getKey().endsWith("CURRENT")) {
+            current = objectSummary;
+          } else {
+            s3Client.copyObject(
+                new CopyObjectRequest(
+                    bucket,
+                    objectSummary.getKey(),
+                    bucket,
+                    shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectSummary.getKey()))).toString()
+                ).withNewObjectTagging(objectTagging)
+            );
+          }
         }
-      }
+        srcRequest.setContinuationToken(ol.getNextContinuationToken());
+        first = false;
+      } while (ol.isTruncated());
       if (current != null) {
         s3Client.copyObject(
             new CopyObjectRequest(
