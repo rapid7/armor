@@ -17,7 +17,10 @@ import java.util.List;
 
 public interface WriteStore {
   String rootDirectory();
+  List<String> getTenants();
   void deleteTenant(String tenant);
+  void deleteTable(String tenant, String table);
+  
   ColumnMetadata columnMetadata(String tenant, String table, ColumnShardId columnShard);
 
   // Loading from store

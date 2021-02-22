@@ -27,6 +27,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -327,6 +329,12 @@ public class FileWriteStore implements WriteStore {
       LOGGER.warn("Unable to previous shard version under {}", transaction, ioe);
     }
   }
+  
+  @Override
+  public List<String> getTenants() {
+    File[] directories = basePath.toFile().listFiles(File::isDirectory);
+    return Arrays.stream(directories).map(File::getName).collect(Collectors.toList());
+  }
 
   @Override
   public void saveError(String transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error) {
@@ -476,6 +484,19 @@ public class FileWriteStore implements WriteStore {
       );
     } catch (IOException exception) {
       throw new RuntimeException(exception);
+    }
+  }
+
+  @Override
+  public void deleteTable(String tenant, String table) {
+    try {
+      Path toDelete = basePath.resolve(Paths.get(tenant, table));
+      Files.walk(toDelete)
+          .sorted(Comparator.reverseOrder())
+          .map(Path::toFile)
+          .forEach(File::delete);
+    } catch (Exception e) {
+      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
     }
   }
 }

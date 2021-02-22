@@ -12,12 +12,15 @@ import com.rapid7.armor.store.S3ReadStore;
 import com.rapid7.armor.store.S3WriteStore;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.writers.ArmorWriter;
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
@@ -67,6 +70,39 @@ public class S3StoreTest {
     assertEquals(rowGroupOffset, eir.getRowGroupOffset());
     assertEquals(nullLength, eir.getNullLength());
     assertEquals(deleted, eir.getDeleted());
+  }
+  
+  @Test
+  public void deleteTenant() throws AmazonServiceException, SdkClientException, JsonProcessingException {
+    String current1 = UUID.randomUUID().toString();
+    ObjectMapper mapper = new ObjectMapper();
+    HashMap<String, String> currentValue1 = new HashMap<>();
+    currentValue1.put("current", current1);
+    
+    client.putObject(TEST_BUCKET, "org10/table1/table-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
+    
+    client.putObject(TEST_BUCKET, "org10/table2/table-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
+    
+    S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
+    List<ShardId> shards = writeStore.findShardIds("org10", "table1", SINGLE, Instant.now());
+    assertEquals(1, shards.size());
+    shards = writeStore.findShardIds("org10", "table2", SINGLE, Instant.now());
+    assertEquals(1, shards.size());
+
+    writeStore.deleteTable("org10", "table1");
+    shards = writeStore.findShardIds("org10", "table1", SINGLE, Instant.now());
+    assertEquals(0, shards.size());
+    
+    shards = writeStore.findShardIds("org10", "table2", SINGLE, Instant.now());
+    assertEquals(1, shards.size());
   }
 
   @Test

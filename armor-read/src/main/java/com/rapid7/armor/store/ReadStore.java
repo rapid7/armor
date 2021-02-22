@@ -8,7 +8,6 @@ import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.shard.ShardId;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 public interface ReadStore {
   List<String> getTenants();

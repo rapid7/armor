@@ -47,6 +47,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -530,6 +531,21 @@ public class S3WriteStore implements WriteStore {
       throw new RuntimeException(ioe);
     }
   }
+  
+  @Override
+  public List<String> getTenants() {
+    ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
+    lor.withDelimiter("/");
+    
+    Set<String> allPrefixes = new HashSet<>();
+    ListObjectsV2Result result;
+    do {
+      result = s3Client.listObjectsV2(lor);
+      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace("/", "")).collect(Collectors.toList()));
+      lor.setContinuationToken(result.getNextContinuationToken());
+    } while (result.isTruncated());
+    return new ArrayList<>(allPrefixes);
+  }
 
   private String getIntervalPrefix(ShardId shardId) {
     return shardId.getTenant() + "/" + shardId.getTable() + "/" + shardId.getInterval() + "/" + shardId.getIntervalStart();
@@ -624,5 +640,30 @@ public class S3WriteStore implements WriteStore {
       }
     }
     throw new IllegalStateException("Should not have dropped into this section");
+  }
+
+  @Override
+  public void deleteTable(String tenant, String table) {
+    try {
+      String toDelete = tenant + "/" + table + "/";
+      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+          .withBucketName(bucket)
+          .withPrefix(toDelete);
+      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+      while (true) {
+        for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
+          s3Client.deleteObject(bucket, objectSummary.getKey());
+        }
+        if (objectListing.isTruncated()) {
+          objectListing = s3Client.listNextBatchOfObjects(objectListing);
+        } else {
+          break;
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+      throw e;
+    }    
+    
   }
 }
