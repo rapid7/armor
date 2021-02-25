@@ -197,7 +197,7 @@ public class ArmorWriter implements Closeable {
   public synchronized TableWriter getTableWriter(TableId tableId) {
     TableWriter existing = tableWriters.get(tableId);
     if (existing == null) {
-      TableWriter tableWriter = new TableWriter(tableId.getTenant(), tableId.getTableName(), store);
+      TableWriter tableWriter = new TableWriter(tableId.getTenant(), tableId.getTableName());
       tableWriters.put(tableId, tableWriter);
       return tableWriter;
     } else {

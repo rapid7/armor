@@ -2,11 +2,21 @@ package com.rapid7.armor.interval;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
+
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class IntervalStrategyTest {
+  
+  @Test
+  public void testWeekly() {
+    Instant ld = LocalDate.parse("2021-02-22").atStartOfDay().toInstant(ZoneOffset.UTC);
+    assertEquals("2021-02-21T00:00:00Z", Interval.WEEKLY.getIntervalStart(ld));
+  }
+
   @Test
   public void testFixed() {
     Clock clock = Clock.fixed(Instant.parse("2021-01-01T00:15:00Z"), ZoneId.of("UTC"));

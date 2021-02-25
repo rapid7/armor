@@ -4,9 +4,9 @@ import java.time.Instant;
 import static com.rapid7.armor.interval.IntervalManager.REGISTERED_INTERVALS;
 
 public enum Interval {
-  HOURLY(new IntervalStrategyFixed(60 * 60 * 1000L)),
-  DAILY(new IntervalStrategyFixed(24 * 60 * 60 * 1000L)),
-  WEEKLY(new IntervalStrategyFixed(7 * 24 * 60 * 60 * 1000L)),
+  HOURLY(new IntervalStrategyHourly()),
+  DAILY(new IntervalStrategyDaily()),
+  WEEKLY(new IntervalStrategyWeekly()),
   MONTHLY(new IntervalStrategyMonthly()),
   YEARLY(new IntervalStrategyYearly()),
   SINGLE(new IntervalStrategySingle());

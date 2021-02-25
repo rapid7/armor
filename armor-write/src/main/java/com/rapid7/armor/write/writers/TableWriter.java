@@ -1,7 +1,6 @@
 package com.rapid7.armor.write.writers;
 
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.store.WriteStore;
 
 import java.io.Closeable;
 import java.util.Collection;
@@ -16,12 +15,10 @@ public class TableWriter implements Closeable {
 
   private final String tableName;
   private final String tenant;
-  private final WriteStore store;
   // Must be have some synchronization to prevent lost shards.
   private final Map<ShardId, ShardWriter> shards = new HashMap<>();
 
-  public TableWriter(String tenant, String table, WriteStore store) {
-    this.store = store;
+  public TableWriter(String tenant, String table) {
     this.tenant = tenant;
     this.tableName = table;
   }
