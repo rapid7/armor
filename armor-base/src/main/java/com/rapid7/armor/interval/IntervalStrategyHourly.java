@@ -39,6 +39,6 @@ public class IntervalStrategyHourly implements IntervalStrategy {
 
   @Override
   public boolean supports(String interval) {
-    return INTERVAL.equals(interval);
+    return INTERVAL.equalsIgnoreCase(interval);
   }
 }

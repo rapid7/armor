@@ -4,6 +4,7 @@ import java.time.Instant;
 
 public class IntervalStrategySingle implements IntervalStrategy {
   private static final String INTERVAL = "all";
+  private static final String INTERVAL_ALT = "single";
 
   @Override
   public String getInterval() {
@@ -22,6 +23,6 @@ public class IntervalStrategySingle implements IntervalStrategy {
 
   @Override
   public boolean supports(String interval) {
-    return INTERVAL.equals(interval);
+    return INTERVAL.equalsIgnoreCase(interval) || INTERVAL_ALT.equalsIgnoreCase(interval);
   }
 }
