@@ -30,7 +30,7 @@ public class IntervalStrategyTest {
   public void testSingle() {
     IntervalStrategy intervalStrategy = new IntervalStrategySingle();
 
-    assertEquals("all", intervalStrategy.getInterval());
+    assertEquals("single", intervalStrategy.getInterval());
     assertEquals("1970-01-01T00:00:00Z", intervalStrategy.getIntervalStart(Instant.now()));
   }
 
