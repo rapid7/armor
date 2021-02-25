@@ -3,8 +3,7 @@ package com.rapid7.armor.interval;
 import java.time.Instant;
 
 public class IntervalStrategySingle implements IntervalStrategy {
-  private static final String INTERVAL = "all";
-  private static final String INTERVAL_ALT = "single";
+  private static final String INTERVAL = "single";
 
   @Override
   public String getInterval() {
@@ -23,6 +22,6 @@ public class IntervalStrategySingle implements IntervalStrategy {
 
   @Override
   public boolean supports(String interval) {
-    return INTERVAL.equalsIgnoreCase(interval) || INTERVAL_ALT.equalsIgnoreCase(interval);
+    return INTERVAL.equalsIgnoreCase(interval);
   }
 }

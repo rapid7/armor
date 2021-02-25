@@ -12,11 +12,14 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -228,5 +231,54 @@ public class FileReadStore implements ReadStore {
         throw new RuntimeException(ioe);
       }
     }
+  }
+
+  @Override
+  public List<String> getIntervalStarts(String tenant, String table, Interval interval) {
+     Path searchPath =  basePath.resolve(Paths.get(tenant, table, interval.getInterval()));
+     List<String> intervalStarts = new ArrayList<>();
+     try {
+      Files.walkFileTree(searchPath, new FileVisitor<Path>() {
+         @Override
+         public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+             return FileVisitResult.CONTINUE;
+         }
+ 
+         @Override
+         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+             return FileVisitResult.CONTINUE;
+         }
+ 
+         @Override
+         public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+             return FileVisitResult.CONTINUE;
+         }
+ 
+         @Override
+         public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+             int searchNameCount = searchPath.getNameCount();
+             int dirNameCount = dir.getNameCount();
+             if (dirNameCount == searchNameCount + 1) {
+                 intervalStarts.add(dir.getFileName().toString());
+             }
+             return FileVisitResult.CONTINUE;
+         }
+       });
+      return intervalStarts;
+     } catch (IOException ioe) {
+         throw new RuntimeException(ioe);
+     }
+  }
+
+  @Override
+  public List<String> getIntervalStarts(String tenant, String table, Interval interval, InstantPredicate predicate) {
+      List<String> intervalStarts = getIntervalStarts(tenant, table, interval);
+      List<Instant> instants = intervalStarts.stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
+      List<String> matches = new ArrayList<>();
+      for (Instant instant : instants) {
+          if (predicate.test(Arrays.asList(instant)))
+              matches.add(instant.toString());
+      }
+      return matches;
   }
 }

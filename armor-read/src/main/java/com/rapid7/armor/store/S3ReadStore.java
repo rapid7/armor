@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -242,6 +243,10 @@ public class S3ReadStore implements ReadStore {
       return null;
   }
 
+  private String getIntervalPrefix(String tenant, String table, Interval interval) {
+    return tenant + "/" + table + "/" + interval.getInterval();
+  }
+  
   private String getIntervalPrefix(String tenant, String table, Interval interval, Instant timestamp) {
     return getIntervalPrefix(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp));
   }
@@ -275,5 +280,36 @@ public class S3ReadStore implements ReadStore {
     String shardName = Paths.get(rawShard).getFileName().toString();
     int shardNum = Integer.parseInt(shardName);
     return buildShardId(tenant, table, interval, timestamp, shardNum);
+  }
+
+  @Override
+  public List<String> getIntervalStarts(String tenant, String table, Interval interval) {
+    ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
+    lor.withDelimiter("/");
+    String prefix = getIntervalPrefix(tenant, table, interval) + "/";
+    lor.withPrefix(prefix);
+    ListObjectsV2Result ol;
+    // Remove trailing /
+    Set<String> intervalStarts = new HashSet<>();
+    do {
+      ol = s3Client.listObjectsV2(lor);
+      List<String> commonPrefixes = ol.getCommonPrefixes();
+      intervalStarts.addAll(
+        commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1).replaceAll(prefix, "")).collect(Collectors.toList()));
+      lor.setContinuationToken(ol.getNextContinuationToken());
+    } while (ol.isTruncated());
+    return new ArrayList<>(intervalStarts);
+  }
+
+  @Override
+  public List<String> getIntervalStarts(String tenant, String table, Interval interval, InstantPredicate predicate) {
+      List<String> intervalStarts = getIntervalStarts(tenant, table, interval);
+      List<Instant> instants = intervalStarts.stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
+      List<String> matches = new ArrayList<>();
+      for (Instant instant : instants) {
+          if (predicate.test(Arrays.asList(instant)))
+              matches.add(instant.toString());
+      }
+      return matches;
   }
 }

@@ -3,7 +3,6 @@ package com.rapid7.armor.read.slow;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,6 +55,7 @@ public class SlowArmorReader extends BaseArmorReader {
     return armorShard.getColumn().first(limit);
   }
 
+  @SuppressWarnings("unchecked")
   public Column<?> getColumn(String tenant, String table, Interval interval, Instant timestamp, String columnId) throws IOException {
     List<ShardId> shardIds = store.findShardIds(tenant, table, interval, timestamp, columnId).stream()
         .sorted(Comparator.comparingInt(ShardId::getShardNum))
@@ -71,6 +71,7 @@ public class SlowArmorReader extends BaseArmorReader {
     return column;
   }
   
+  @SuppressWarnings("unchecked")
   public Table getTable(String tenant, String table, Interval interval, Instant timestamp) {
     List<ColumnId> columnIds = store.getColumnIds(tenant, table, interval, timestamp);
     Map<String, Column<?>> columns = new HashMap<>();

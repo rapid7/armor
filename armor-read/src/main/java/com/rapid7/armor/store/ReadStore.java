@@ -10,8 +10,13 @@ import java.time.Instant;
 import java.util.List;
 
 public interface ReadStore {
+    
   List<String> getTenants();
 
+  List<String> getIntervalStarts(String tenant, String table, Interval interval, InstantPredicate predicate);
+
+  List<String> getIntervalStarts(String tenant, String table, Interval interval);
+  
   ColumnId findColumnId(String tenant, String table, Interval interval, Instant timestamp, String columnName);
   
   ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
