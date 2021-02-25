@@ -37,7 +37,7 @@ public class S3ReadStore implements ReadStore {
   private final AmazonS3 s3Client;
   private final String bucket;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final String TENANT_EXCLUDE_FILTER = "___";
+  private static final String TENANT_EXCLUDE_FILTER_PREFIX = "___";
 
   public S3ReadStore(AmazonS3 s3Client, String bucket) {
     this.s3Client = s3Client;
@@ -216,7 +216,7 @@ public class S3ReadStore implements ReadStore {
       allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace("/", "")).collect(Collectors.toList()));
       lor.setContinuationToken(result.getNextContinuationToken());
     } while (result.isTruncated());
-    return allPrefixes.stream().filter(t -> !t.startsWith(TENANT_EXCLUDE_FILTER)).collect(Collectors.toList());
+    return allPrefixes.stream().filter(t -> !t.startsWith(TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
   }
 
   @Override
