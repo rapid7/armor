@@ -148,7 +148,7 @@ public interface ReadStore {
    *
    * @return A list of {@link ShardId}s.
    */
-  List<ShardId> findShardIds(String tenant, String tableName, Interval interval, InstantPredicate intervalStartPredicate);
+  List<ShardId> findShardIds(String tenant, String table, Interval interval, InstantPredicate intervalStartPredicate);
   
   /**
    * Finds the {@link ShardId}s given a set of parameters.
@@ -160,7 +160,7 @@ public interface ReadStore {
    *
    * @return A list of {@link ShardId}s.
    */
-  List<ShardId> findShardIds(String tenant, String tableName, StringPredicate intervalPredicate, InstantPredicate intervalStartPredicate);
+  List<ShardId> findShardIds(String tenant, String table, StringPredicate intervalPredicate, InstantPredicate intervalStartPredicate);
   
   /**
    * Finds the {@link ShardId}s given a set of parameters.
@@ -171,5 +171,5 @@ public interface ReadStore {
    *
    * @return A list of {@link ShardId}s.
    */
-  List<ShardId> findShardIds(String tenant, String tableName, Interval interval);
+  List<ShardId> findShardIds(String tenant, String table, Interval interval);
 }
