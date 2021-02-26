@@ -589,7 +589,7 @@ public class FileStoreV2Test {
       
       verifyTableReaderPOV(1, testDirectory, 1);
       verifyEntityReaderPOV(entity1, testDirectory);
-      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
+      ColumnMetadata md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
 
     }
@@ -608,10 +608,10 @@ public class FileStoreV2Test {
       verifyEntityReaderPOV(entity1, testDirectory);
       verifyEntityReaderPOV(entity2, testDirectory);
       
-      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
+      ColumnMetadata md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity2Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity2Shard), testColumn));
       assertEquals(Compression.ZSTD.toString(), md.getCompressionAlgorithm());
     }
     
@@ -630,13 +630,13 @@ public class FileStoreV2Test {
       verifyEntityReaderPOV(entity2, testDirectory);
       verifyEntityReaderPOV(entity3, testDirectory);
       
-      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
+      ColumnMetadata md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity2Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity2Shard), testColumn));
       assertEquals(Compression.ZSTD.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity3Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity3Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
     }
     
@@ -656,16 +656,16 @@ public class FileStoreV2Test {
       verifyEntityReaderPOV(entity3, testDirectory);
       verifyEntityReaderPOV(entity4, testDirectory);
       
-      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
+      ColumnMetadata md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity2Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity2Shard), testColumn));
       assertEquals(Compression.ZSTD.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity3Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity3Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity4Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity4Shard), testColumn));
       assertEquals(Compression.ZSTD.toString(), md.getCompressionAlgorithm());
     }
     
@@ -695,19 +695,19 @@ public class FileStoreV2Test {
       verifyEntityReaderPOV(entity4, testDirectory);
       verifyEntityReaderPOV(entity5, testDirectory);
 
-      ColumnMetadata md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
+      ColumnMetadata md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity2Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity2Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity3Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity3Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity4Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity4Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
       
-      md = store.columnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity5Shard), testColumn));
+      md = store.getColumnMetadata(TENANT, TABLE, new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity5Shard), testColumn));
       assertEquals(Compression.NONE.toString(), md.getCompressionAlgorithm());
     }
   }

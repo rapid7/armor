@@ -177,7 +177,7 @@ public class ArmorWriter implements Closeable {
 
     // If it is null then table doesn't exist yet which means we can just return.
     // If it is not null then table does exist, in that case load it up and attempt a delete.
-    TableMetadata tableMeta = store.loadTableMetadata(tenant, table);
+    TableMetadata tableMeta = store.getTableMetadata(tenant, table);
     if (tableMeta == null)
       return;
 
@@ -278,7 +278,7 @@ public class ArmorWriter implements Closeable {
     TableId tableId = new TableId(tenant, table);
     final TableWriter tableWriter;
     if (!tableWriters.containsKey(tableId)) {
-      TableMetadata tableMeta = store.loadTableMetadata(tenant, table);
+      TableMetadata tableMeta = store.getTableMetadata(tenant, table);
       if (tableMeta != null) {
         // The table exists, load it up then
         tableWriter = getTableWriter(tableId);
@@ -361,7 +361,7 @@ public class ArmorWriter implements Closeable {
     }
     ColumnId entityColumnId = tableEntityColumnIds.get(tableId);
     if (entityColumnId == null) {
-      TableMetadata tableMetadata = this.store.loadTableMetadata(tenant, table);
+      TableMetadata tableMetadata = this.store.getTableMetadata(tenant, table);
       if (tableMetadata == null) {
         throw new RuntimeException("Unable to determine the entityid column name from store or memory, cannot commit");
       }

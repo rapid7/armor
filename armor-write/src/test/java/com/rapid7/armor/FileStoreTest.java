@@ -2,7 +2,6 @@ package com.rapid7.armor;
 
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
-import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.read.fast.FastArmorBlock;

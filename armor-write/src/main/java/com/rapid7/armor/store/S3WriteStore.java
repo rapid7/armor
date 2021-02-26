@@ -68,14 +68,9 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
-  }
-
-  @Override
   public ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, Object entityId) {
     int shardNum = shardStrategy.shardNum(entityId);
-    return buildShardId(tenant, table, interval, timestamp, shardNum);
+    return ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
   }
 
   @Override
@@ -173,8 +168,8 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public List<ColumnFileWriter> loadColumnWriters(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
-    List<ColumnId> columnIds = getColumnIds(buildShardId(tenant, table, interval, timestamp, shardNum));
+    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
+    List<ColumnId> columnIds = getColumnIds(ShardId.buildShardId(tenant, table, interval, timestamp, shardNum));
     List<ColumnFileWriter> writers = new ArrayList<>();
     for (ColumnId columnId : columnIds) {
       String shardIdPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardId.getShardNum()) + "/" + columnId.fullName();
@@ -205,7 +200,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public TableMetadata loadTableMetadata(String tenant, String table) {
+  public TableMetadata getTableMetadata(String tenant, String table) {
     String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
     try {
       if (doesObjectExist(bucket, relativeTarget)) {
@@ -238,7 +233,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public ShardMetadata loadShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
+  public ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     String shardIdPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum) + "/" + Constants.SHARD_METADATA + ".armor";
 
     if (s3Client.doesObjectExist(bucket, shardIdPath)) {
@@ -257,7 +252,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public void saveShardMetadata(String transactionId, String tenant, String table, Interval interval, Instant timestamp, int shardNum, ShardMetadata shardMetadata) {
-    ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
+    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
     String shardIdPath = shardId.getShardId() + "/" + transactionId + "/" + Constants.SHARD_METADATA + ".armor";
     for (int i = 0; i < 10; i++) {
       try {
@@ -498,7 +493,7 @@ public class S3WriteStore implements WriteStore {
   private ShardId toShardId(String tenant, String table, Interval interval, Instant timestamp, String rawShard) {
     String shardName = Paths.get(rawShard).getFileName().toString();
     int shardNum = Integer.parseInt(shardName.replace("shard-", ""));
-    return buildShardId(tenant, table, interval, timestamp, shardNum);
+    return ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
   }
 
   @Override
@@ -526,7 +521,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public ColumnMetadata columnMetadata(String tenant, String table, ColumnShardId columnShardId) {
+  public ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShardId) {
     String shardIdPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getInterval(), columnShardId.getIntervalStart(), columnShardId.getShardNum()) + "/" + columnShardId.getColumnId().fullName();
     try {
       if (!s3Client.doesObjectExist(bucket, shardIdPath)) {

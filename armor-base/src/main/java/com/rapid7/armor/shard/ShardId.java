@@ -1,7 +1,10 @@
 package com.rapid7.armor.shard;
 
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Objects;
+
+import com.rapid7.armor.interval.Interval;
 
 public class ShardId {
 
@@ -10,6 +13,10 @@ public class ShardId {
   private final String interval;
   private final String intervalStart;
   private final int shardNum;
+
+  public static ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
+    return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
+  }
 
   public ShardId(String tenant, String table, String interval, String intervalStart, int shardNum) {
     this.tenant = tenant;

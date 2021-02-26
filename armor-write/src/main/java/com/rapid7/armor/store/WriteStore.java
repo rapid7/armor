@@ -21,23 +21,21 @@ public interface WriteStore {
   void deleteTenant(String tenant);
   void deleteTable(String tenant, String table);
   
-  ColumnMetadata columnMetadata(String tenant, String table, ColumnShardId columnShard);
+  ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShard);
 
   // Loading from store
   List<ColumnFileWriter> loadColumnWriters(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
 
   ColumnFileWriter loadColumnWriter(ColumnShardId columnShard);
 
-  ShardMetadata loadShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
+  ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
 
-  TableMetadata loadTableMetadata(String tenant, String table);
+  TableMetadata getTableMetadata(String tenant, String table);
 
   // Get style methods
   int findShardNum(Object entityId);
 
   ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, Object entityId);
-
-  ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
 
   List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp);
 

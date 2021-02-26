@@ -19,8 +19,6 @@ import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
@@ -160,8 +158,8 @@ public class S3StoreTest {
     assertTrue(shard1columnIds.contains(nameColumn));
     assertTrue(shard1columnIds.contains(levelColumn));
 
-    assertEquals(shard0, writeStore.buildShardId("org1", "table1", SINGLE, Instant.now(), 0));
-    assertEquals(shard1, writeStore.buildShardId("org1", "table1", SINGLE, Instant.now(), 1));
+    assertEquals(shard0, ShardId.buildShardId("org1", "table1", SINGLE, Instant.now(), 0));
+    assertEquals(shard1, ShardId.buildShardId("org1", "table1", SINGLE, Instant.now(), 1));
 
     S3ReadStore readStore = new S3ReadStore(client, TEST_BUCKET);
     assertEquals(shard0, readStore.findShardId("org1", "table1", SINGLE, Instant.now(), 0));

@@ -52,11 +52,6 @@ public class FileWriteStore implements WriteStore {
     this.shardStrategy = shardStrategy;
   }
 
-  @Override
-  public ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
-  }
-
   private ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, String num) {
     return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), Integer.parseInt(num));
   }
@@ -99,7 +94,7 @@ public class FileWriteStore implements WriteStore {
   @Override
   public ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, Object entityId) {
     int shardNum = shardStrategy.shardNum(entityId);
-    return buildShardId(tenant, table, interval, timestamp, shardNum);
+    return ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
   }
 
   @Override
@@ -169,8 +164,8 @@ public class FileWriteStore implements WriteStore {
   @Override
   public List<ColumnFileWriter> loadColumnWriters(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     String currentPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
-    ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
-    List<ColumnId> columnIds = getColumnIds(buildShardId(tenant, table, interval, timestamp, shardNum));
+    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
+    List<ColumnId> columnIds = getColumnIds(ShardId.buildShardId(tenant, table, interval, timestamp, shardNum));
     List<ColumnFileWriter> writers = new ArrayList<>();
     for (ColumnId columnId : columnIds) {
       Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnId.fullName()));
@@ -191,7 +186,7 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public TableMetadata loadTableMetadata(String tenant, String table) {
+  public TableMetadata getTableMetadata(String tenant, String table) {
     String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
     Path target = basePath.resolve(relativeTarget);
     if (!Files.exists(target))
@@ -221,7 +216,7 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public ShardMetadata loadShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
+  public ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     String currentPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
     if (currentPath == null)
       return null;
@@ -238,7 +233,7 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public void saveShardMetadata(String transactionId, String tenant, String table, Interval interval, Instant timestamp, int shardNum, ShardMetadata shardMetadata) {
-    ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
+    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
     Path shardIdPath = basePath.resolve(Paths.get(shardId.getShardId(), transactionId, Constants.SHARD_METADATA + ".armor"));
     try {
       Files.createDirectories(shardIdPath.getParent());
@@ -394,7 +389,7 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public ColumnMetadata columnMetadata(String tenant, String table, ColumnShardId columnShardId) {
+  public ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShardId) {
     String currentPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getInterval(), columnShardId.getIntervalStart(), columnShardId.getShardNum());
     if (currentPath == null)
       return null;
