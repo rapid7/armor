@@ -48,11 +48,11 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
   }
 
   public DataType getDataType() {
-    return metadata.getDataType();
+    return metadata.getColumnType();
   }
 
-  public String columnId() {
-    return metadata.getColumnId();
+  public String columnName() {
+    return metadata.getColumnName();
   }
 
   public FastArmorBlockReader getFastArmorColumnReader() {
@@ -64,7 +64,7 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
         metadata.getNumEntities(),
         entityDecodedLength,
         entityNumRows,
-        metadata.getDataType());
+        metadata.getColumnType());
   }
   
   public List<Object> getValuesForRecord(int entityId) {
@@ -124,10 +124,10 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
 
   
   private int loadToByteBuffer(List<EntityRecord> indexRecords, InputStream inputStream, ColumnMetadata metadata) throws IOException {
-    columnValues = ByteBuffer.allocate(metadata.getDataType().determineByteLength(metadata.getNumRows()));
+    columnValues = ByteBuffer.allocate(metadata.getColumnType().determineByteLength(metadata.getNumRows()));
     entityNumRows = new int[metadata.getNumEntities()];
     entityDecodedLength = new int[metadata.getNumEntities()];
-    DataType dataType = metadata.getDataType();
+    DataType dataType = metadata.getColumnType();
     int bytesRead = 0;
     int entityCounter = 0;
 
@@ -169,7 +169,7 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
             rowsIsNull.add(rowCounter + relativeRowPosition);
           }
         } catch (Exception e) {
-          throw new RuntimeException("Unable to read column " + metadata.getColumnId(), e);
+          throw new RuntimeException("Unable to read column " + metadata.getColumnName(), e);
         }
       }
       rowCounter += numRows;
@@ -204,7 +204,7 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
       ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
       int uncompressedRead = loadToByteBuffer(entityRecords, zstdInputStream, metadata);
       if (uncompressed != uncompressedRead) {
-        LOGGER.warn("The expected number of bytes to be read for {} doesn't match {} read vs. {} expected, this can be an issue", this.columnId(), uncompressedRead, uncompressed);
+        LOGGER.warn("The expected number of bytes to be read for {} doesn't match {} read vs. {} expected, this can be an issue", this.columnName(), uncompressedRead, uncompressed);
       }
       return compressed;
     } else {

@@ -19,7 +19,7 @@ public class IntervalStrategyWeekly implements IntervalStrategy {
     ZonedDateTime dateTime = timestamp.atZone(ZoneId.of("UTC"));
 
     return dateTime
-        .with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         .withHour(0)
         .withMinute(0)
         .withSecond(0)
@@ -34,7 +34,7 @@ public class IntervalStrategyWeekly implements IntervalStrategy {
 
     return dateTime
         .plusWeeks(offset)
-        .with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         .withHour(0)
         .withMinute(0)
         .withSecond(0)

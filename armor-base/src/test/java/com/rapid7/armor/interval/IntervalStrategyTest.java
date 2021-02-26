@@ -14,7 +14,7 @@ public class IntervalStrategyTest {
   @Test
   public void testWeekly() {
     Instant ld = LocalDate.parse("2021-02-22").atStartOfDay().toInstant(ZoneOffset.UTC);
-    assertEquals("2021-02-21T00:00:00Z", Interval.WEEKLY.getIntervalStart(ld));
+    assertEquals("2021-02-22T00:00:00Z", Interval.WEEKLY.getIntervalStart(ld));
   }
 
   @Test

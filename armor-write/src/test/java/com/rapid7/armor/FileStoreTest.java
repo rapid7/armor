@@ -278,7 +278,7 @@ public class FileStoreTest {
 
           SlowArmorReader armorReader = new SlowArmorReader(fileReadStore);
           ColumnMetadata aShard = armorReader.getColumnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
-          assertEquals(DataType.INTEGER, aShard.getDataType());
+          assertEquals(DataType.INTEGER, aShard.getColumnType());
           assertEquals(Integer.valueOf(0), Integer.valueOf(aShard.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), aShard.getMaxValue());
           assertEquals(Double.valueOf(-1.0), aShard.getMinValue());
@@ -294,7 +294,7 @@ public class FileStoreTest {
 
           FastArmorReader fastArmorReader = new FastArmorReader(fileReadStore);
           ColumnMetadata rShard = armorReader.getColumnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
-          assertEquals(DataType.INTEGER, rShard.getDataType());
+          assertEquals(DataType.INTEGER, rShard.getColumnType());
           assertEquals(Integer.valueOf(0), Integer.valueOf(rShard.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), rShard.getMaxValue());
           assertEquals(Double.valueOf(-1.0), rShard.getMinValue());

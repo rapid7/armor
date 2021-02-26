@@ -1,11 +1,15 @@
 package com.rapid7.armor.meta;
 
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @JsonInclude(value = Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -47,5 +51,14 @@ public class TableMetadata {
 
   public void setEntityColumnIdType(String entityColumnIdType) {
     this.entityColumnIdType = entityColumnIdType;
+  }
+  
+  public List<ColumnId> getColumnIds() {
+    Set<ColumnId> columnIds = new HashSet<>(); 
+    for (ShardMetadata shardMetadata : shardMetadata) {
+      columnIds.addAll(
+         shardMetadata.getColumnMetadata().stream().map(c -> new ColumnId(c.getColumnName(), c.getColumnType().getCode())).collect(Collectors.toSet()));
+    }
+    return new ArrayList<>(columnIds);
   }
 }

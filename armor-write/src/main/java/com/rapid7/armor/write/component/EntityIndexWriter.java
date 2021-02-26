@@ -144,7 +144,7 @@ public class EntityIndexWriter extends FileComponent {
     metadata.setNumEntities(numEntities);
     float fragPercent = ((float) freeableBytes / (freeableBytes + usedBytes));
     metadata.setFragmentationLevel((int) (fragPercent * 100));
-    metadata.setNumRows(metadata.getDataType().rowCount(usedBytes));
+    metadata.setNumRows(metadata.getColumnType().rowCount(usedBytes));
   }
 
   public EntityRecord delete(int entityUuid, long version, String instanceId) throws IOException {

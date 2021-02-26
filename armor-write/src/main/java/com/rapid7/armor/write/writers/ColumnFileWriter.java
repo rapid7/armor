@@ -67,8 +67,8 @@ public class ColumnFileWriter implements AutoCloseable {
     metadata = new ColumnMetadata();
     DataType dataType = columnShardId.getColumnId().dataType();
     this.columnShardId = columnShardId;
-    metadata.setDataType(columnShardId.getColumnId().dataType());
-    metadata.setColumnId(columnShardId.getColumnId().getName());
+    metadata.setColumnType(columnShardId.getColumnId().dataType());
+    metadata.setColumnName(columnShardId.getColumnId().getName());
     columnShardId.getColumnId().dataType();
     if (dataType == DataType.STRING)
       valueDictionary = new DictionaryWriter(false);
@@ -94,8 +94,8 @@ public class ColumnFileWriter implements AutoCloseable {
         }
       } else {
         metadata = new ColumnMetadata();
-        metadata.setDataType(dt);
-        metadata.setColumnId(columnShardId.getColumnId().getName());
+        metadata.setColumnType(dt);
+        metadata.setColumnName(columnShardId.getColumnId().getName());
         metadata.setLastUpdate(new Date().toString());
         if (dt == DataType.STRING)
           valueDictionary = new DictionaryWriter(false);
@@ -280,7 +280,7 @@ public class ColumnFileWriter implements AutoCloseable {
    * @return A list of entity record summaries.
    */
   public List<EntityRecordSummary> getEntityRecordSummaries() {
-    int byteLength = metadata.getDataType().getByteLength();
+    int byteLength = metadata.getColumnType().getByteLength();
     List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
     if (entityDictionary.isEmpty()) {
       return records.stream()
@@ -572,7 +572,7 @@ public class ColumnFileWriter implements AutoCloseable {
       if (eRecord == null) {
         // This doesn't exist on this column but may on other columns according to the entities
         // passed in as a parameter. Because of this we should fill in null values for this.
-        int valueLength = metadata.getDataType().determineByteLength(entityCheck.getNumRows());
+        int valueLength = metadata.getColumnType().determineByteLength(entityCheck.getNumRows());
         EntityRecord er = new EntityRecord(
             entityId,
             Constants.NULL_FILLER_INDICATOR, // Trigger null fill in row group

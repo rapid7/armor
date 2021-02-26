@@ -83,19 +83,19 @@ public class ColumnMetadata {
     this.maxValue = maxValue;
   }
 
-  public DataType getDataType() {
+  public DataType getColumnType() {
     return dataType;
   }
 
-  public void setDataType(DataType dataType) {
+  public void setColumnType(DataType dataType) {
     this.dataType = dataType;
   }
 
-  public String getColumnId() {
+  public String getColumnName() {
     return columnId;
   }
 
-  public void setColumnId(String columnId) {
+  public void setColumnName(String columnId) {
     this.columnId = columnId;
   }
 

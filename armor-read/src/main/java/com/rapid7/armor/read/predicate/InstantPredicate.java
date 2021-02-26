@@ -1,37 +1,42 @@
-package com.rapid7.armor.store;
+package com.rapid7.armor.read.predicate;
 
 import java.time.Instant;
 import java.util.List;
+
+import com.rapid7.armor.store.Operator;
 
 public class InstantPredicate extends Predicate<Instant> {
     public InstantPredicate(String field, Operator operator, List<Instant> values) {
         super(field, operator, values);
     }
+    public InstantPredicate(String field, Operator operator, Instant value) {
+        super(field, operator, value);
+    }
 
     @Override
-    public boolean executeTest(List<Instant> testValues) {
+    public boolean executeTest(Instant testValue) {
       if (operator == Operator.EQUALS) {
-        return executeEquals(testValues.get(0));
+        return executeEquals(testValue);
       } else if (operator == Operator.NOT_EQUALS) {
-        return executeNotEquals(testValues.get(9));
+        return executeNotEquals(testValue);
       } else if (operator == Operator.GREATER_THAN) {
-        return executeGreaterThan(testValues.get(0).toEpochMilli());
+        return executeNumGreaterThan(testValue);
       } else if (operator == Operator.GREATER_THAN_EQUAL) {
-        return executeGreaterThan(testValues.get(0).toEpochMilli());
+        return executeNumGreaterThan(testValue);
       } else if (operator == Operator.LESS_THAN) {
-        return executeLessThan(testValues.get(0).toEpochMilli());
+        return executeNumLessThan(testValue);
       } else if (operator == Operator.LESS_THAN_EQUAL) {
-        return executeLessThanEqual(testValues.get(0).toEpochMilli());
+        return executeNumLessThanEqual(testValue);
       } else if (operator == Operator.BETWEEN) {
-        return executeBetween(testValues.get(0).toEpochMilli());
+        return executeNumBetween(testValue);
       } else if (operator == Operator.IN) {
-        return executeIn(testValues.get(0));
+        return executeIn(testValue);
       }
       return false;
     }
 
     @Override
-    public Number convertValuesToNumber(Instant value) {
+    public Number convertValueToNumber(Instant value) {
        return value.toEpochMilli();
     }
 }

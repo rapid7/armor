@@ -2,7 +2,10 @@ package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.meta.ShardMetadata;
+import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
+import com.rapid7.armor.read.predicate.InstantPredicate;
+import com.rapid7.armor.read.predicate.StringPredicate;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.interval.Interval;
@@ -46,25 +49,6 @@ public class S3ReadStore implements ReadStore {
 
   private ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
-  }
-
-  @Override
-  public List<ColumnId> getColumnIds(ShardId shardId) {
-    ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    lor.withPrefix(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()) + "/");
-    HashSet<ColumnId> columnIds = new HashSet<>();
-    ListObjectsV2Result ol;
-    do {
-      ol = s3Client.listObjectsV2(lor);
-      List<S3ObjectSummary> summaries = ol.getObjectSummaries();
-      columnIds.addAll(summaries.stream()
-        .map(s -> Paths.get(s.getKey()).getFileName().toString())
-        .filter(n -> !n.contains(Constants.SHARD_METADATA))
-        .map(ColumnId::new).collect(Collectors.toList()));
-      lor.setContinuationToken(ol.getNextContinuationToken());
-    } while (ol.isTruncated());
-    return new ArrayList<>(columnIds);
   }
 
   @Override
@@ -158,6 +142,47 @@ public class S3ReadStore implements ReadStore {
       }
     }
   }
+  
+  @Override
+  public TableMetadata getTableMetadata(String tenant, String table) {
+    String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
+    try {
+      if (doesObjectExist(bucket, relativeTarget)) {
+        try (S3Object s3Object = s3Client.getObject(bucket, relativeTarget); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
+          try {
+            return OBJECT_MAPPER.readValue(s3InputStream, TableMetadata.class);
+          } finally {
+            com.amazonaws.util.IOUtils.drainInputStream(s3InputStream);
+          }
+        } catch (IOException jpe) {
+          throw new RuntimeException(jpe);
+        }
+      } else
+        return null;
+    } catch (AmazonS3Exception as3) {
+      LOGGER.error("Unable to load metadata at on {} at {}", bucket, relativeTarget);
+      throw as3;
+    }
+  }
+  
+  @Override
+  public List<ColumnId> getColumnIds(String tenant, String table) {
+    TableMetadata tm = getTableMetadata(tenant, table);
+    if (tm == null) {
+        Set<ColumnId> columnIds = new HashSet<>();
+        for (Interval interval : getIntervals(tenant, table)) {
+            if (interval == Interval.SINGLE)
+                columnIds.addAll(getColumnIds(tenant, table, interval, Instant.now()));
+            else {
+                List<String> startIntervals = getIntervalStarts(tenant, table, interval);
+                if (!startIntervals.isEmpty()) {
+                    columnIds.addAll(getColumnIds(tenant, table, interval, Instant.parse(startIntervals.get(0))));
+                }
+            }
+        }
+    }
+    return tm.getColumnIds();
+  }
 
   @Override
   public List<ColumnId> getColumnIds(String tenant, String table, Interval interval, Instant timestamp) {
@@ -165,6 +190,25 @@ public class S3ReadStore implements ReadStore {
     if (shardIds.isEmpty())
       return new ArrayList<>();
     return getColumnIds(shardIds.get(0));
+  }
+  
+  @Override
+  public List<ColumnId> getColumnIds(ShardId shardId) {
+    ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
+    lor.withDelimiter("/");
+    lor.withPrefix(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()) + "/");
+    HashSet<ColumnId> columnIds = new HashSet<>();
+    ListObjectsV2Result ol;
+    do {
+      ol = s3Client.listObjectsV2(lor);
+      List<S3ObjectSummary> summaries = ol.getObjectSummaries();
+      columnIds.addAll(summaries.stream()
+        .map(s -> Paths.get(s.getKey()).getFileName().toString())
+        .filter(n -> !n.contains(Constants.SHARD_METADATA))
+        .map(ColumnId::new).collect(Collectors.toList()));
+      lor.setContinuationToken(ol.getNextContinuationToken());
+    } while (ol.isTruncated());
+    return new ArrayList<>(columnIds);
   }
 
   @Override
@@ -220,7 +264,7 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public ColumnId findColumnId(String tenant, String table, Interval interval, Instant timestamp, String columnName) {
+  public ColumnId getColumnId(String tenant, String table, Interval interval, Instant timestamp, String columnName) {
     List<ColumnId> columnIds = getColumnIds(tenant, table, interval, timestamp);
     Optional<ColumnId> first = columnIds.stream().filter(c -> c.getName().equalsIgnoreCase(columnName)).findFirst();
     return first.orElse(null);
@@ -242,6 +286,10 @@ public class S3ReadStore implements ReadStore {
       }
     } else
       return null;
+  }
+
+  private String getIntervalPrefix(String tenant, String table) {
+      return tenant + "/" + table;
   }
 
   private String getIntervalPrefix(String tenant, String table, Interval interval) {
@@ -303,14 +351,86 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public List<String> getIntervalStarts(String tenant, String table, Interval interval, InstantPredicate predicate) {
+  public List<String> getIntervalStarts(String tenant, String table, Interval interval, InstantPredicate intervalStart) {
       List<String> intervalStarts = getIntervalStarts(tenant, table, interval);
       List<Instant> instants = intervalStarts.stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
       List<String> matches = new ArrayList<>();
       for (Instant instant : instants) {
-          if (predicate.test(Arrays.asList(instant)))
+          if (intervalStart == null || intervalStart.test(instant))
               matches.add(instant.toString());
       }
       return matches;
+  }
+  
+  @Override
+  public List<ShardId> findShardIds(String tenant, String table, Interval interval) {
+      if (interval == Interval.SINGLE)
+          return findShardIds(tenant, table, interval, Instant.now());
+      List<String> matches = getIntervalStarts(tenant, table, interval);
+      List<ShardId> shardIds = new ArrayList<>();
+      for (String match : matches) {
+          shardIds.addAll(findShardIds(tenant, table, interval, Instant.parse(match)));
+      }
+      return shardIds;
+  }
+  
+  @Override
+  public List<ShardId> findShardIds(String tenant, String table, Interval interval, InstantPredicate intervalStart) {
+      if (interval == Interval.SINGLE)
+          return findShardIds(tenant, table, interval, Instant.now());
+      List<String> intervalStarts = getIntervalStarts(tenant, table, interval);
+      List<Instant> instants = intervalStarts.stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
+      List<String> matches = new ArrayList<>();
+      for (Instant instant : instants) {
+          if (intervalStart == null || intervalStart.test(instant))
+              matches.add(instant.toString());
+      }
+      
+      List<ShardId> shardIds = new ArrayList<>();
+      // So now we have the matching intervals, next for each interval get the shardIds
+      for (String match : matches) {
+          shardIds.addAll(findShardIds(tenant, table, interval, Instant.parse(match)));
+      }
+      return shardIds;
+  }
+  
+  @Override
+  public List<ShardId> findShardIds(String tenant, String table, StringPredicate interval, InstantPredicate intervalStart) {
+      if (interval == null) {
+          // This is gonna be slow but we will do it.
+          List<ShardId> shardIds = new ArrayList<>();
+          List<Interval> intervals = getIntervals(tenant, table);
+          for (Interval inter : intervals) {
+              shardIds.addAll(findShardIds(tenant, table, inter, intervalStart));
+          }
+          return shardIds;
+      } else if (interval.getOperator() == Operator.EQUALS && interval.getValue().equalsIgnoreCase(Interval.SINGLE.getInterval()))
+          return findShardIds(tenant, table, Interval.SINGLE, Instant.now());
+
+      List<Interval> intervals = getIntervals(tenant, table);
+      List<ShardId> shardIds = new ArrayList<>();
+      for (Interval inter : intervals) {
+          if (inter != null && interval.test(inter.getInterval()))
+              shardIds.addAll(findShardIds(tenant, table, inter, intervalStart));
+      }
+      return shardIds;
+  }
+
+  @Override
+  public List<Interval> getIntervals(String tenant, String table) {
+      ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
+      lor.withPrefix(getIntervalPrefix(tenant, table) + "/");
+      lor.withDelimiter("/");
+      
+      Set<String> allPrefixes = new HashSet<>();
+      ListObjectsV2Result result;
+      do {
+        result = s3Client.listObjectsV2(lor);
+        allPrefixes.addAll(
+           result.getCommonPrefixes().stream()
+              .map(o -> Paths.get(o).getFileName().toString()).collect(Collectors.toList()));
+        lor.setContinuationToken(result.getNextContinuationToken());
+      } while (result.isTruncated());
+      return allPrefixes.stream().map(i -> Interval.toInterval(i)).collect(Collectors.toList());
   }
 }

@@ -57,15 +57,15 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
   }
 
   public DataType getDataType() {
-    return metadata.getDataType();
+    return metadata.getColumnType();
   }
 
   public int countRows() {
     return column.size();
   }
 
-  public String columnId() {
-    return metadata.getColumnId();
+  public String columnName() {
+    return metadata.getColumnName();
   }
 
   public IntColumn getEntitesInt() {
@@ -73,7 +73,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
   }
 
   public Column<?> getColumnByEntityId(Object entityId) {
-    switch (metadata.getDataType()) {
+    switch (metadata.getColumnType()) {
       case STRING:
         return getStringsByEntity(entityId);
       case BOOLEAN:
@@ -92,7 +92,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
   }
 
   public Column<?> getColumn() {
-    switch (metadata.getDataType()) {
+    switch (metadata.getColumnType()) {
       case STRING:
         return getStrings();
       case BOOLEAN:
@@ -136,12 +136,12 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     Integer surrogate = resolveEntity(entityid);
     List<Integer> rowNumbers = entityToRowNumbers.get(surrogate);
     if (rowNumbers == null)
-      return StringColumn.create(metadata.getColumnId());
+      return StringColumn.create(metadata.getColumnName());
 
     for (Integer rowNum : rowNumbers) {
       results.add((String) column.get(rowNum));
     }
-    return StringColumn.create(metadata.getColumnId(), results.toArray(new String[results.size()]));
+    return StringColumn.create(metadata.getColumnName(), results.toArray(new String[results.size()]));
   }
   
   public LongColumn getLongsByEntity(Object entityid) {
@@ -149,7 +149,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     ArrayList<Long> results = new ArrayList<>();
     List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
     if (rowNumbers == null)
-      return LongColumn.create(metadata.getColumnId());
+      return LongColumn.create(metadata.getColumnName());
 
     for (Integer rowNum : rowNumbers) {
       results.add((Long) column.get(rowNum));
@@ -161,7 +161,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
       else
         finalResults[i] = results.get(i);   
     }
-    return LongColumn.create(metadata.getColumnId(), finalResults);
+    return LongColumn.create(metadata.getColumnName(), finalResults);
   }
 
   public IntColumn getIntegersByEntity(Object entityid) {
@@ -169,12 +169,12 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
     ArrayList<Integer> results = new ArrayList<>();
     List<Integer> rowNumbers = entityToRowNumbers.get(resolveEntity(entityid));
     if (rowNumbers == null)
-      return IntColumn.create(metadata.getColumnId());
+      return IntColumn.create(metadata.getColumnName());
 
     for (Integer rowNum : rowNumbers) {
       results.add((Integer) column.get(rowNum));
     }
-    return IntColumn.create(metadata.getColumnId(), results.toArray(new Integer[results.size()]));
+    return IntColumn.create(metadata.getColumnName(), results.toArray(new Integer[results.size()]));
   }
 
   public IntColumn getIntegers() {
@@ -232,9 +232,9 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
   private int readToTable(List<EntityRecord> indexRecords, InputStream inputStream, ColumnMetadata metadata) throws IOException {
     int readBytes = 0;
     final AtomicInteger rowCounter = new AtomicInteger(1);
-    DataType dt = metadata.getDataType();
+    DataType dt = metadata.getColumnType();
 
-    column = createColumn(dt, metadata.getColumnId());
+    column = createColumn(dt, metadata.getColumnName());
 
     for (EntityRecord eir : indexRecords) {
       int entity = eir.getEntityId();
@@ -280,7 +280,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
             column.set(rowAdjusted, null);
           }
         } catch (Exception e) {
-          throw new RuntimeException("Unable to read column " + metadata.getColumnId(), e);
+          throw new RuntimeException("Unable to read column " + metadata.getColumnName(), e);
         }
       }
     }
@@ -295,8 +295,8 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
   }
 
   private void validateValueCall(DataType dataType) {
-    if (metadata.getDataType() != dataType)
-      throw new IllegalArgumentException("The data type " + dataType + " doesn't match the defined column data type of " + metadata.getDataType());
+    if (metadata.getColumnType() != dataType)
+      throw new IllegalArgumentException("The data type " + dataType + " doesn't match the defined column data type of " + metadata.getColumnType());
   }
 
   @Override
@@ -305,7 +305,7 @@ public class SlowArmorShardColumn extends BaseArmorShardColumn {
       ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
       int uncompressedRead = readToTable(entityRecords, zstdInputStream, metadata);
       if (uncompressed != uncompressedRead) {
-        LOGGER.warn("The expected number of bytes to be read for {} doesn't match {} read vs. {} expected, this can be an issue", this.columnId(), uncompressedRead, uncompressed);
+        LOGGER.warn("The expected number of bytes to be read for {} doesn't match {} read vs. {} expected, this can be an issue", this.columnName(), uncompressedRead, uncompressed);
       }
       return compressed;
     } else {
