@@ -180,6 +180,7 @@ public class S3ReadStore implements ReadStore {
                 }
             }
         }
+        return new ArrayList<>(columnIds);
     }
     return tm.getColumnIds();
   }
@@ -375,23 +376,32 @@ public class S3ReadStore implements ReadStore {
   }
   
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, Interval interval, InstantPredicate intervalStart) {
-      if (interval == Interval.SINGLE)
+  public List<ShardId> findShardIds(String tenant, String table, Interval interval, InstantPredicate intervalStartPredicate) {
+      if (interval != null && interval == Interval.SINGLE)
           return findShardIds(tenant, table, interval, Instant.now());
-      List<String> intervalStarts = getIntervalStarts(tenant, table, interval);
-      List<Instant> instants = intervalStarts.stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
-      List<String> matches = new ArrayList<>();
-      for (Instant instant : instants) {
-          if (intervalStart == null || intervalStart.test(instant))
-              matches.add(instant.toString());
-      }
+      Map<Interval, List<String>> intervalStarts = new HashMap<>();
+      if (interval == null) {
+         for (Interval inter : getIntervals(tenant, table)) {
+             intervalStarts.put(inter, getIntervalStarts(tenant, table, inter));
+         }
+      } else 
+          intervalStarts.put(interval, getIntervalStarts(tenant, table, interval));
       
-      List<ShardId> shardIds = new ArrayList<>();
-      // So now we have the matching intervals, next for each interval get the shardIds
-      for (String match : matches) {
-          shardIds.addAll(findShardIds(tenant, table, interval, Instant.parse(match)));
+      Set<ShardId> shardIds = new HashSet<>();
+      for (Map.Entry<Interval, List<String>> entry : intervalStarts.entrySet()) {
+       List<Instant> intervalStartInstances = entry.getValue().stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
+       List<String> matches = new ArrayList<>();
+       for (Instant intervalStartInstant : intervalStartInstances) {
+           if (intervalStartPredicate == null || intervalStartPredicate.test(intervalStartInstant))
+               matches.add(intervalStartInstant.toString());
+       }
+       
+       // So now we have the matching intervals, next for each interval get the shardIds
+       for (String match : matches) {
+          shardIds.addAll(findShardIds(tenant, table, entry.getKey(), Instant.parse(match)));
+       }
       }
-      return shardIds;
+      return new ArrayList<>(shardIds);
   }
   
   @Override
