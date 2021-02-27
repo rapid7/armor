@@ -35,7 +35,7 @@ public class ShardIdTest {
     assertEquals(table, shardId.getTable());
     assertEquals(interval.getInterval(), shardId.getInterval());
     assertEquals(interval.getIntervalStart(timestamp), shardId.getIntervalStart());
-    assertEquals(expectedShardPath, shardId.getShardId());
+    assertEquals(expectedShardPath, shardId.shardIdPath());
   }
 
   @Test
@@ -62,7 +62,7 @@ public class ShardIdTest {
     assertEquals(table, shardId.getTable());
     assertEquals(interval.getInterval(), shardId.getInterval());
     assertEquals(interval.getIntervalStart(timestamp), shardId.getIntervalStart());
-    assertEquals(expectedShardPath, shardId.getShardId());
+    assertEquals(expectedShardPath, shardId.shardIdPath());
   }
   
   @Test
@@ -88,7 +88,7 @@ public class ShardIdTest {
     assertEquals(table, shardId.getTable());
     assertEquals(interval.getInterval(), shardId.getInterval());
     assertEquals(interval.getIntervalStart(timestamp), shardId.getIntervalStart());
-    assertEquals(expectedShardPath, shardId.getShardId());
+    assertEquals(expectedShardPath, shardId.shardIdPath());
   }
   
   @Test

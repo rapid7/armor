@@ -8,15 +8,17 @@ import com.rapid7.armor.interval.Interval;
 
 public class ShardId {
 
-  private final String table;
-  private final String tenant;
-  private final String interval;
-  private final String intervalStart;
-  private final int shardNum;
+  private String table;
+  private String tenant;
+  private String interval;
+  private String intervalStart;
+  private int shardNum;
 
   public static ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
   }
+
+  public ShardId() {}
 
   public ShardId(String tenant, String table, String interval, String intervalStart, int shardNum) {
     this.tenant = tenant;
@@ -38,20 +40,40 @@ public class ShardId {
     return new ShardId(base.relativize(columFile));
   }
 
+  public void setTable(String table) {
+    this.table = table;
+  }
+  
   public String getTable() {
     return table;
   }
 
+  public void setTenant(String tenant) {
+    this.tenant = tenant;
+  }
+
   public String getTenant() {
     return tenant;
+  }
+  
+  public void setInterval(String interval) {
+    this.interval = interval;
   }
 
   public String getInterval() {
     return interval;
   }
 
+  public void setIntervalStart(String intervalStart) {
+    this.intervalStart = intervalStart;
+  }
+
   public String getIntervalStart() {
     return intervalStart;
+  }
+
+  public void setShardNum(int shardNum) {
+    this.shardNum = shardNum;
   }
 
   public int getShardNum() {
@@ -86,7 +108,7 @@ public class ShardId {
     return tenant + "_" + table  + "_" + interval + "_" + intervalStart + "_" + shardNum;
   }
 
-  public String getShardId() {
+  public String shardIdPath() {
     return tenant + "/" + table  + "/" + interval + "/" + intervalStart + "/" + shardNum;
   }
 

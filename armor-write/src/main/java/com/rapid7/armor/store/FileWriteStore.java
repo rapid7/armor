@@ -99,7 +99,7 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public void saveColumn(String transaction, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
-    Path shardIdPath = basePath.resolve(Paths.get(columnShardId.getShardId().getShardId(), transaction, columnShardId.getColumnId().fullName()));
+    Path shardIdPath = basePath.resolve(Paths.get(columnShardId.getShardId().shardIdPath(), transaction, columnShardId.getColumnId().fullName()));
     try {
       Files.createDirectories(shardIdPath.getParent());
       long copied = Files.copy(inputStream, shardIdPath, REPLACE_EXISTING);
@@ -187,7 +187,7 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public TableMetadata getTableMetadata(String tenant, String table) {
-    String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
+    String relativeTarget = resolveCurrentPath(tenant, table) + "/" + Constants.TABLE_METADATA + ".armor";
     Path target = basePath.resolve(relativeTarget);
     if (!Files.exists(target))
       return null;
@@ -200,9 +200,19 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void saveTableMetadata(String transaction, String tenant, String table, TableMetadata tableMetadata) {
-    String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
-    Path target = basePath.resolve(relativeTarget);
+  public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
+    Map<String, String> currentValues = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
+    String oldCurrent = null;
+    String oldPrevious = null;
+    if (currentValues != null) {
+      oldCurrent = currentValues.get("current");
+      oldPrevious = currentValues.get("previous");
+    }
+    if (oldCurrent != null && oldCurrent.equalsIgnoreCase(transaction))
+      throw new RuntimeException("Create another transaction");
+    String targetTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + transaction + "/" + Constants.TABLE_METADATA + ".armor";
+
+    Path target = basePath.resolve(targetTableMetaaPath);
     try {
       byte[] payload = OBJECT_MAPPER.writeValueAsBytes(tableMetadata);
       if (!Files.exists(target)) {
@@ -210,9 +220,19 @@ public class FileWriteStore implements WriteStore {
         Files.write(target, payload, StandardOpenOption.CREATE_NEW);
       } else
         Files.write(target, payload, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+      saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, oldCurrent);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
+    if (oldPrevious == null)
+      return;
+    try {
+      String deleteTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + oldPrevious + "/" + Constants.TABLE_METADATA + ".armor";
+      Files.deleteIfExists(basePath.resolve(deleteTableMetaaPath));
+    } catch (Exception e) {
+      LOGGER.warn("Unable to previous shard version under {}", oldPrevious, e);
+    }
+
   }
 
   @Override
@@ -232,9 +252,9 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void saveShardMetadata(String transactionId, String tenant, String table, Interval interval, Instant timestamp, int shardNum, ShardMetadata shardMetadata) {
-    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
-    Path shardIdPath = basePath.resolve(Paths.get(shardId.getShardId(), transactionId, Constants.SHARD_METADATA + ".armor"));
+  public void saveShardMetadata(String transaction, ShardMetadata shardMetadata) {
+    ShardId shardId = shardMetadata.getShardId();
+    Path shardIdPath = basePath.resolve(Paths.get(shardId.shardIdPath(), transaction, Constants.SHARD_METADATA + ".armor"));
     try {
       Files.createDirectories(shardIdPath.getParent());
       byte[] payload = OBJECT_MAPPER.writeValueAsBytes(shardMetadata);
@@ -250,17 +270,17 @@ public class FileWriteStore implements WriteStore {
       return;
     }
 
-    File shardIdDstDirectory = new File(basePath.resolve(Paths.get(shardIdDst.getShardId())).toString());
+    File shardIdDstDirectory = new File(basePath.resolve(Paths.get(shardIdDst.shardIdPath())).toString());
     if (shardIdDstDirectory.exists()) {
       return;
     }
 
-    File shardIdSrcDirectory = new File(basePath.resolve(Paths.get(shardIdSrc.getShardId())).toString());
+    File shardIdSrcDirectory = new File(basePath.resolve(Paths.get(shardIdSrc.shardIdPath())).toString());
     if (!shardIdSrcDirectory.exists() || !shardIdSrcDirectory.isDirectory()) {
       return;
     }
 
-    File copying = new File(basePath.resolve(Paths.get(shardIdDst.getShardId(), "COPYING")).toString());
+    File copying = new File(basePath.resolve(Paths.get(shardIdDst.shardIdPath(), "COPYING")).toString());
     try {
       Files.createDirectories(shardIdDstDirectory.toPath());
       copying.createNewFile();
@@ -407,12 +427,33 @@ public class FileWriteStore implements WriteStore {
     }
   }
 
+  private String resolveCurrentPath(String tenant, String table) {
+    Map<String, String> values = getCurrentValues(tenant, table);
+    String current = values.get("current");
+    if (current == null)
+      return null;
+    return basePath.resolve(Paths.get(tenant, table, current)).toString();
+  }
+
   private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
     Map<String, String> values = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
     String current = values.get("current");
     if (current == null)
       return null;
     return basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), current)).toString();
+  }
+
+  private Map<String, String> getCurrentValues(String tenant, String table) {
+    Path searchPath = basePath.resolve(Paths.get(tenant, table, Constants.CURRENT));
+    if (!Files.exists(searchPath))
+      return new HashMap<>();
+    else {
+      try {
+        return OBJECT_MAPPER.readValue(Files.newInputStream(searchPath), new TypeReference<Map<String, String>>() {});
+      } catch (IOException ioe) {
+        throw new RuntimeException(ioe);
+      }
+    }
   }
 
   private Map<String, String> getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
@@ -426,6 +467,20 @@ public class FileWriteStore implements WriteStore {
         throw new RuntimeException(ioe);
       }
     }
+  }
+
+  public void saveCurrentValues(String tenant, String table, String current, String previous) {
+      Path searchPath = basePath.resolve(Paths.get(tenant, table, Constants.CURRENT));
+      try {
+          Files.createDirectories(searchPath.getParent());
+          HashMap<String, String> currentValues = new HashMap<>();
+          currentValues.put("current", current);
+          if (previous != null)
+              currentValues.put("previous", previous);
+          Files.write(searchPath, OBJECT_MAPPER.writeValueAsBytes(currentValues), StandardOpenOption.CREATE);
+      } catch (IOException ioe) {
+          throw new RuntimeException(ioe);
+      }
   }
 
   public void saveCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum, String current, String previous) {

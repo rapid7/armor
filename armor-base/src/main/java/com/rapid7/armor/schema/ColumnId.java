@@ -16,6 +16,11 @@ public class ColumnId {
     this.name = fullName.substring(0, lastUnderscore);
     this.type = DataType.getDataType(fullName.substring(lastUnderscore + 1)).getCode();
   }
+  
+  public ColumnId(String name, DataType type) {
+      this.name = name;
+      this.type = type.getCode();
+    }
 
   public ColumnId(String name, String type) {
     this.name = name;

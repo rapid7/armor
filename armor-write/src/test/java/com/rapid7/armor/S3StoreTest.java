@@ -129,10 +129,10 @@ public class S3StoreTest {
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(2));
     ShardId shard0 = writeStore.findShardId("org1", "table1", SINGLE, Instant.now(), 0);
     assertEquals(0, shard0.getShardNum());
-    assertEquals("org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0", shard0.getShardId());
+    assertEquals("org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0", shard0.shardIdPath());
     ShardId shard1 = writeStore.findShardId("org1", "table1", SINGLE, Instant.now(), 1);
     assertEquals(1, shard1.getShardNum());
-    assertEquals("org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1", shard1.getShardId());
+    assertEquals("org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1", shard1.shardIdPath());
 
 
     List<ShardId> shardIds = writeStore.findShardIds("org1", "table1", SINGLE, Instant.now());

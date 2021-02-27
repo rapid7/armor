@@ -23,8 +23,10 @@ import java.nio.file.NoSuchFileException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ConcurrentHashMap;
@@ -360,8 +362,9 @@ public class ArmorWriter implements Closeable {
       return;
     }
     ColumnId entityColumnId = tableEntityColumnIds.get(tableId);
+    TableMetadata tableMetadata = null;
     if (entityColumnId == null) {
-      TableMetadata tableMetadata = this.store.getTableMetadata(tenant, table);
+      tableMetadata = this.store.getTableMetadata(tenant, table);
       if (tableMetadata == null) {
         throw new RuntimeException("Unable to determine the entityid column name from store or memory, cannot commit");
       }
@@ -399,12 +402,13 @@ public class ArmorWriter implements Closeable {
       submitted++;
     }
 
-    List<ShardMetadata> shardMetaDatas = new ArrayList<>();
-    TableMetadata tableMetadata = new TableMetadata(entityColumnId.getName(), entityColumnId.getType());
-    tableMetadata.setShardMetadata(shardMetaDatas);
+    if (tableMetadata == null)
+        tableMetadata = new TableMetadata(tenant, table, entityColumnId.getName(), entityColumnId.getType());
     for (int i = 0; i < submitted; ++i) {
       try {
-        shardMetaDatas.add(std.take().get());
+        ShardMetadata smd = std.take().get();
+        if (smd != null)
+          tableMetadata.addColumnIds(smd.columnIds());
       } catch (InterruptedException | ExecutionException e) {
         // Throw specialized handlers up verses wrapped runtime exceptions
         if (!offsetExceptions.isEmpty()) {
@@ -418,7 +422,8 @@ public class ArmorWriter implements Closeable {
         }
         throw new RuntimeException(e);
       }
+      // At this point in time put each column file into the underlying store.
     }
-    store.saveTableMetadata(transaction, tenant, table, tableMetadata);
+    store.saveTableMetadata(transaction, tableMetadata);
   }
 }

@@ -16,21 +16,34 @@ import java.time.Instant;
 import java.util.List;
 
 public interface WriteStore {
+  /**
+   * Returns the root directory for the write store.
+   *
+   * @return The rooot directory.
+   */
   String rootDirectory();
+  
+  /**
+   * Returns a list of all tenants stored.
+   *
+   * @return A list of all tenant store.
+   */
   List<String> getTenants();
   void deleteTenant(String tenant);
   void deleteTable(String tenant, String table);
   
+  ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
+  TableMetadata getTableMetadata(String tenant, String table);
   ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShard);
+  
+  void saveShardMetadata(String transaction, ShardMetadata shardMetadata);
+  void saveTableMetadata(String transaction, TableMetadata tableMetadata);
 
   // Loading from store
   List<ColumnFileWriter> loadColumnWriters(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
-
   ColumnFileWriter loadColumnWriter(ColumnShardId columnShard);
 
-  ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
 
-  TableMetadata getTableMetadata(String tenant, String table);
 
   // Get style methods
   int findShardNum(Object entityId);
@@ -43,10 +56,6 @@ public interface WriteStore {
 
   List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp, String columnId);
 
-  // Write to store
-  void saveShardMetadata(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum, ShardMetadata shardMetadata);
-
-  void saveTableMetadata(String transaction, String tenant, String table, TableMetadata tableMetadata);
 
   void copyShard(ShardId shardIdDst, ShardId shardIdSrc);
 

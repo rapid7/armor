@@ -141,9 +141,8 @@ public class ShardWriter {
       // Do this after the save, to ensure metadata is updated.
       List<ColumnMetadata> columnMetadata = columnFileWriters.values().stream().map(ColumnFileWriter::getMetadata).collect(Collectors.toList());
       columnMetadata.add(entityColumnMetadata);
-      ShardMetadata smd = new ShardMetadata();
-      smd.setColumnMetadata(columnMetadata);
-      store.saveShardMetadata(transaction, shardId.getTenant(), shardId.getTable(), interval, timestamp, shardId.getShardNum(), smd);
+      ShardMetadata smd = new ShardMetadata(shardId, columnMetadata);
+      store.saveShardMetadata(transaction, smd);
       store.commit(transaction, shardId.getTenant(), shardId.getTable(), interval, timestamp, shardId.getShardNum());
       committed = true;
       return smd;

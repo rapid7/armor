@@ -19,12 +19,12 @@ import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -169,20 +169,9 @@ public class S3ReadStore implements ReadStore {
   public List<ColumnId> getColumnIds(String tenant, String table) {
     TableMetadata tm = getTableMetadata(tenant, table);
     if (tm == null) {
-        Set<ColumnId> columnIds = new HashSet<>();
-        for (Interval interval : getIntervals(tenant, table)) {
-            if (interval == Interval.SINGLE)
-                columnIds.addAll(getColumnIds(tenant, table, interval, Instant.now()));
-            else {
-                List<String> startIntervals = getIntervalStarts(tenant, table, interval);
-                if (!startIntervals.isEmpty()) {
-                    columnIds.addAll(getColumnIds(tenant, table, interval, Instant.parse(startIntervals.get(0))));
-                }
-            }
-        }
-        return new ArrayList<>(columnIds);
+       return new ArrayList<>();
     }
-    return tm.getColumnIds();
+    return new ArrayList<>(tm.getColumnIds());
   }
 
   @Override

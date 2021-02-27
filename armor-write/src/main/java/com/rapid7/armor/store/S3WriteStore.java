@@ -74,8 +74,8 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void saveColumn(String transactionId, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
-    String key = getIntervalPrefix(columnShardId.getShardId()) + "/" + columnShardId.getShardNum() + "/" + transactionId + "/" +
+  public void saveColumn(String transaction, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
+    String key = getIntervalPrefix(columnShardId.getShardId()) + "/" + columnShardId.getShardNum() + "/" + transaction + "/" +
         columnShardId.getColumnId().fullName();
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(byteSize);
@@ -201,10 +201,10 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public TableMetadata getTableMetadata(String tenant, String table) {
-    String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
+   String tableMetapath = resolveCurrentPath(tenant, table) + "/" + Constants.TABLE_METADATA + ".armor";
     try {
-      if (doesObjectExist(bucket, relativeTarget)) {
-        try (S3Object s3Object = s3Client.getObject(bucket, relativeTarget); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
+      if (doesObjectExist(bucket, tableMetapath)) {
+        try (S3Object s3Object = s3Client.getObject(bucket, tableMetapath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
           try {
             return OBJECT_MAPPER.readValue(s3InputStream, TableMetadata.class);
           } finally {
@@ -216,20 +216,49 @@ public class S3WriteStore implements WriteStore {
       } else
         return null;
     } catch (AmazonS3Exception as3) {
-      LOGGER.error("Unable to load metadata at on {} at {}", bucket, relativeTarget);
+      LOGGER.error("Unable to load metadata at on {} at {}", bucket, tableMetapath);
       throw as3;
     }
   }
 
   @Override
-  public void saveTableMetadata(String transaction, String tenant, String table, TableMetadata tableMetadata) {
-    String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
-    try {
-      String payload = OBJECT_MAPPER.writeValueAsString(tableMetadata);
-      s3Client.putObject(bucket, relativeTarget, payload);
-    } catch (IOException ioe) {
-      throw new RuntimeException(ioe);
+  public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
+    Map<String, String> currentValues = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
+    String oldCurrent = null;
+    String oldPrevious = null;
+    if (currentValues != null) {
+      oldCurrent = currentValues.get("current");
+      oldPrevious = currentValues.get("previous");
     }
+    if (oldCurrent != null && oldCurrent.equalsIgnoreCase(transaction))
+      throw new RuntimeException("Create another transaction");
+    String targetTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + transaction + "/" + Constants.TABLE_METADATA + ".armor";
+    for (int i = 0; i < 10; i++) {
+      try {
+        String payload = OBJECT_MAPPER.writeValueAsString(tableMetadata);
+        s3Client.putObject(bucket, targetTableMetaaPath, payload);
+        saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, oldCurrent);
+        break;
+      } catch (IOException ioe) {
+          if (i + 1 == 10)
+              throw new RuntimeException(ioe);
+          else {
+              try {
+                  Thread.sleep((i + 1) * 1000);
+              } catch (InterruptedException ie) {
+                  // do nothing
+              }
+          }
+      }
+    }
+    if (oldPrevious == null)
+      return;
+    try {
+        String deleteTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + oldPrevious + "/" + Constants.TABLE_METADATA + ".armor";
+        s3Client.deleteObject(bucket, deleteTableMetaaPath);
+      } catch (Exception e) {
+        LOGGER.warn("Unable to previous shard version under {}", oldPrevious, e);
+      }
   }
 
   @Override
@@ -251,13 +280,13 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void saveShardMetadata(String transactionId, String tenant, String table, Interval interval, Instant timestamp, int shardNum, ShardMetadata shardMetadata) {
-    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
-    String shardIdPath = shardId.getShardId() + "/" + transactionId + "/" + Constants.SHARD_METADATA + ".armor";
+  public void saveShardMetadata(String transaction, ShardMetadata shardMetadata) {
+    ShardId shardId = shardMetadata.getShardId();
+    String shardIdPath = shardId.shardIdPath() + "/" + transaction + "/" + Constants.SHARD_METADATA + ".armor";
     for (int i = 0; i < 10; i++) {
       try {
         String payload = OBJECT_MAPPER.writeValueAsString(shardMetadata);
-        putObject(shardIdPath, payload, interval.getInterval());
+        putObject(shardIdPath, payload, shardId.getInterval());
         break;
       } catch (Exception ioe) {
         if (i + 1 == 10)
@@ -568,6 +597,14 @@ public class S3WriteStore implements WriteStore {
   private String getIntervalPrefix(String tenant, String table, String interval, String intervalStart) {
     return tenant + "/" + table + "/" + interval + "/" + intervalStart;
   }
+  
+  private String resolveCurrentPath(String tenant, String table) {
+      Map<String, String> values = getCurrentValues(tenant, table);
+      String current = values.get("current");
+      if (current == null)
+        return null;
+      return tenant + "/" + table + "/" + current;
+  }
 
   private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
     Map<String, String> values = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
@@ -575,6 +612,19 @@ public class S3WriteStore implements WriteStore {
     if (current == null)
       return null;
     return getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + current;
+  }
+
+  private Map<String, String> getCurrentValues(String tenant, String table) {
+    String key = tenant + "/" + table + "/" + Constants.CURRENT;
+    if (!doesObjectExist(this.bucket, key))
+      return new HashMap<>();
+    else {
+      try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
+        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
+      } catch (IOException ioe) {
+        throw new RuntimeException(ioe);
+      }
+    }
   }
 
   private Map<String, String> getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
@@ -587,6 +637,24 @@ public class S3WriteStore implements WriteStore {
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
+    }
+  }
+  
+  private void saveCurrentValues(String tenant, String table, String current, String previous) {
+      String key = tenant + "/" + table + "/" + Constants.CURRENT;
+      try {
+        HashMap<String, String> currentValues = new HashMap<>();
+        currentValues.put("current", current);
+        if (previous != null)
+          currentValues.put("previous", previous);
+        String payload = OBJECT_MAPPER.writeValueAsString(currentValues);
+        ObjectMetadata objectMetadata = new ObjectMetadata();
+        objectMetadata.setContentType("text/plain");
+        objectMetadata.setContentLength(payload.length());
+        PutObjectRequest putObjectRequest = new PutObjectRequest(bucket, key, new StringInputStream(payload), objectMetadata);
+        s3Client.putObject(putObjectRequest);
+    } catch (IOException ioe) {
+      throw new RuntimeException(ioe);
     }
   }
 

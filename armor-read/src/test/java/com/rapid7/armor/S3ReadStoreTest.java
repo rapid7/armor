@@ -6,6 +6,7 @@ import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.read.predicate.InstantPredicate;
 import com.rapid7.armor.read.predicate.StringPredicate;
+import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.Operator;
@@ -39,27 +40,12 @@ public class S3ReadStoreTest {
   private static AmazonS3 client;
   private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-  private TableMetadata generateTestTableMedateDate() {
-    TableMetadata tmd = new TableMetadata("columnId", "columnIdType");
-    ShardMetadata smd1 = new ShardMetadata();
-      
-    ColumnMetadata cmd1 = new ColumnMetadata();
-    cmd1.setColumnName("column1");
-    cmd1.setColumnType(DataType.STRING);
-      
-    ColumnMetadata cmd2 = new ColumnMetadata();
-    cmd2.setColumnName("column2");
-    cmd2.setColumnType(DataType.STRING);
-      
-    smd1.setColumnMetadata(Arrays.asList(cmd1, cmd2));
-    ColumnMetadata cmd3 = new ColumnMetadata();
-    cmd3.setColumnName("column3");
-    cmd3.setColumnType(DataType.STRING);
-      
-    ShardMetadata smd2 = new ShardMetadata();
-    smd2.setColumnMetadata(Arrays.asList(cmd3));
-    tmd.setShardMetadata(Arrays.asList(smd1, smd2));
-
+  private TableMetadata generateTestTableMedataDate() {
+    TableMetadata tmd = new TableMetadata("org", "tenant", "columnId", "columnIdType");
+    ColumnId c1 = new ColumnId("column1", DataType.STRING);
+    ColumnId c2 = new ColumnId("column2", DataType.STRING);
+    ColumnId c3 = new ColumnId("column3", DataType.STRING);
+    tmd.addColumnIds(Arrays.asList(c1, c2, c3));
     return tmd;
   }
 
@@ -93,7 +79,7 @@ public class S3ReadStoreTest {
     HashMap<String, String> currentValue2 = new HashMap<>();
     currentValue2.put("current", current2);
 
-    TableMetadata tmdTest = generateTestTableMedateDate();
+    TableMetadata tmdTest = generateTestTableMedataDate();
     String tmdJson = OBJECT_MAPPER.writeValueAsString(tmdTest);
     client.putObject(TEST_BUCKET, "org1/table1/table-metadata.armor", tmdJson);
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");

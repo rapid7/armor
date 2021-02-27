@@ -105,7 +105,7 @@ public class FileReadStore implements ReadStore {
   @Override
   public ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
-    Path shardIdPath = basePath.resolve(Paths.get(shardId.getShardId()));
+    Path shardIdPath = basePath.resolve(Paths.get(shardId.shardIdPath()));
     if (Files.exists(shardIdPath))
       return shardId;
     else
@@ -303,19 +303,9 @@ public class FileReadStore implements ReadStore {
   public List<ColumnId> getColumnIds(String tenant, String table) {
       TableMetadata tm = getTableMetadata(tenant, table);
       if (tm == null) {
-          Set<ColumnId> columnIds = new HashSet<>();
-          for (Interval interval : getIntervals(tenant, table)) {
-              if (interval == Interval.SINGLE)
-                  columnIds.addAll(getColumnIds(tenant, table, interval, Instant.now()));
-              else {
-                  List<String> startIntervals = getIntervalStarts(tenant, table, interval);
-                  if (!startIntervals.isEmpty()) {
-                      columnIds.addAll(getColumnIds(tenant, table, interval, Instant.parse(startIntervals.get(0))));
-                  }
-              }
-          }
+          return new ArrayList<>();
       }
-      return tm.getColumnIds();
+      return new ArrayList<>(tm.getColumnIds());
   }
   
   @Override
