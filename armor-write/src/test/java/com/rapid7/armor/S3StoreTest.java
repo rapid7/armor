@@ -12,6 +12,8 @@ import com.rapid7.armor.store.S3ReadStore;
 import com.rapid7.armor.store.S3WriteStore;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.writers.ArmorWriter;
+import com.rapid7.armor.xact.DistXact;
+import com.rapid7.armor.xact.DistXactUtil;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -81,13 +83,13 @@ public class S3StoreTest {
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     
     client.putObject(TEST_BUCKET, "org10/table2/table-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
     List<ShardId> shards = writeStore.findShardIds("org10", "table1", SINGLE, Instant.now());
@@ -119,12 +121,12 @@ public class S3StoreTest {
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + Constants.CURRENT, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
 
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + Constants.CURRENT, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
 
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(2));
     ShardId shard0 = writeStore.findShardId("org1", "table1", SINGLE, Instant.now(), 0);

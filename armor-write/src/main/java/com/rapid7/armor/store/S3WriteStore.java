@@ -13,6 +13,8 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.shard.ShardStrategy;
 import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
+import com.rapid7.armor.xact.DistXact;
+import com.rapid7.armor.xact.DistXactUtil;
 import com.amazonaws.ResetException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
@@ -223,21 +225,15 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
-    Map<String, String> currentValues = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
-    String oldCurrent = null;
-    String oldPrevious = null;
-    if (currentValues != null) {
-      oldCurrent = currentValues.get("current");
-      oldPrevious = currentValues.get("previous");
-    }
-    if (oldCurrent != null && oldCurrent.equalsIgnoreCase(transaction))
+    DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
+    if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
       throw new RuntimeException("Create another transaction");
     String targetTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + transaction + "/" + Constants.TABLE_METADATA + ".armor";
     for (int i = 0; i < 10; i++) {
       try {
         String payload = OBJECT_MAPPER.writeValueAsString(tableMetadata);
         s3Client.putObject(bucket, targetTableMetaaPath, payload);
-        saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, oldCurrent);
+        saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), new DistXact(transaction, status == null ? null : status.getCurrent()));
         break;
       } catch (IOException ioe) {
           if (i + 1 == 10)
@@ -251,13 +247,13 @@ public class S3WriteStore implements WriteStore {
           }
       }
     }
-    if (oldPrevious == null)
+    if (status == null || status.getPrevious() == null)
       return;
     try {
-        String deleteTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + oldPrevious + "/" + Constants.TABLE_METADATA + ".armor";
-        s3Client.deleteObject(bucket, deleteTableMetaaPath);
+        String deleteTableMetaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + status.getPrevious() + "/" + Constants.TABLE_METADATA + ".armor";
+        s3Client.deleteObject(bucket, deleteTableMetaPath);
       } catch (Exception e) {
-        LOGGER.warn("Unable to previous shard version under {}", oldPrevious, e);
+        LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
       }
   }
 
@@ -383,18 +379,15 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public void commit(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    Map<String, String> currentValues = getCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
-    String oldCurrent = null;
-    String oldPrevious = null;
-    if (currentValues != null) {
-      oldCurrent = currentValues.get("current");
-      oldPrevious = currentValues.get("previous");
-    }
-    if (oldCurrent != null && oldCurrent.equalsIgnoreCase(transaction))
+    DistXact status = getCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
+    if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
       throw new RuntimeException("Create another transaction");
-    saveCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum, transaction, oldCurrent);
+    saveCurrentValues(
+       tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum, new DistXact(transaction, status == null ? null : status.getCurrent()));
     try {
-      String toDelete = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + oldPrevious;
+      if (status == null || status.getPrevious() == null)
+        return;
+      String toDelete = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + status.getPrevious();
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
           .withPrefix(toDelete);
@@ -410,7 +403,7 @@ public class S3WriteStore implements WriteStore {
         }
       }
     } catch (Exception e) {
-      LOGGER.warn("Unable to previous shard version under {}", oldPrevious, e);
+      LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
     }
   }
 
@@ -599,73 +592,63 @@ public class S3WriteStore implements WriteStore {
   }
   
   private String resolveCurrentPath(String tenant, String table) {
-      Map<String, String> values = getCurrentValues(tenant, table);
-      String current = values.get("current");
-      if (current == null)
-        return null;
-      return tenant + "/" + table + "/" + current;
+    DistXact status = getCurrentValues(tenant, table);
+    if (status == null || status.getCurrent() == null)
+      return null;
+    return tenant + "/" + table + "/" + status.getCurrent();
   }
 
   private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    Map<String, String> values = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
-    String current = values.get("current");
-    if (current == null)
+    DistXact status = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+    if (status == null || status.getCurrent() == null)
       return null;
-    return getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + current;
+    return getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + status.getCurrent();
   }
 
-  private Map<String, String> getCurrentValues(String tenant, String table) {
-    String key = tenant + "/" + table + "/" + Constants.CURRENT;
+  private DistXact getCurrentValues(String tenant, String table) {
+    String key = DistXactUtil.buildCurrentMarker(tenant + "/" + table);
     if (!doesObjectExist(this.bucket, key))
-      return new HashMap<>();
+      return null;
     else {
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
+        return DistXactUtil.readXactStatus(inputStream);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
     }
   }
 
-  private Map<String, String> getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    String key = getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + Constants.CURRENT;
+  private DistXact getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
+    String key = DistXactUtil.buildCurrentMarker(getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum);
     if (!doesObjectExist(this.bucket, key))
-      return new HashMap<>();
+      return null;
     else {
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
+        return DistXactUtil.readXactStatus(inputStream);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
     }
   }
   
-  private void saveCurrentValues(String tenant, String table, String current, String previous) {
-      String key = tenant + "/" + table + "/" + Constants.CURRENT;
-      try {
-        HashMap<String, String> currentValues = new HashMap<>();
-        currentValues.put("current", current);
-        if (previous != null)
-          currentValues.put("previous", previous);
-        String payload = OBJECT_MAPPER.writeValueAsString(currentValues);
-        ObjectMetadata objectMetadata = new ObjectMetadata();
-        objectMetadata.setContentType("text/plain");
-        objectMetadata.setContentLength(payload.length());
-        PutObjectRequest putObjectRequest = new PutObjectRequest(bucket, key, new StringInputStream(payload), objectMetadata);
-        s3Client.putObject(putObjectRequest);
+  private void saveCurrentValues(String tenant, String table, DistXact status) {
+    String key = DistXactUtil.buildCurrentMarker(tenant + "/" + table);
+    try {
+      String payload = DistXactUtil.prepareToCommit(status);
+      ObjectMetadata objectMetadata = new ObjectMetadata();
+      objectMetadata.setContentType("text/plain");
+      objectMetadata.setContentLength(payload.length());
+      PutObjectRequest putObjectRequest = new PutObjectRequest(bucket, key, new StringInputStream(payload), objectMetadata);
+      s3Client.putObject(putObjectRequest);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
   }
 
-  private void saveCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum, String current, String previous) {
-    String key = getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + Constants.CURRENT;
+  private void saveCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum, DistXact status) {
+    String key = DistXactUtil.buildCurrentMarker(getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum);
     try {
-      HashMap<String, String> currentValues = new HashMap<>();
-      currentValues.put("current", current);
-      if (previous != null)
-        currentValues.put("previous", previous);
-      String payload = OBJECT_MAPPER.writeValueAsString(currentValues);
+      String payload = DistXactUtil.prepareToCommit(status);
       ObjectMetadata objectMetadata = new ObjectMetadata();
       objectMetadata.setContentType("text/plain");
       objectMetadata.setContentLength(payload.length());

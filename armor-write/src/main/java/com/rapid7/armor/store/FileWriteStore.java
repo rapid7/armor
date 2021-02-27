@@ -13,7 +13,8 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.shard.ShardStrategy;
 import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.rapid7.armor.xact.DistXact;
+import com.rapid7.armor.xact.DistXactUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -32,7 +33,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -201,14 +201,8 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
-    Map<String, String> currentValues = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
-    String oldCurrent = null;
-    String oldPrevious = null;
-    if (currentValues != null) {
-      oldCurrent = currentValues.get("current");
-      oldPrevious = currentValues.get("previous");
-    }
-    if (oldCurrent != null && oldCurrent.equalsIgnoreCase(transaction))
+    DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
+    if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
       throw new RuntimeException("Create another transaction");
     String targetTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + transaction + "/" + Constants.TABLE_METADATA + ".armor";
 
@@ -220,17 +214,17 @@ public class FileWriteStore implements WriteStore {
         Files.write(target, payload, StandardOpenOption.CREATE_NEW);
       } else
         Files.write(target, payload, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-      saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, oldCurrent);
+      saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, status == null ? null : status.getCurrent());
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
-    if (oldPrevious == null)
+    if (status == null || status.getPrevious() == null)
       return;
     try {
-      String deleteTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + oldPrevious + "/" + Constants.TABLE_METADATA + ".armor";
+      String deleteTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + status.getPrevious() + "/" + Constants.TABLE_METADATA + ".armor";
       Files.deleteIfExists(basePath.resolve(deleteTableMetaaPath));
     } catch (Exception e) {
-      LOGGER.warn("Unable to previous shard version under {}", oldPrevious, e);
+      LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
     }
 
   }
@@ -300,35 +294,29 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public void commit(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    Map<String, String> currentValues = getCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
-    String oldCurrent = null;
-    final String oldPrevious;
-    if (currentValues != null) {
-      oldCurrent = currentValues.get("current");
-      oldPrevious = currentValues.get("previous");
-    } else
-      oldPrevious = null;
-    if (oldCurrent != null && oldCurrent.equalsIgnoreCase(transaction))
+    DistXact status = getCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
+    if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
       throw new WriteTranscationError("Create another transaction", transaction);
-    saveCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum, transaction, oldCurrent);
+    saveCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum, transaction, status == null ? null : status.getCurrent());
     try {
       Runnable runnable = () -> {
         try {
-          if (oldPrevious == null)
+          if (status == null || status.getPrevious() == null)
             return;
-          Path toDelete = basePath.resolve(Paths.get(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), Integer.toString(shardNum), oldPrevious));
+          Path toDelete = basePath.resolve(
+             Paths.get(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), Integer.toString(shardNum), status.getPrevious()));
           Files.walk(toDelete)
               .sorted(Comparator.reverseOrder())
               .map(Path::toFile)
               .forEach(File::delete);
         } catch (IOException ioe) {
-          LOGGER.warn("Unable to previous shard version under {}", oldPrevious, ioe);
+          LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), ioe);
         }
       };
       Thread t = new Thread(runnable);
       t.start();
     } catch (Exception e) {
-      LOGGER.warn("Unable to previous shard version under {}", oldPrevious, e);
+      LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
     }
   }
 
@@ -428,41 +416,39 @@ public class FileWriteStore implements WriteStore {
   }
 
   private String resolveCurrentPath(String tenant, String table) {
-    Map<String, String> values = getCurrentValues(tenant, table);
-    String current = values.get("current");
-    if (current == null)
+    DistXact status = getCurrentValues(tenant, table);
+    if (status == null || status.getCurrent() == null)
       return null;
-    return basePath.resolve(Paths.get(tenant, table, current)).toString();
+    return basePath.resolve(Paths.get(tenant, table, status.getCurrent())).toString();
   }
 
   private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    Map<String, String> values = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
-    String current = values.get("current");
-    if (current == null)
+    DistXact status = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+    if (status == null || status.getCurrent() == null)
       return null;
-    return basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), current)).toString();
+    return basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), status.getCurrent())).toString();
   }
 
-  private Map<String, String> getCurrentValues(String tenant, String table) {
-    Path searchPath = basePath.resolve(Paths.get(tenant, table, Constants.CURRENT));
+  private DistXact getCurrentValues(String tenant, String table) {
+    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
     if (!Files.exists(searchPath))
-      return new HashMap<>();
+      return null;
     else {
-      try {
-        return OBJECT_MAPPER.readValue(Files.newInputStream(searchPath), new TypeReference<Map<String, String>>() {});
+      try (InputStream is = Files.newInputStream(searchPath)) {
+        return DistXactUtil.readXactStatus(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
     }
   }
 
-  private Map<String, String> getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    Path searchPath = basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), Constants.CURRENT));
+  private DistXact getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
+    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum)).toString()));
     if (!Files.exists(searchPath))
-      return new HashMap<>();
+      return null;
     else {
-      try {
-        return OBJECT_MAPPER.readValue(Files.newInputStream(searchPath), new TypeReference<Map<String, String>>() {});
+      try (InputStream is = Files.newInputStream(searchPath)) {
+        return DistXactUtil.readXactStatus(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -470,21 +456,21 @@ public class FileWriteStore implements WriteStore {
   }
 
   public void saveCurrentValues(String tenant, String table, String current, String previous) {
-      Path searchPath = basePath.resolve(Paths.get(tenant, table, Constants.CURRENT));
-      try {
-          Files.createDirectories(searchPath.getParent());
-          HashMap<String, String> currentValues = new HashMap<>();
-          currentValues.put("current", current);
-          if (previous != null)
-              currentValues.put("previous", previous);
-          Files.write(searchPath, OBJECT_MAPPER.writeValueAsBytes(currentValues), StandardOpenOption.CREATE);
-      } catch (IOException ioe) {
-          throw new RuntimeException(ioe);
-      }
+    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
+    try {
+      Files.createDirectories(searchPath.getParent());
+      HashMap<String, String> currentValues = new HashMap<>();
+      currentValues.put("current", current);
+      if (previous != null)
+        currentValues.put("previous", previous);
+      Files.write(searchPath, OBJECT_MAPPER.writeValueAsBytes(currentValues), StandardOpenOption.CREATE);
+    } catch (IOException ioe) {
+      throw new RuntimeException(ioe);
+    }
   }
 
   public void saveCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum, String current, String previous) {
-    Path searchPath = basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), Constants.CURRENT));
+    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum)).toString()));
     try {
       Files.createDirectories(searchPath.getParent());
       HashMap<String, String> currentValues = new HashMap<>();

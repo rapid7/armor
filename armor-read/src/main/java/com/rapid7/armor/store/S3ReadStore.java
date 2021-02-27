@@ -10,6 +10,8 @@ import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.shard.ShardId;
+import com.rapid7.armor.xact.DistXact;
+import com.rapid7.armor.xact.DistXactUtil;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
@@ -295,20 +297,19 @@ public class S3ReadStore implements ReadStore {
   }
 
   private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    Map<String, String> values = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
-    String current = values.get("current");
-    if (current == null)
+    DistXact status = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+    if (status == null || status.getCurrent() == null)
       return null;
-    return getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + current;
+    return getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + status.getCurrent();
   }
 
-  private Map<String, String> getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    String key = getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + Constants.CURRENT;
+  private DistXact getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
+    String key = DistXactUtil.buildCurrentMarker(getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum);
     if (!doesObjectExist(this.bucket, key))
-      return new HashMap<>();
+      return null;
     else {
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return OBJECT_MAPPER.readValue(inputStream, new TypeReference<Map<String, String>>() {});
+        return DistXactUtil.readXactStatus(inputStream);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }

@@ -10,10 +10,13 @@ import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.shard.ShardId;
+import com.rapid7.armor.xact.DistXact;
+import com.rapid7.armor.xact.DistXactUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
@@ -135,7 +138,8 @@ public class FileReadStore implements ReadStore {
 
   @Override
   public List<ColumnId> getColumnIds(ShardId shardId) {
-    Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()));
+    Path shardIdPath = Paths.get(
+        resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()));
     List<ColumnId> fileList = new ArrayList<>();
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(shardIdPath)) {
       for (Path path : stream) {
@@ -229,21 +233,19 @@ public class FileReadStore implements ReadStore {
   }
 
   private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    Map<String, String> values = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
-    String current = values.get("current");
-    if (current == null)
-      return null;
-    return basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), current)).toString();
+    DistXact status = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+    if (status == null || status.getCurrent() == null)
+       return null;
+    return basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), status.getCurrent())).toString();
   }
 
-  @SuppressWarnings("unchecked")
-  private Map<String, String> getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    Path searchPath = basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), Constants.CURRENT));
+  private DistXact getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
+    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum)).toString()));
     if (!Files.exists(searchPath))
-      return new HashMap<>();
+      return null;
     else {
-      try {
-        return OBJECT_MAPPER.readValue(Files.newInputStream(searchPath), Map.class);
+      try (InputStream is = Files.newInputStream(searchPath)) {
+        return DistXactUtil.readXactStatus(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }

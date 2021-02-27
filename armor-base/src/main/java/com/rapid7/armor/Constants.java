@@ -2,7 +2,6 @@ package com.rapid7.armor;
 
 public final class Constants {
   public final static String CAPTURE = "capture";
-  public final static String CURRENT = "CURRENT";
   public final static String LAST_ERROR = "lasterror";
 
   public final static int NULL_FILLER_INDICATOR = -123;
