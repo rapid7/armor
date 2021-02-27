@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 import com.rapid7.armor.interval.Interval;
+import com.rapid7.armor.io.PathBuilder;
 
 public class ShardId {
 
@@ -109,7 +110,7 @@ public class ShardId {
   }
 
   public String shardIdPath() {
-    return tenant + "/" + table  + "/" + interval + "/" + intervalStart + "/" + shardNum;
+    return PathBuilder.buildPath(tenant, table, interval, intervalStart, Integer.toString(shardNum));
   }
 
 }

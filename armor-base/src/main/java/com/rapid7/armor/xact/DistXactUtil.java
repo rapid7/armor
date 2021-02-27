@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rapid7.armor.io.PathBuilder;
 
 public class DistXactUtil {
   private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -22,17 +23,9 @@ public class DistXactUtil {
       throw new RuntimeException(ioe);
     }
   }
-  
-  public static String buildCurrentMarker(String path, String delimeter) {
-    if (delimeter == null)
-      return path + "/" + DistXact.CURRENT_MARKER;
-    else
-      return path + delimeter + DistXact.CURRENT_MARKER;
-  }
-  
-  
+    
   public static String buildCurrentMarker(String path) {
-    return path + "/" + DistXact.CURRENT_MARKER;
+    return PathBuilder.buildPath(path, DistXact.CURRENT_MARKER);
   }
   
   public static String prepareToCommit(DistXact status) {

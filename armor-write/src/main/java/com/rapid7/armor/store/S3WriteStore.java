@@ -4,6 +4,7 @@ import com.rapid7.armor.Constants;
 import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.interval.Interval;
+import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
@@ -74,7 +75,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public void saveColumn(String transaction, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
-    String key = columnShardId.getShardId().shardIdPath() + "/" + transaction + "/" + columnShardId.getColumnId().fullName();
+    String key = PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), transaction, columnShardId.getColumnId().fullName());
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(byteSize);
     try {
@@ -87,7 +88,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public ColumnFileWriter loadColumnWriter(ColumnShardId columnShardId) {
-    String shardIdPath = resolveCurrentPath(columnShardId.getShardId()) + "/" + columnShardId.getColumnId().fullName();
+    String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(columnShardId.getShardId()), columnShardId.getColumnId().fullName());
     try {
       if (!s3Client.doesObjectExist(bucket, shardIdPath)) {
         return new ColumnFileWriter(columnShardId);
@@ -108,8 +109,8 @@ public class S3WriteStore implements WriteStore {
   @Override
   public List<ColumnId> getColumnIds(ShardId shardId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    lor.withPrefix(resolveCurrentPath(shardId) + "/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+    lor.withPrefix(resolveCurrentPath(shardId) + Constants.STORE_DELIMETER);
     Set<ColumnId> columnIds = new HashSet<>();
     ListObjectsV2Result ol;
     do {
@@ -127,8 +128,8 @@ public class S3WriteStore implements WriteStore {
   @Override
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+    lor.withPrefix(PathBuilder.buildPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp)) + Constants.STORE_DELIMETER);
     ListObjectsV2Result ol;
     Set<ShardId> shardIds = new HashSet<>();
     do {
@@ -144,8 +145,8 @@ public class S3WriteStore implements WriteStore {
   @Override
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp, String columnId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+    lor.withPrefix(PathBuilder.buildPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp)) + Constants.STORE_DELIMETER);
     ListObjectsV2Result ol;
     Set<ShardId> shardIds = new HashSet<>();
     do {
@@ -169,7 +170,7 @@ public class S3WriteStore implements WriteStore {
     List<ColumnId> columnIds = getColumnIds(shardId);
     List<ColumnFileWriter> writers = new ArrayList<>();
     for (ColumnId columnId : columnIds) {
-      String shardIdPath = resolveCurrentPath(shardId) + "/" + columnId.fullName();
+      String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), columnId.fullName());
       try {
         if (doesObjectExist(bucket, shardIdPath)) {
           S3ObjectInputStream s3InputStream = null;
@@ -198,7 +199,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public TableMetadata getTableMetadata(String tenant, String table) {
-   String tableMetapath = resolveCurrentPath(tenant, table) + "/" + Constants.TABLE_METADATA + ".armor";
+   String tableMetapath = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
     try {
       if (doesObjectExist(bucket, tableMetapath)) {
         try (S3Object s3Object = s3Client.getObject(bucket, tableMetapath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
@@ -223,7 +224,7 @@ public class S3WriteStore implements WriteStore {
     DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
     if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
       throw new RuntimeException("Create another transaction");
-    String targetTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + transaction + "/" + Constants.TABLE_METADATA + ".armor";
+    String targetTableMetaaPath = PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, Constants.TABLE_METADATA + ".armor");
     for (int i = 0; i < 10; i++) {
       try {
         String payload = OBJECT_MAPPER.writeValueAsString(tableMetadata);
@@ -245,7 +246,8 @@ public class S3WriteStore implements WriteStore {
     if (status == null || status.getPrevious() == null)
       return;
     try {
-        String deleteTableMetaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + status.getPrevious() + "/" + Constants.TABLE_METADATA + ".armor";
+        String deleteTableMetaPath =
+          PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), status.getPrevious(), Constants.TABLE_METADATA + ".armor");
         s3Client.deleteObject(bucket, deleteTableMetaPath);
       } catch (Exception e) {
         LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
@@ -254,8 +256,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public ShardMetadata getShardMetadata(ShardId shardId) {
-    String shardIdPath = resolveCurrentPath(shardId) + "/" + Constants.SHARD_METADATA + ".armor";
-
+    String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), Constants.SHARD_METADATA + ".armor");
     if (s3Client.doesObjectExist(bucket, shardIdPath)) {
       try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
         try {
@@ -273,7 +274,7 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void saveShardMetadata(String transaction, ShardMetadata shardMetadata) {
     ShardId shardId = shardMetadata.getShardId();
-    String shardIdPath = shardId.shardIdPath() + "/" + transaction + "/" + Constants.SHARD_METADATA + ".armor";
+    String shardIdPath = PathBuilder.buildPath(shardId.shardIdPath(), transaction, Constants.SHARD_METADATA + ".armor");
     for (int i = 0; i < 10; i++) {
       try {
         String payload = OBJECT_MAPPER.writeValueAsString(shardMetadata);
@@ -304,7 +305,7 @@ public class S3WriteStore implements WriteStore {
         new ListObjectsV2Request()
             .withBucketName(bucket)
             .withMaxKeys(10000)
-            .withPrefix(shardDstPath.toString() + "/")
+            .withPrefix(shardDstPath.toString() + Constants.STORE_DELIMETER)
     );
     if (!ol.getObjectSummaries().isEmpty()) {
       return;
@@ -314,7 +315,7 @@ public class S3WriteStore implements WriteStore {
     ListObjectsV2Request srcRequest = new ListObjectsV2Request()
       .withBucketName(bucket)
       .withMaxKeys(10000)
-      .withPrefix(shardSrcPath.toString() + "/");
+      .withPrefix(shardSrcPath.toString() + Constants.STORE_DELIMETER);
     ol = s3Client.listObjectsV2(srcRequest);
     if (ol.getObjectSummaries().isEmpty()) {
       return;
@@ -361,7 +362,7 @@ public class S3WriteStore implements WriteStore {
           new ListObjectsV2Request()
               .withBucketName(bucket)
               .withMaxKeys(10000)
-              .withPrefix(shardDstPath.toString() + "/")
+              .withPrefix(shardDstPath.toString() + Constants.STORE_DELIMETER)
       ).getObjectSummaries().forEach(
           s3ObjectSummary -> s3Client.deleteObject(new DeleteObjectRequest(bucket, s3ObjectSummary.getKey()))
       );
@@ -381,7 +382,7 @@ public class S3WriteStore implements WriteStore {
     try {
       if (status == null || status.getPrevious() == null)
         return;
-      String toDelete = shardId.shardIdPath() + "/" + status.getPrevious();
+      String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), status.getPrevious());
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
           .withPrefix(toDelete);
@@ -403,7 +404,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public void rollback(String transaction, ShardId shardId) {
-    String toDelete = shardId.shardIdPath() + "/" + transaction;
+    String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), transaction);
     try {
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
@@ -427,7 +428,7 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void saveError(String transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error) {
     // First erase any previous errors that may have existed before.
-    String toDelete = columnShardId.getShardId().shardIdPath() + "/" + Constants.LAST_ERROR;
+    String toDelete = PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), Constants.LAST_ERROR);
     try {
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
@@ -448,20 +449,14 @@ public class S3WriteStore implements WriteStore {
       LOGGER.warn("Unable to previous shard version under {}", toDelete, e);
     }
 
-    String key = columnShardId.getTenant() + "/" + columnShardId.getTable() + "/" + columnShardId.getShardNum() + "/" + Constants.LAST_ERROR + "/" + transaction + "/" + columnShardId.getColumnId().fullName();
+    String key = PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), Constants.LAST_ERROR, transaction, columnShardId.getColumnId().fullName());
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(size);
     try {
       putObject(key, inputStream, omd, columnShardId.getInterval());
       if (error != null) {
         String description =
-          columnShardId.getTenant() + "/" +
-          columnShardId.getTable() + "/" +
-          columnShardId.getInterval() + "/" +
-          columnShardId.getIntervalStart() + "/" +
-          columnShardId.getShardNum() + "/" +
-          Constants.LAST_ERROR + "/" +
-          transaction + "/" + columnShardId.getColumnId().fullName() + "_msg";
+          PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), Constants.LAST_ERROR, transaction, columnShardId.getColumnId().fullName() + "_msg");
         putObject(description, error, columnShardId.getInterval());
       }
     } catch (ResetException e) {
@@ -477,23 +472,29 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
-    String key = shardId.getTenant() + "/" + Constants.CAPTURE + "/" + transaction + "/" + shardId.getTable() + "/" + shardId.getInterval() + "/" + shardId.getIntervalStart();
+    String key = PathBuilder.buildPath(
+       shardId.getTenant(),
+       Constants.CAPTURE,
+       transaction,
+       shardId.getTable(),
+       shardId.getInterval(),
+       shardId.getIntervalStart());
     if (shardId.getShardNum() >= 0) {
-      key = key + "/" + shardId.getShardNum();
+      key = PathBuilder.buildPath(key, Integer.toString(shardId.getShardNum()));
     }
     try {
       if (entities != null) {
-        String payloadName = key + "/" + "entities";
+        String payloadName = PathBuilder.buildPath(key, "entities");
         String payload = OBJECT_MAPPER.writeValueAsString(entities);
         putObject(payloadName, payload, shardId.getInterval());
       }
       if (requests != null) {
-        String payloadName = key + "/" + "writeRequests";
+        String payloadName = PathBuilder.buildPath(key, "writeRequests");
         String payload = OBJECT_MAPPER.writeValueAsString(requests);
         putObject(payloadName, payload, shardId.getInterval());
       }
       if (deleteEntity != null) {
-        String payloadName = key + "/" + deleteEntity;
+        String payloadName = PathBuilder.buildPath(key, deleteEntity.toString());
         putObject(payloadName, "deleted", shardId.getInterval());
       }
     } catch (Exception e) {
@@ -515,7 +516,7 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void deleteTenant(String tenant) {
     try {
-      String toDelete = tenant + "/";
+      String toDelete = tenant + Constants.STORE_DELIMETER;
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
           .withPrefix(toDelete);
@@ -538,7 +539,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShardId) {
-    String shardIdPath = resolveCurrentPath(columnShardId.getShardId()) + "/" + columnShardId.getColumnId().fullName();
+    String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(columnShardId.getShardId()), columnShardId.getColumnId().fullName());
     try {
       if (!s3Client.doesObjectExist(bucket, shardIdPath)) {
         return null;
@@ -561,38 +562,34 @@ public class S3WriteStore implements WriteStore {
   @Override
   public List<String> getTenants() {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
     
     Set<String> allPrefixes = new HashSet<>();
     ListObjectsV2Result result;
     do {
       result = s3Client.listObjectsV2(lor);
-      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace("/", "")).collect(Collectors.toList()));
+      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
       lor.setContinuationToken(result.getNextContinuationToken());
     } while (result.isTruncated());
     return new ArrayList<>(allPrefixes);
-  }
-
-  private String getIntervalPrefix(String tenant, String table, Interval interval, Instant timestamp) {
-    return tenant + "/" + table + "/" + interval.getInterval() + "/" + interval.getIntervalStart(timestamp);
   }
   
   private String resolveCurrentPath(String tenant, String table) {
     DistXact status = getCurrentValues(tenant, table);
     if (status == null || status.getCurrent() == null)
       return null;
-    return tenant + "/" + table + "/" + status.getCurrent();
+    return PathBuilder.buildPath(tenant, table, status.getCurrent());
   }
 
   private String resolveCurrentPath(ShardId shardId) {
     DistXact status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
       return null;
-    return shardId.shardIdPath() + "/" + status.getCurrent();
+    return PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent());
   }
 
   private DistXact getCurrentValues(String tenant, String table) {
-    String key = DistXactUtil.buildCurrentMarker(tenant + "/" + table);
+    String key = DistXactUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
     if (!doesObjectExist(this.bucket, key))
       return null;
     else {
@@ -618,7 +615,7 @@ public class S3WriteStore implements WriteStore {
   }
   
   private void saveCurrentValues(String tenant, String table, DistXact status) {
-    String key = DistXactUtil.buildCurrentMarker(tenant + "/" + table);
+    String key = DistXactUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
     try {
       String payload = DistXactUtil.prepareToCommit(status);
       ObjectMetadata objectMetadata = new ObjectMetadata();
@@ -692,7 +689,7 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void deleteTable(String tenant, String table) {
     try {
-      String toDelete = tenant + "/" + table + "/";
+      String toDelete = PathBuilder.buildPath(tenant, table) + Constants.STORE_DELIMETER;
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
           .withPrefix(toDelete);

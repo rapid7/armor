@@ -4,6 +4,7 @@ import com.rapid7.armor.Constants;
 import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.interval.Interval;
+import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
@@ -186,7 +187,7 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public TableMetadata getTableMetadata(String tenant, String table) {
-    String relativeTarget = resolveCurrentPath(tenant, table) + "/" + Constants.TABLE_METADATA + ".armor";
+    String relativeTarget = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
     Path target = basePath.resolve(relativeTarget);
     if (!Files.exists(target))
       return null;
@@ -203,7 +204,11 @@ public class FileWriteStore implements WriteStore {
     DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
     if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
       throw new RuntimeException("Create another transaction");
-    String targetTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + transaction + "/" + Constants.TABLE_METADATA + ".armor";
+    String targetTableMetaaPath = PathBuilder.buildPath(
+      tableMetadata.getTenant(),
+      tableMetadata.getTable(),
+      transaction,
+      Constants.TABLE_METADATA + ".armor");
 
     Path target = basePath.resolve(targetTableMetaaPath);
     try {
@@ -220,8 +225,9 @@ public class FileWriteStore implements WriteStore {
     if (status == null || status.getPrevious() == null)
       return;
     try {
-      String deleteTableMetaaPath = tableMetadata.getTenant() + "/" + tableMetadata.getTable() + "/" + status.getPrevious() + "/" + Constants.TABLE_METADATA + ".armor";
-      Files.deleteIfExists(basePath.resolve(deleteTableMetaaPath));
+      String deleteTableMetaPath =
+        PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), status.getPrevious(), Constants.TABLE_METADATA + ".armor");
+      Files.deleteIfExists(basePath.resolve(deleteTableMetaPath));
     } catch (Exception e) {
       LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
     }
@@ -302,8 +308,7 @@ public class FileWriteStore implements WriteStore {
         try {
           if (status == null || status.getPrevious() == null)
             return;
-          Path toDelete = basePath.resolve(
-             Paths.get(shardId.shardIdPath(), status.getPrevious()));
+          Path toDelete = basePath.resolve(Paths.get(shardId.shardIdPath(), status.getPrevious()));
           Files.walk(toDelete)
               .sorted(Comparator.reverseOrder())
               .map(Path::toFile)

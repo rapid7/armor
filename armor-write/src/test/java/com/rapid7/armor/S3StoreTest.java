@@ -80,16 +80,16 @@ public class S3StoreTest {
     currentValue1.put("current", current1);
     
     client.putObject(TEST_BUCKET, "org10/table1/table-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     
     client.putObject(TEST_BUCKET, "org10/table2/table-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
     List<ShardId> shards = writeStore.findShardIds("org10", "table1", SINGLE, Instant.now());
@@ -118,23 +118,23 @@ public class S3StoreTest {
     currentValue2.put("current", current2);
 
     client.putObject(TEST_BUCKET, "org1/table1/table-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
 
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/name_S", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/level_I", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current2 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current2 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current2 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
 
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(2));
     ShardId shard0 = writeStore.findShardId("org1", "table1", SINGLE, Instant.now(), 0);
     assertEquals(0, shard0.getShardNum());
-    assertEquals("org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/0", shard0.shardIdPath());
+    assertEquals("org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0", shard0.shardIdPath());
     ShardId shard1 = writeStore.findShardId("org1", "table1", SINGLE, Instant.now(), 1);
     assertEquals(1, shard1.getShardNum());
-    assertEquals("org1/table1/" + SINGLE.getInterval() + "/" + Instant.ofEpochMilli(0) + "/1", shard1.shardIdPath());
+    assertEquals("org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1", shard1.shardIdPath());
 
 
     List<ShardId> shardIds = writeStore.findShardIds("org1", "table1", SINGLE, Instant.now());

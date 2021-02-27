@@ -9,6 +9,7 @@ import com.rapid7.armor.read.predicate.StringPredicate;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.interval.Interval;
+import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.xact.DistXact;
 import com.rapid7.armor.xact.DistXactUtil;
@@ -51,8 +52,8 @@ public class S3ReadStore implements ReadStore {
   @Override
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+    lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + Constants.STORE_DELIMETER);
     ListObjectsV2Result ol;
     // Remove trailing /
     Set<ShardId> shards = new HashSet<>();
@@ -69,8 +70,8 @@ public class S3ReadStore implements ReadStore {
   @Override
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp, String columnId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+    lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + Constants.STORE_DELIMETER);
     ListObjectsV2Result ol;
     // Remove trailing /
     Set<ShardId> shards = new HashSet<>();
@@ -88,8 +89,8 @@ public class S3ReadStore implements ReadStore {
   public ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+    lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + Constants.STORE_DELIMETER);
     ListObjectsV2Result ol;
     do {
       ol = s3Client.listObjectsV2(lor);
@@ -108,7 +109,7 @@ public class S3ReadStore implements ReadStore {
     List<ColumnId> columnIds = getColumnIds(shardId);
     Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
     ColumnId cn = option.get();
-    String shardIdPath = resolveCurrentPath(shardId) + "/" + cn.fullName();
+    String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), cn.fullName());
     if (!doesObjectExist(bucket, shardIdPath)) {
       return new SlowArmorShardColumn();
     } else {
@@ -126,7 +127,7 @@ public class S3ReadStore implements ReadStore {
     List<ColumnId> columnIds = getColumnIds(shardId);
     Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
     ColumnId cn = option.get();
-    String shardIdPath = resolveCurrentPath(shardId) + "/" + cn.fullName();
+    String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), cn.fullName());
     if (!doesObjectExist(bucket, shardIdPath)) {
       return null;
     } else {
@@ -142,10 +143,10 @@ public class S3ReadStore implements ReadStore {
   
   @Override
   public TableMetadata getTableMetadata(String tenant, String table) {
-    String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
+    String tableMetapath = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
     try {
-      if (doesObjectExist(bucket, relativeTarget)) {
-        try (S3Object s3Object = s3Client.getObject(bucket, relativeTarget); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
+      if (doesObjectExist(bucket, tableMetapath)) {
+        try (S3Object s3Object = s3Client.getObject(bucket, tableMetapath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
           try {
             return OBJECT_MAPPER.readValue(s3InputStream, TableMetadata.class);
           } finally {
@@ -157,7 +158,7 @@ public class S3ReadStore implements ReadStore {
       } else
         return null;
     } catch (AmazonS3Exception as3) {
-      LOGGER.error("Unable to load metadata at on {} at {}", bucket, relativeTarget);
+      LOGGER.error("Unable to load metadata at on {} at {}", bucket, tableMetapath);
       throw as3;
     }
   }
@@ -182,8 +183,8 @@ public class S3ReadStore implements ReadStore {
   @Override
   public List<ColumnId> getColumnIds(ShardId shardId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    lor.withPrefix(resolveCurrentPath(shardId) + "/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+    lor.withPrefix(resolveCurrentPath(shardId) + Constants.STORE_DELIMETER);
     HashSet<ColumnId> columnIds = new HashSet<>();
     ListObjectsV2Result ol;
     do {
@@ -201,14 +202,14 @@ public class S3ReadStore implements ReadStore {
   @Override
   public List<String> getTables(String tenant) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    lor.withPrefix(tenant + "/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+    lor.withPrefix(tenant + Constants.STORE_DELIMETER);
     ListObjectsV2Result ol;
     List<String> tables = new ArrayList<>();
     do {
       ol = s3Client.listObjectsV2(lor);
       List<String> commonPrefixes = ol.getCommonPrefixes();
-      tables.addAll(commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).map(cp -> cp.replace(tenant + "/", "")).collect(Collectors.toList()));
+      tables.addAll(commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).map(cp -> cp.replace(tenant + Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
       lor.setContinuationToken(ol.getNextContinuationToken());
     } while (ol.isTruncated());
     return tables;
@@ -238,13 +239,13 @@ public class S3ReadStore implements ReadStore {
   @Override
   public List<String> getTenants() {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
+    lor.withDelimiter(Constants.STORE_DELIMETER);
     
     Set<String> allPrefixes = new HashSet<>();
     ListObjectsV2Result result;
     do {
       result = s3Client.listObjectsV2(lor);
-      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace("/", "")).collect(Collectors.toList()));
+      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
       lor.setContinuationToken(result.getNextContinuationToken());
     } while (result.isTruncated());
     return allPrefixes.stream().filter(t -> !t.startsWith(TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
@@ -259,7 +260,7 @@ public class S3ReadStore implements ReadStore {
 
   @Override
   public ShardMetadata getShardMetadata(ShardId shardId) {
-    String shardIdPath = resolveCurrentPath(shardId) + "/" + Constants.SHARD_METADATA + ".armor";
+    String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), Constants.SHARD_METADATA + ".armor");
 
     if (s3Client.doesObjectExist(bucket, shardIdPath)) {
       try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
@@ -274,28 +275,16 @@ public class S3ReadStore implements ReadStore {
     } else
       return null;
   }
-
-  private String getIntervalPrefix(String tenant, String table) {
-      return tenant + "/" + table;
-  }
-
-  private String getIntervalPrefix(String tenant, String table, Interval interval) {
-    return tenant + "/" + table + "/" + interval.getInterval();
-  }
   
   private String getIntervalPrefix(String tenant, String table, Interval interval, Instant timestamp) {
-    return getIntervalPrefix(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp));
-  }
-
-  private String getIntervalPrefix(String tenant, String table, String interval, String intervalStart) {
-    return tenant + "/" + table + "/" + interval + "/" + intervalStart;
+    return PathBuilder.buildPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp));
   }
 
   private String resolveCurrentPath(ShardId shardId) {
     DistXact status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
       return null;
-    return shardId.shardIdPath() + "/" + status.getCurrent();
+    return PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent());
   }
 
   private DistXact getCurrentValues(ShardId shardId) {
@@ -320,8 +309,8 @@ public class S3ReadStore implements ReadStore {
   @Override
   public List<String> getIntervalStarts(String tenant, String table, Interval interval) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter("/");
-    String prefix = getIntervalPrefix(tenant, table, interval) + "/";
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+    String prefix = PathBuilder.buildPath(tenant, table, interval.getInterval()) + Constants.STORE_DELIMETER;
     lor.withPrefix(prefix);
     ListObjectsV2Result ol;
     // Remove trailing /
@@ -338,14 +327,14 @@ public class S3ReadStore implements ReadStore {
 
   @Override
   public List<String> getIntervalStarts(String tenant, String table, Interval interval, InstantPredicate intervalStart) {
-      List<String> intervalStarts = getIntervalStarts(tenant, table, interval);
-      List<Instant> instants = intervalStarts.stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
-      List<String> matches = new ArrayList<>();
-      for (Instant instant : instants) {
-          if (intervalStart == null || intervalStart.test(instant))
-              matches.add(instant.toString());
-      }
-      return matches;
+    List<String> intervalStarts = getIntervalStarts(tenant, table, interval);
+    List<Instant> instants = intervalStarts.stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
+    List<String> matches = new ArrayList<>();
+    for (Instant instant : instants) {
+      if (intervalStart == null || intervalStart.test(instant))
+        matches.add(instant.toString());
+    }
+    return matches;
   }
   
   @Override
@@ -413,19 +402,39 @@ public class S3ReadStore implements ReadStore {
 
   @Override
   public List<Interval> getIntervals(String tenant, String table) {
-      ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-      lor.withPrefix(getIntervalPrefix(tenant, table) + "/");
-      lor.withDelimiter("/");
-      
-      Set<String> allPrefixes = new HashSet<>();
-      ListObjectsV2Result result;
-      do {
-        result = s3Client.listObjectsV2(lor);
-        allPrefixes.addAll(
-           result.getCommonPrefixes().stream()
-              .map(o -> Paths.get(o).getFileName().toString()).collect(Collectors.toList()));
-        lor.setContinuationToken(result.getNextContinuationToken());
-      } while (result.isTruncated());
-      return allPrefixes.stream().map(i -> Interval.toInterval(i)).collect(Collectors.toList());
+    ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
+    lor.withPrefix(PathBuilder.buildPath(tenant, table) + Constants.STORE_DELIMETER);
+    lor.withDelimiter(Constants.STORE_DELIMETER);
+
+    Set<String> allPrefixes = new HashSet<>();
+    ListObjectsV2Result result;
+    do {
+      result = s3Client.listObjectsV2(lor);
+      allPrefixes.addAll(
+          result.getCommonPrefixes().stream()
+          .map(o -> Paths.get(o).getFileName().toString()).collect(Collectors.toList()));
+      lor.setContinuationToken(result.getNextContinuationToken());
+    } while (result.isTruncated());
+    return allPrefixes.stream().map(i -> Interval.toInterval(i)).filter(i -> i != null).collect(Collectors.toList());
+  }
+  
+  private String resolveCurrentPath(String tenant, String table) {
+    DistXact status = getCurrentValues(tenant, table);
+    if (status == null || status.getCurrent() == null)
+      return null;
+    return PathBuilder.buildPath(tenant, table, status.getCurrent());
+  }
+  
+  private DistXact getCurrentValues(String tenant, String table) {
+    String key = DistXactUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
+    if (!doesObjectExist(this.bucket, key))
+      return null;
+    else {
+      try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
+        return DistXactUtil.readXactStatus(inputStream);
+      } catch (IOException ioe) {
+        throw new RuntimeException(ioe);
+      }
+    }
   }
 }

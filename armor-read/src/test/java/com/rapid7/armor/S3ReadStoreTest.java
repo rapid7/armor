@@ -83,7 +83,8 @@ public class S3ReadStoreTest {
 
     TableMetadata tmdTest = generateTestTableMedataDate();
     String tmdJson = OBJECT_MAPPER.writeValueAsString(tmdTest);
-    client.putObject(TEST_BUCKET, "org1/table1/table-metadata.armor", tmdJson);
+    client.putObject(TEST_BUCKET, "org1/table1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org1/table1/" + current1 + "/table-metadata.armor", tmdJson);
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");
@@ -98,7 +99,8 @@ public class S3ReadStoreTest {
     
     ShardId shard1Org1 = new ShardId("org1", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 1);
 
-    client.putObject(TEST_BUCKET, "org2/table1/table-metadata.armor", tmdJson);
+    client.putObject(TEST_BUCKET, "org2/table1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org2/table1/" + current1 + "/table-metadata.armor", tmdJson);
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");

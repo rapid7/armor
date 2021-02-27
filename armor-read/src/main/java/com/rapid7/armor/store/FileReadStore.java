@@ -9,6 +9,7 @@ import com.rapid7.armor.read.predicate.StringPredicate;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.interval.Interval;
+import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.xact.DistXact;
 import com.rapid7.armor.xact.DistXactUtil;
@@ -29,10 +30,8 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -55,7 +54,7 @@ public class FileReadStore implements ReadStore {
   
   @Override
   public TableMetadata getTableMetadata(String tenant, String table) {
-    String relativeTarget = tenant + "/" + table + "/" + Constants.TABLE_METADATA + ".armor";
+    String relativeTarget = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
     Path target = basePath.resolve(relativeTarget);
     if (!Files.exists(target))
       return null;
@@ -238,6 +237,19 @@ public class FileReadStore implements ReadStore {
     return basePath.resolve(Paths.get(shardId.shardIdPath(),status.getCurrent())).toString();
   }
 
+  private DistXact getCurrentValues(String tenant, String table) {
+    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
+    if (!Files.exists(searchPath))
+      return null;
+    else {
+      try (InputStream is = Files.newInputStream(searchPath)) {
+        return DistXactUtil.readXactStatus(is);
+      } catch (IOException ioe) {
+        throw new RuntimeException(ioe);
+      }
+    }
+  }
+  
   private DistXact getCurrentValues(ShardId shardId) {
     Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
     if (!Files.exists(searchPath))
@@ -302,65 +314,65 @@ public class FileReadStore implements ReadStore {
 
   @Override
   public List<ColumnId> getColumnIds(String tenant, String table) {
-      TableMetadata tm = getTableMetadata(tenant, table);
-      if (tm == null) {
-          return new ArrayList<>();
-      }
-      return new ArrayList<>(tm.getColumnIds());
+    TableMetadata tm = getTableMetadata(tenant, table);
+    if (tm == null) {
+      return new ArrayList<>();
+    }
+    return new ArrayList<>(tm.getColumnIds());
   }
   
   @Override
   public List<ShardId> findShardIds(String tenant, String table, Interval interval) {
-      if (interval == Interval.SINGLE)
-          return findShardIds(tenant, table, interval, Instant.now());
-      List<String> matches = getIntervalStarts(tenant, table, interval);
-      List<ShardId> shardIds = new ArrayList<>();
-      for (String match : matches) {
-          shardIds.addAll(findShardIds(tenant, table, interval, Instant.parse(match)));
-      }
-      return shardIds;
+    if (interval == Interval.SINGLE)
+      return findShardIds(tenant, table, interval, Instant.now());
+    List<String> matches = getIntervalStarts(tenant, table, interval);
+    List<ShardId> shardIds = new ArrayList<>();
+    for (String match : matches) {
+      shardIds.addAll(findShardIds(tenant, table, interval, Instant.parse(match)));
+    }
+    return shardIds;
   }
   
   @Override
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, InstantPredicate intervalStart) {
-      if (interval == Interval.SINGLE)
-          return findShardIds(tenant, table, interval, Instant.now());
-      List<String> intervalStarts = getIntervalStarts(tenant, table, interval);
-      List<Instant> instants = intervalStarts.stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
-      List<String> matches = new ArrayList<>();
-      for (Instant instant : instants) {
-          if (intervalStart == null || intervalStart.test(instant))
-              matches.add(instant.toString());
-      }
-      
-      List<ShardId> shardIds = new ArrayList<>();
-      // So now we have the matching intervals, next for each interval get the shardIds
-      for (String match : matches) {
-          shardIds.addAll(findShardIds(tenant, table, interval, Instant.parse(match)));
-      }
-      return shardIds;
+    if (interval == Interval.SINGLE)
+      return findShardIds(tenant, table, interval, Instant.now());
+    List<String> intervalStarts = getIntervalStarts(tenant, table, interval);
+    List<Instant> instants = intervalStarts.stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
+    List<String> matches = new ArrayList<>();
+    for (Instant instant : instants) {
+      if (intervalStart == null || intervalStart.test(instant))
+        matches.add(instant.toString());
+    }
+
+    List<ShardId> shardIds = new ArrayList<>();
+    // So now we have the matching intervals, next for each interval get the shardIds
+    for (String match : matches) {
+      shardIds.addAll(findShardIds(tenant, table, interval, Instant.parse(match)));
+    }
+    return shardIds;
   }
   
   @Override
   public List<ShardId> findShardIds(String tenant, String table, StringPredicate interval, InstantPredicate intervalStart) {
-      if (interval == null) {
-          // This is gonna be slow but we will do it.
-          List<ShardId> shardIds = new ArrayList<>();
-          List<Interval> intervals = getIntervals(tenant, table);
-          for (Interval inter : intervals) {
-              shardIds.addAll(findShardIds(tenant, table, inter, intervalStart));
-          }
-          return shardIds;
-      } else if (interval.getOperator() == Operator.EQUALS && interval.getValue().equalsIgnoreCase(Interval.SINGLE.getInterval()))
-          return findShardIds(tenant, table, Interval.SINGLE, Instant.now());
-
-      List<Interval> intervals = getIntervals(tenant, table);
+    if (interval == null) {
+      // This is gonna be slow but we will do it.
       List<ShardId> shardIds = new ArrayList<>();
+      List<Interval> intervals = getIntervals(tenant, table);
       for (Interval inter : intervals) {
-          if (interval.test(inter.getInterval()))
-              shardIds.addAll(findShardIds(tenant, table, inter, intervalStart));
+        shardIds.addAll(findShardIds(tenant, table, inter, intervalStart));
       }
       return shardIds;
+    } else if (interval.getOperator() == Operator.EQUALS && interval.getValue().equalsIgnoreCase(Interval.SINGLE.getInterval()))
+      return findShardIds(tenant, table, Interval.SINGLE, Instant.now());
+
+    List<Interval> intervals = getIntervals(tenant, table);
+    List<ShardId> shardIds = new ArrayList<>();
+    for (Interval inter : intervals) {
+      if (interval.test(inter.getInterval()))
+        shardIds.addAll(findShardIds(tenant, table, inter, intervalStart));
+    }
+    return shardIds;
   }
 
   @Override
@@ -377,5 +389,12 @@ public class FileReadStore implements ReadStore {
       throw new RuntimeException(ioe);
     }
     return intervals;
+  }
+  
+  private String resolveCurrentPath(String tenant, String table) {
+    DistXact status = getCurrentValues(tenant, table);
+    if (status == null || status.getCurrent() == null)
+      return null;
+    return basePath.resolve(Paths.get(tenant, table, status.getCurrent())).toString();
   }
 }

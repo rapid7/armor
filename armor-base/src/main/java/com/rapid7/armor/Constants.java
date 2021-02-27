@@ -3,7 +3,7 @@ package com.rapid7.armor;
 public final class Constants {
   public final static String CAPTURE = "capture";
   public final static String LAST_ERROR = "lasterror";
-
+  public final static String STORE_DELIMETER = "/";
   public final static int NULL_FILLER_INDICATOR = -123;
   // Entity record constants
   public final static int ID_BYTE_LENGTH = 4;
