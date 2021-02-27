@@ -34,7 +34,6 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.Tag;
 import com.amazonaws.util.StringInputStream;
 import com.amazonaws.util.StringUtils;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -44,10 +43,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -77,8 +74,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public void saveColumn(String transaction, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
-    String key = getIntervalPrefix(columnShardId.getShardId()) + "/" + columnShardId.getShardNum() + "/" + transaction + "/" +
-        columnShardId.getColumnId().fullName();
+    String key = columnShardId.getShardId().shardIdPath() + "/" + transaction + "/" + columnShardId.getColumnId().fullName();
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(byteSize);
     try {
@@ -91,7 +87,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public ColumnFileWriter loadColumnWriter(ColumnShardId columnShardId) {
-    String shardIdPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getInterval(), columnShardId.getIntervalStart(), columnShardId.getShardNum()) + "/" + columnShardId.getColumnId().fullName();
+    String shardIdPath = resolveCurrentPath(columnShardId.getShardId()) + "/" + columnShardId.getColumnId().fullName();
     try {
       if (!s3Client.doesObjectExist(bucket, shardIdPath)) {
         return new ColumnFileWriter(columnShardId);
@@ -113,7 +109,7 @@ public class S3WriteStore implements WriteStore {
   public List<ColumnId> getColumnIds(ShardId shardId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
-    lor.withPrefix(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()) + "/");
+    lor.withPrefix(resolveCurrentPath(shardId) + "/");
     Set<ColumnId> columnIds = new HashSet<>();
     ListObjectsV2Result ol;
     do {
@@ -169,12 +165,11 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public List<ColumnFileWriter> loadColumnWriters(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
-    List<ColumnId> columnIds = getColumnIds(ShardId.buildShardId(tenant, table, interval, timestamp, shardNum));
+  public List<ColumnFileWriter> loadColumnWriters(ShardId shardId) {
+    List<ColumnId> columnIds = getColumnIds(shardId);
     List<ColumnFileWriter> writers = new ArrayList<>();
     for (ColumnId columnId : columnIds) {
-      String shardIdPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardId.getShardNum()) + "/" + columnId.fullName();
+      String shardIdPath = resolveCurrentPath(shardId) + "/" + columnId.fullName();
       try {
         if (doesObjectExist(bucket, shardIdPath)) {
           S3ObjectInputStream s3InputStream = null;
@@ -258,8 +253,8 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    String shardIdPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum) + "/" + Constants.SHARD_METADATA + ".armor";
+  public ShardMetadata getShardMetadata(ShardId shardId) {
+    String shardIdPath = resolveCurrentPath(shardId) + "/" + Constants.SHARD_METADATA + ".armor";
 
     if (s3Client.doesObjectExist(bucket, shardIdPath)) {
       try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
@@ -378,16 +373,15 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void commit(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    DistXact status = getCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
+  public void commit(String transaction, ShardId shardId) {
+    DistXact status = getCurrentValues(shardId);
     if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
       throw new RuntimeException("Create another transaction");
-    saveCurrentValues(
-       tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum, new DistXact(transaction, status == null ? null : status.getCurrent()));
+    saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
     try {
       if (status == null || status.getPrevious() == null)
         return;
-      String toDelete = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + status.getPrevious();
+      String toDelete = shardId.shardIdPath() + "/" + status.getPrevious();
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
           .withPrefix(toDelete);
@@ -408,8 +402,8 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void rollback(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    String toDelete = getIntervalPrefix(tenant, table, interval, timestamp) + "/" + shardNum + "/" + transaction;
+  public void rollback(String transaction, ShardId shardId) {
+    String toDelete = shardId.shardIdPath() + "/" + transaction;
     try {
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
@@ -433,7 +427,7 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void saveError(String transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error) {
     // First erase any previous errors that may have existed before.
-    String toDelete = getIntervalPrefix(columnShardId.getShardId()) + "/" + columnShardId.getShardNum() + "/" + Constants.LAST_ERROR;
+    String toDelete = columnShardId.getShardId().shardIdPath() + "/" + Constants.LAST_ERROR;
     try {
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
@@ -544,7 +538,7 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShardId) {
-    String shardIdPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getInterval(), columnShardId.getIntervalStart(), columnShardId.getShardNum()) + "/" + columnShardId.getColumnId().fullName();
+    String shardIdPath = resolveCurrentPath(columnShardId.getShardId()) + "/" + columnShardId.getColumnId().fullName();
     try {
       if (!s3Client.doesObjectExist(bucket, shardIdPath)) {
         return null;
@@ -579,16 +573,8 @@ public class S3WriteStore implements WriteStore {
     return new ArrayList<>(allPrefixes);
   }
 
-  private String getIntervalPrefix(ShardId shardId) {
-    return shardId.getTenant() + "/" + shardId.getTable() + "/" + shardId.getInterval() + "/" + shardId.getIntervalStart();
-  }
-
   private String getIntervalPrefix(String tenant, String table, Interval interval, Instant timestamp) {
     return tenant + "/" + table + "/" + interval.getInterval() + "/" + interval.getIntervalStart(timestamp);
-  }
-
-  private String getIntervalPrefix(String tenant, String table, String interval, String intervalStart) {
-    return tenant + "/" + table + "/" + interval + "/" + intervalStart;
   }
   
   private String resolveCurrentPath(String tenant, String table) {
@@ -598,11 +584,11 @@ public class S3WriteStore implements WriteStore {
     return tenant + "/" + table + "/" + status.getCurrent();
   }
 
-  private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    DistXact status = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+  private String resolveCurrentPath(ShardId shardId) {
+    DistXact status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
       return null;
-    return getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + status.getCurrent();
+    return shardId.shardIdPath() + "/" + status.getCurrent();
   }
 
   private DistXact getCurrentValues(String tenant, String table) {
@@ -618,8 +604,8 @@ public class S3WriteStore implements WriteStore {
     }
   }
 
-  private DistXact getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    String key = DistXactUtil.buildCurrentMarker(getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum);
+  private DistXact getCurrentValues(ShardId shardId) {
+    String key = DistXactUtil.buildCurrentMarker(shardId.shardIdPath());
     if (!doesObjectExist(this.bucket, key))
       return null;
     else {
@@ -645,15 +631,15 @@ public class S3WriteStore implements WriteStore {
     }
   }
 
-  private void saveCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum, DistXact status) {
-    String key = DistXactUtil.buildCurrentMarker(getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum);
+  private void saveCurrentValues(ShardId shardId, DistXact status) {
+    String key = DistXactUtil.buildCurrentMarker(shardId.shardIdPath());
     try {
       String payload = DistXactUtil.prepareToCommit(status);
       ObjectMetadata objectMetadata = new ObjectMetadata();
       objectMetadata.setContentType("text/plain");
       objectMetadata.setContentLength(payload.length());
       PutObjectRequest putObjectRequest = new PutObjectRequest(bucket, key, new StringInputStream(payload), objectMetadata);
-      putObjectRequest.withTagging(createObjectTagging(interval));
+      putObjectRequest.withTagging(createObjectTagging(shardId.getInterval()));
       s3Client.putObject(putObjectRequest);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);

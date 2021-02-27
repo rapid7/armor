@@ -60,7 +60,7 @@ public class FileWriteStore implements WriteStore {
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp, String columnId) {
     List<ShardId> shardIds = new ArrayList<>();
     for (ShardId shardId : findShardIds(tenant, table, interval, timestamp)) {
-      Path currentPath = Paths.get(resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardId.getShardNum()));
+      Path currentPath = Paths.get(resolveCurrentPath(shardId));
       try (DirectoryStream<Path> stream = Files.newDirectoryStream(currentPath)) {
         for (Path path : stream) {
           if (!Files.isDirectory(path)) {
@@ -113,7 +113,7 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public ColumnFileWriter loadColumnWriter(ColumnShardId columnShardId) {
-    String currentPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getInterval(), columnShardId.getIntervalStart(), columnShardId.getShardNum());
+    String currentPath = resolveCurrentPath(columnShardId.getShardId());
     if (currentPath == null) {
       try {
         return new ColumnFileWriter(columnShardId);
@@ -136,7 +136,7 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public List<ColumnId> getColumnIds(ShardId shardId) {
-    String currentPath = resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum());
+    String currentPath = resolveCurrentPath(shardId);
     if (currentPath == null)
       return new ArrayList<>();
     Path target = Paths.get(currentPath);
@@ -162,10 +162,9 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public List<ColumnFileWriter> loadColumnWriters(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    String currentPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
-    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
-    List<ColumnId> columnIds = getColumnIds(ShardId.buildShardId(tenant, table, interval, timestamp, shardNum));
+  public List<ColumnFileWriter> loadColumnWriters(ShardId shardId) {
+    String currentPath = resolveCurrentPath(shardId);
+    List<ColumnId> columnIds = getColumnIds(shardId);
     List<ColumnFileWriter> writers = new ArrayList<>();
     for (ColumnId columnId : columnIds) {
       Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnId.fullName()));
@@ -230,8 +229,8 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    String currentPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
+  public ShardMetadata getShardMetadata(ShardId shardId) {
+    String currentPath = resolveCurrentPath(shardId);
     if (currentPath == null)
       return null;
     Path shardIdPath = basePath.resolve(Paths.get(currentPath, Constants.SHARD_METADATA + ".armor"));
@@ -293,18 +292,18 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void commit(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    DistXact status = getCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
+  public void commit(String transaction, ShardId shardId) {
+    DistXact status = getCurrentValues(shardId);
     if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
       throw new WriteTranscationError("Create another transaction", transaction);
-    saveCurrentValues(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum, transaction, status == null ? null : status.getCurrent());
+    saveCurrentValues(shardId, transaction, status == null ? null : status.getCurrent());
     try {
       Runnable runnable = () -> {
         try {
           if (status == null || status.getPrevious() == null)
             return;
           Path toDelete = basePath.resolve(
-             Paths.get(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), Integer.toString(shardNum), status.getPrevious()));
+             Paths.get(shardId.shardIdPath(), status.getPrevious()));
           Files.walk(toDelete)
               .sorted(Comparator.reverseOrder())
               .map(Path::toFile)
@@ -321,9 +320,9 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void rollback(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
+  public void rollback(String transaction, ShardId shardId) {
     try {
-      Path toDelete = basePath.resolve(Paths.get(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), Integer.toString(shardNum), transaction));
+      Path toDelete = basePath.resolve(Paths.get(shardId.shardIdPath(), transaction));
       Files.walk(toDelete)
           .sorted(Comparator.reverseOrder())
           .map(Path::toFile)
@@ -398,7 +397,7 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShardId) {
-    String currentPath = resolveCurrentPath(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getInterval(), columnShardId.getIntervalStart(), columnShardId.getShardNum());
+    String currentPath = resolveCurrentPath(columnShardId.getShardId());
     if (currentPath == null)
       return null;
     Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnShardId.getColumnId().fullName()));
@@ -422,11 +421,11 @@ public class FileWriteStore implements WriteStore {
     return basePath.resolve(Paths.get(tenant, table, status.getCurrent())).toString();
   }
 
-  private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    DistXact status = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+  private String resolveCurrentPath(ShardId shardId) {
+    DistXact status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
       return null;
-    return basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), status.getCurrent())).toString();
+    return basePath.resolve(Paths.get(shardId.shardIdPath(), status.getCurrent())).toString();
   }
 
   private DistXact getCurrentValues(String tenant, String table) {
@@ -442,8 +441,8 @@ public class FileWriteStore implements WriteStore {
     }
   }
 
-  private DistXact getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum)).toString()));
+  private DistXact getCurrentValues(ShardId shardId) {
+    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
     if (!Files.exists(searchPath))
       return null;
     else {
@@ -469,8 +468,8 @@ public class FileWriteStore implements WriteStore {
     }
   }
 
-  public void saveCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum, String current, String previous) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum)).toString()));
+  public void saveCurrentValues(ShardId shardId, String current, String previous) {
+    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
     try {
       Files.createDirectories(searchPath.getParent());
       HashMap<String, String> currentValues = new HashMap<>();

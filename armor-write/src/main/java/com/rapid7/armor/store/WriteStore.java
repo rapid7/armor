@@ -32,7 +32,7 @@ public interface WriteStore {
   void deleteTenant(String tenant);
   void deleteTable(String tenant, String table);
   
-  ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
+  ShardMetadata getShardMetadata(ShardId shardId);
   TableMetadata getTableMetadata(String tenant, String table);
   ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShard);
   
@@ -40,7 +40,7 @@ public interface WriteStore {
   void saveTableMetadata(String transaction, TableMetadata tableMetadata);
 
   // Loading from store
-  List<ColumnFileWriter> loadColumnWriters(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
+  List<ColumnFileWriter> loadColumnWriters(ShardId shardId);
   ColumnFileWriter loadColumnWriter(ColumnShardId columnShard);
 
 
@@ -61,9 +61,9 @@ public interface WriteStore {
 
   void saveColumn(String transaction, ColumnShardId columnShardId, int size, InputStream inputStream);
 
-  void commit(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum);
+  void commit(String transaction, ShardId shardId);
 
-  void rollback(String transaction, String tenant, String table, Interval interval, Instant timestamp, int shardNum);
+  void rollback(String transaction, ShardId shardId);
 
   /**
    * Captures write activity either at the entity or write request level. This is useful for debugging issues and replaying

@@ -190,7 +190,7 @@ public class ArmorWriter implements Closeable {
 
     ShardWriter sw = tableWriter.getShard(shardId);
     if (sw == null) {
-      sw = new ShardWriter(shardId, interval, timestamp, store, compress, compactionTrigger, captureWrites);
+      sw = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
       sw = tableWriter.addShard(sw);
     }
     sw.delete(transaction, entityId, version, instanceId);
@@ -311,7 +311,7 @@ public class ArmorWriter implements Closeable {
               ShardWriter shardWriter = tableWriter.getShard(shardId);
               Thread.currentThread().setName(originalThreadName + "(" + shardId.toString() + ")");
               if (shardWriter == null) {
-                shardWriter = new ShardWriter(shardId, interval, timestamp, store, compress, compactionTrigger, captureWrites);
+                shardWriter = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
                 shardWriter = tableWriter.addShard(shardWriter);
               }
 

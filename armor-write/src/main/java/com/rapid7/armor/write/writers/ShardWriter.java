@@ -3,7 +3,6 @@ package com.rapid7.armor.write.writers;
 import com.rapid7.armor.entity.Column;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.EntityRecordSummary;
-import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
@@ -43,8 +42,6 @@ public class ShardWriter {
   private Map<ColumnShardId, ColumnFileWriter> columnFileWriters = new ConcurrentHashMap<>();
   private final WriteStore store;
   private final ShardId shardId;
-  private final Interval interval;
-  private final Instant timestamp;
   private final BiPredicate<ShardId, String> captureWrite;
   private final Supplier<Integer> compactionTrigger;
   private Compression compress = Compression.ZSTD;
@@ -61,16 +58,12 @@ public class ShardWriter {
 
   public ShardWriter(
     ShardId shardId,
-    Interval interval,
-    Instant timestamp,
     WriteStore store,
     Compression compress,
     Supplier<Integer> compactionTriggerSupplier,
     BiPredicate<ShardId, String> captureWrite
   ) {
     this.shardId = shardId;
-    this.interval = interval;
-    this.timestamp = timestamp;
     this.store = store;
     this.compress = compress;
     if (compactionTriggerSupplier == null)
@@ -79,7 +72,7 @@ public class ShardWriter {
       this.compactionTrigger = compactionTriggerSupplier;
     this.captureWrite = captureWrite;
     // Load all columns
-    List<ColumnFileWriter> columnWriters = store.loadColumnWriters(shardId.getTenant(), shardId.getTable(), interval, timestamp, shardId.getShardNum());
+    List<ColumnFileWriter> columnWriters = store.loadColumnWriters(shardId);
     columnFileWriters = columnWriters.stream().collect(Collectors.toMap(ColumnFileWriter::getColumnShardId, w -> w));
   }
 
@@ -143,12 +136,12 @@ public class ShardWriter {
       columnMetadata.add(entityColumnMetadata);
       ShardMetadata smd = new ShardMetadata(shardId, columnMetadata);
       store.saveShardMetadata(transaction, smd);
-      store.commit(transaction, shardId.getTenant(), shardId.getTable(), interval, timestamp, shardId.getShardNum());
+      store.commit(transaction, shardId);
       committed = true;
       return smd;
     } finally {
       if (!committed)
-        store.rollback(transaction, shardId.getTenant(), shardId.getTable(), interval, timestamp, shardId.getShardNum());
+        store.rollback(transaction, shardId);
     }
   }
 
