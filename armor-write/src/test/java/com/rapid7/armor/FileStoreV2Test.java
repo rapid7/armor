@@ -39,9 +39,9 @@ import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.FileReadStore;
 import com.rapid7.armor.store.FileWriteStore;
-import com.rapid7.armor.store.WriteTranscationError;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.writers.ArmorWriter;
+import com.rapid7.armor.xact.XactError;
 
 import tech.tablesaw.api.IntColumn;
 import tech.tablesaw.api.LongColumn;
@@ -470,7 +470,7 @@ public class FileStoreV2Test {
       if (i == 1)
         RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
       for (Compression compression : Compression.values()) {
-        Assertions.assertThrows(WriteTranscationError.class, () -> {
+        Assertions.assertThrows(XactError.class, () -> {
           try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
             List<Entity> entities = new ArrayList<>();
             Entity random = generateEntity("same", 1, null);

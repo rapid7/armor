@@ -16,4 +16,11 @@ public class DistXact {
   public String getPrevious() {
     return previous;
   }
+  
+  public void validateXact(String test) {
+    if (current != null && current.equalsIgnoreCase(test))
+      throw new XactError("Create another transaction", test);
+    if (previous != null && previous.equalsIgnoreCase(test))
+      throw new XactError("Create another transaction", test);
+  }
 }

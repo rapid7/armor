@@ -222,8 +222,8 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
     DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
-    if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
-      throw new RuntimeException("Create another transaction");
+    if (status != null)
+      status.validateXact(transaction);
     String targetTableMetaaPath = PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, Constants.TABLE_METADATA + ".armor");
     for (int i = 0; i < 10; i++) {
       try {
@@ -376,8 +376,8 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void commit(String transaction, ShardId shardId) {
     DistXact status = getCurrentValues(shardId);
-    if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
-      throw new RuntimeException("Create another transaction");
+    if (status != null)
+      status.validateXact(transaction);
     saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
     try {
       if (status == null || status.getPrevious() == null)

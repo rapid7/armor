@@ -12,10 +12,10 @@ import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
-import com.rapid7.armor.store.WriteTranscationError;
 import com.rapid7.armor.write.EntityOffsetException;
 import com.rapid7.armor.write.TableId;
 import com.rapid7.armor.write.WriteRequest;
+import com.rapid7.armor.xact.XactError;
 
 import java.io.Closeable;
 import java.nio.channels.ClosedChannelException;
@@ -417,8 +417,8 @@ public class ArmorWriter implements Closeable {
           LOGGER.error(offsetException.getMessage());
           throw offsetException;
         }
-        if (e.getCause() instanceof WriteTranscationError) {
-          throw (WriteTranscationError) e.getCause();
+        if (e.getCause() instanceof XactError) {
+          throw (XactError) e.getCause();
         }
         throw new RuntimeException(e);
       }

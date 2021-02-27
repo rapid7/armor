@@ -202,8 +202,9 @@ public class FileWriteStore implements WriteStore {
   @Override
   public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
     DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
-    if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
-      throw new RuntimeException("Create another transaction");
+    if (status != null)
+      status.validateXact(transaction);
+
     String targetTableMetaaPath = PathBuilder.buildPath(
       tableMetadata.getTenant(),
       tableMetadata.getTable(),
@@ -300,8 +301,8 @@ public class FileWriteStore implements WriteStore {
   @Override
   public void commit(String transaction, ShardId shardId) {
     DistXact status = getCurrentValues(shardId);
-    if (status != null && status.getCurrent().equalsIgnoreCase(transaction))
-      throw new WriteTranscationError("Create another transaction", transaction);
+    if (status != null)
+      status.validateXact(transaction);
     saveCurrentValues(shardId, transaction, status == null ? null : status.getCurrent());
     try {
       Runnable runnable = () -> {
