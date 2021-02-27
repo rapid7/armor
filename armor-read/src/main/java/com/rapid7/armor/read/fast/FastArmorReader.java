@@ -29,7 +29,7 @@ public class FastArmorReader extends BaseArmorReader {
       return null;
     FastArmorShardColumn armorShard = store.getFastArmorShard(shardId, columnName);
     if (armorShard == null) {
-      ShardMetadata metadata = store.getShardMetadata(tenant, table, interval, timestamp, shardNum);
+      ShardMetadata metadata = store.getShardMetadata(ShardId.buildShardId(tenant, table, interval, timestamp, shardNum));
       if (metadata == null)
         return null;
       int numRows = metadata.getColumnMetadata().get(0).getNumRows();
@@ -44,7 +44,7 @@ public class FastArmorReader extends BaseArmorReader {
     ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
     if (shardId == null)
       return null;
-    ShardMetadata metadata = store.getShardMetadata(tenant, table, interval, timestamp, shardNum);
+    ShardMetadata metadata = store.getShardMetadata(ShardId.buildShardId(tenant, table, interval, timestamp, shardNum));
     int numRows = metadata.getColumnMetadata().get(0).getNumRows();
 
     return new FixedValueArmorBlockReader(fixedValue, numRows);

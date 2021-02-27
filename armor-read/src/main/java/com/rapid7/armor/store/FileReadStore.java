@@ -71,7 +71,7 @@ public class FileReadStore implements ReadStore {
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp, String columnId) {
     List<ShardId> shardIds = new ArrayList<>();
     for (ShardId shardId : findShardIds(tenant, table, interval, timestamp)) {
-      Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()));
+      Path shardIdPath = Paths.get(resolveCurrentPath(shardId));
       try (DirectoryStream<Path> stream = Files.newDirectoryStream(shardIdPath)) {
         for (Path path : stream) {
           if (!Files.isDirectory(path)) {
@@ -122,7 +122,7 @@ public class FileReadStore implements ReadStore {
     if (!option.isPresent())
       return null;
     ColumnId cn = option.get();
-    Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()), cn.fullName());
+    Path shardIdPath = Paths.get(resolveCurrentPath(shardId), cn.fullName());
     try {
       if (!Files.exists(shardIdPath)) {
         Files.createDirectories(shardIdPath.getParent());
@@ -138,8 +138,7 @@ public class FileReadStore implements ReadStore {
 
   @Override
   public List<ColumnId> getColumnIds(ShardId shardId) {
-    Path shardIdPath = Paths.get(
-        resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()));
+    Path shardIdPath = Paths.get(resolveCurrentPath(shardId));
     List<ColumnId> fileList = new ArrayList<>();
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(shardIdPath)) {
       for (Path path : stream) {
@@ -161,7 +160,7 @@ public class FileReadStore implements ReadStore {
     if (!option.isPresent())
       return null;
     ColumnId cn = option.get();
-    Path shardIdPath = Paths.get(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()), cn.fullName());
+    Path shardIdPath = Paths.get(resolveCurrentPath(shardId), cn.fullName());
     if (!Files.exists(shardIdPath)) {
       return null;
     } else {
@@ -217,8 +216,8 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    String currentPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
+  public ShardMetadata getShardMetadata(ShardId shardId) {
+    String currentPath = resolveCurrentPath(shardId);
     if (currentPath == null)
       return null;
     Path shardIdPath = basePath.resolve(Paths.get(currentPath, Constants.SHARD_METADATA + ".armor"));
@@ -232,15 +231,15 @@ public class FileReadStore implements ReadStore {
     }
   }
 
-  private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    DistXact status = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+  private String resolveCurrentPath(ShardId shardId) {
+    DistXact status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
        return null;
-    return basePath.resolve(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum), status.getCurrent())).toString();
+    return basePath.resolve(Paths.get(shardId.shardIdPath(),status.getCurrent())).toString();
   }
 
-  private DistXact getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table, interval, intervalStart, Integer.toString(shardNum)).toString()));
+  private DistXact getCurrentValues(ShardId shardId) {
+    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
     if (!Files.exists(searchPath))
       return null;
     else {

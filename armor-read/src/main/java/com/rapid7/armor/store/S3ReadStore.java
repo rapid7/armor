@@ -49,10 +49,6 @@ public class S3ReadStore implements ReadStore {
     this.bucket = bucket;
   }
 
-  private ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
-  }
-
   @Override
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
@@ -91,7 +87,7 @@ public class S3ReadStore implements ReadStore {
 
   @Override
   public ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
+    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
     lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + "/");
@@ -113,7 +109,7 @@ public class S3ReadStore implements ReadStore {
     List<ColumnId> columnIds = getColumnIds(shardId);
     Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
     ColumnId cn = option.get();
-    String shardIdPath = resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()) + "/" + cn.fullName();
+    String shardIdPath = resolveCurrentPath(shardId) + "/" + cn.fullName();
     if (!doesObjectExist(bucket, shardIdPath)) {
       return new SlowArmorShardColumn();
     } else {
@@ -131,7 +127,7 @@ public class S3ReadStore implements ReadStore {
     List<ColumnId> columnIds = getColumnIds(shardId);
     Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
     ColumnId cn = option.get();
-    String shardIdPath = resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()) + "/" + cn.fullName();
+    String shardIdPath = resolveCurrentPath(shardId) + "/" + cn.fullName();
     if (!doesObjectExist(bucket, shardIdPath)) {
       return null;
     } else {
@@ -188,7 +184,7 @@ public class S3ReadStore implements ReadStore {
   public List<ColumnId> getColumnIds(ShardId shardId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter("/");
-    lor.withPrefix(resolveCurrentPath(shardId.getTenant(), shardId.getTable(), shardId.getInterval(), shardId.getIntervalStart(), shardId.getShardNum()) + "/");
+    lor.withPrefix(resolveCurrentPath(shardId) + "/");
     HashSet<ColumnId> columnIds = new HashSet<>();
     ListObjectsV2Result ol;
     do {
@@ -263,8 +259,8 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    String shardIdPath = resolveCurrentPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum) + "/" + Constants.SHARD_METADATA + ".armor";
+  public ShardMetadata getShardMetadata(ShardId shardId) {
+    String shardIdPath = resolveCurrentPath(shardId) + "/" + Constants.SHARD_METADATA + ".armor";
 
     if (s3Client.doesObjectExist(bucket, shardIdPath)) {
       try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
@@ -296,15 +292,15 @@ public class S3ReadStore implements ReadStore {
     return tenant + "/" + table + "/" + interval + "/" + intervalStart;
   }
 
-  private String resolveCurrentPath(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    DistXact status = getCurrentValues(tenant, table, interval, intervalStart, shardNum);
+  private String resolveCurrentPath(ShardId shardId) {
+    DistXact status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
       return null;
-    return getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum + "/" + status.getCurrent();
+    return shardId.shardIdPath() + "/" + status.getCurrent();
   }
 
-  private DistXact getCurrentValues(String tenant, String table, String interval, String intervalStart, int shardNum) {
-    String key = DistXactUtil.buildCurrentMarker(getIntervalPrefix(tenant, table, interval, intervalStart) + "/" + shardNum);
+  private DistXact getCurrentValues(ShardId shardId) {
+    String key = DistXactUtil.buildCurrentMarker(shardId.shardIdPath());
     if (!doesObjectExist(this.bucket, key))
       return null;
     else {
@@ -319,7 +315,7 @@ public class S3ReadStore implements ReadStore {
   private ShardId toShardId(String tenant, String table, Interval interval, Instant timestamp, String rawShard) {
     String shardName = Paths.get(rawShard).getFileName().toString();
     int shardNum = Integer.parseInt(shardName);
-    return buildShardId(tenant, table, interval, timestamp, shardNum);
+    return ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
   }
 
   @Override

@@ -86,7 +86,7 @@ public interface ReadStore {
    *
    * @return The {@link ShardMetadata} or {@code null}.
    */
-  ShardMetadata getShardMetadata(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
+  ShardMetadata getShardMetadata(ShardId shardId);
 
   // Reader apis
   SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnName);
