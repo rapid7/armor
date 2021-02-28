@@ -203,7 +203,7 @@ public class S3StoreTest {
     ColumnId name = new ColumnId("name", DataType.STRING.getCode());
     ColumnId time = new ColumnId("time", DataType.LONG.getCode());
     ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
-    ColumnId asset = new ColumnId("asset", DataType.INTEGER.getCode());
+    ColumnId asset = new ColumnId("assetId", DataType.INTEGER.getCode());
     List<ColumnId> columns = Arrays.asList(name, time, vuln);
     for (int i = 0; i < 2; i++) {
       if (i == 1)
@@ -212,7 +212,7 @@ public class S3StoreTest {
         S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
         try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, compression, 10, () -> 1, null)) {
           String transaction = armorWriter.startTransaction();
-          Entity e11 = Entity.buildEntity("asset", 1, 1, null, name, time, vuln);
+          Entity e11 = Entity.buildEntity("assetId", 1, 1, null, name, time, vuln);
           e11.addRows(
               "a", 6L, 1,
               "b", 5L, 2,
@@ -223,7 +223,7 @@ public class S3StoreTest {
               "f", 1L, 6
               );
 
-          Entity e12 = Entity.buildEntity("asset", 1, 2, null, name, time, vuln);  // Should be this one
+          Entity e12 = Entity.buildEntity("assetId", 1, 2, null, name, time, vuln);  // Should be this one
           e12.addRows(
               "a", 7L, 1,
               "b", 8L, 2,
@@ -233,7 +233,7 @@ public class S3StoreTest {
               "e", 11L, 6
               );
 
-          Entity e10 = Entity.buildEntity("asset", 1, 0, null, name, time, vuln);
+          Entity e10 = Entity.buildEntity("assetId", 1, 0, null, name, time, vuln);
           e10.addRows(
               "a", 6L, null,
               "a", 5L, null,

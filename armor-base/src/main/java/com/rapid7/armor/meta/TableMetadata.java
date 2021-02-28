@@ -2,7 +2,9 @@ package com.rapid7.armor.meta;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -65,6 +67,11 @@ public class TableMetadata {
   }
   
   public void addColumnIds(Collection<ColumnId> columnIds) {
+    Map<String, String> columns = columnIds.stream().collect(Collectors.toMap(c -> c.getName(), c -> c.getType()));
+    for (ColumnId columnId : columnIds) {
+      if (columns.containsKey(columnId.getName()) && !columns.get(columnId.getName()).equals(columnId.getType()))
+        throw new RuntimeException("ERROR: detected a change in type for column " + columnId.getName());
+    }
     this.columnIds.addAll(columnIds);
   }
 

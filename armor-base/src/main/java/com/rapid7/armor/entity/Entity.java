@@ -250,5 +250,4 @@ public class Entity {
     }
     return columnValues;
   }
-
 }

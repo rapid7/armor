@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import tech.tablesaw.columns.Column;
 import org.junit.jupiter.api.Test;
 
-public class FileStoreTest {
+public class FileWriteStoreTest {
 
   private void checkEntityIndexRecord(EntityRecord eir, int rowGroupOffset, int valueLength, int nullLength, byte deleted) {
     assertEquals(valueLength, eir.getValueLength());
@@ -111,7 +111,7 @@ public class FileStoreTest {
     ColumnId name = new ColumnId("name", DataType.STRING.getCode());
     ColumnId time = new ColumnId("time", DataType.LONG.getCode());
     ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
-    ColumnId asset = new ColumnId("asset", DataType.INTEGER.getCode());
+    ColumnId asset = new ColumnId("assetId", DataType.INTEGER.getCode());
     List<ColumnId> columns = Arrays.asList(name, time, vuln);
     String instanceId = UUID.randomUUID().toString();
     for (int i = 0; i < 2; i++) {
@@ -120,7 +120,7 @@ public class FileStoreTest {
 
       for (Compression compression : Compression.values()) {
         try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, compression, 10, () -> 1, null)) {
-          Entity e11 = Entity.buildEntity("asset", 1, 1, instanceId, name, time, vuln);
+          Entity e11 = Entity.buildEntity("assetId", 1, 1, instanceId, name, time, vuln);
           e11.addRows(
               "a", 6L, 1,
               "b", 5L, 2,
@@ -131,7 +131,7 @@ public class FileStoreTest {
               "f", 1L, 6
               );
 
-          Entity e12 = Entity.buildEntity("asset", 1, 2, instanceId, name, time, vuln);  // Should be this one
+          Entity e12 = Entity.buildEntity("assetId", 1, 2, instanceId, name, time, vuln);  // Should be this one
           e12.addRows(
               "a", 7L, 1,
               "b", 8L, 2,
@@ -141,7 +141,7 @@ public class FileStoreTest {
               "e", 11L, 6
               );
 
-          Entity e10 = Entity.buildEntity("asset", 1, 0, instanceId, name, time, vuln);
+          Entity e10 = Entity.buildEntity("assetId", 1, 0, instanceId, name, time, vuln);
           e10.addRows(
               "a", 6L, null,
               "a", 5L, null,

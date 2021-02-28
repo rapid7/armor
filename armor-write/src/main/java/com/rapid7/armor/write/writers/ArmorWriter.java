@@ -275,7 +275,6 @@ public class ArmorWriter implements Closeable {
     if (captureWrites != null && captureWrites.test(new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), -1), ArmorWriter.class.getSimpleName()))
       store.captureWrites(transaction, new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), -1), entities, null, null);
 
-
     HashMap<ShardId, List<Entity>> shardToUpdates = new HashMap<>();
     TableId tableId = new TableId(tenant, table);
     final TableWriter tableWriter;
@@ -284,7 +283,12 @@ public class ArmorWriter implements Closeable {
       if (tableMeta != null) {
         // The table exists, load it up then
         tableWriter = getTableWriter(tableId);
-        tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
+        
+        // Make sure the entityid column hasn't changed.
+        String entityIdColumn = tableMeta.getEntityColumnId();
+        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
+          throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
+        tableEntityColumnIds.put(tableId, toColumnId(tableMeta)); 
       } else {
         Entity entity = entities.get(0);
         // No shard metadata exists, create the first shard metadata for this.
@@ -403,7 +407,13 @@ public class ArmorWriter implements Closeable {
     }
 
     if (tableMetadata == null)
-        tableMetadata = new TableMetadata(tenant, table, entityColumnId.getName(), entityColumnId.getType());
+      tableMetadata = new TableMetadata(tenant, table, entityColumnId.getName(), entityColumnId.getType());
+    else {
+      // Verify the entityId column and type are the same.
+      if (!tableMetadata.getEntityColumnId().equals(entityColumnId.getName()) || !tableMetadata.getEntityColumnIdType().equals(entityColumnId.getType())) {
+        throw new RuntimeException("The entity id column name or type has changed, check the shards..table is corrupted may require a rebuid");
+      }
+    }
     for (int i = 0; i < submitted; ++i) {
       try {
         ShardMetadata smd = std.take().get();
