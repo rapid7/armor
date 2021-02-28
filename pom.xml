@@ -49,7 +49,6 @@
         <module>armor-base</module>
         <module>armor-write</module>
         <module>armor-read</module>
-        <module>armor-tools</module>
     </modules>
 
     <distributionManagement>
