@@ -78,11 +78,7 @@ public interface ReadStore {
   /**
    * Gets the shard metadata.
    *
-   * @param tenant The tenant to find.
-   * @param table The table to find.
-   * @param interval The interval to check against.
-   * @param timestamp The timestamp with the interval to check against.
-   * @param shardNum The shard number.
+   * @param shardId The shardId to get table metadata.
    *
    * @return The {@link ShardMetadata} or {@code null}.
    */
@@ -101,17 +97,13 @@ public interface ReadStore {
 
   // Shard apis
   /**
-   * Finds the {@link ShardId} given a set of parameters.
+   * Determines whether the shardId exists.
    *
-   * @param tenant The tenant to find.
-   * @param table The table to find.
-   * @param interval The interval to check against.
-   * @param timestamp The timestamp witihn the interval.
-   * @param shardNum The shard number.
+   * @param shardId The shardId to see if it exists.
    *
-   * @return The {@link ShardId} or {@code null}.
+   * @return {@code true} the shard exists.
    */
-  ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum);
+  boolean shardIdExists(ShardId shardId);
 
   /**
    * Finds the {@link ShardId}s given a set of parameters.

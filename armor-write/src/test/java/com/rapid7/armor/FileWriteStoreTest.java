@@ -276,7 +276,8 @@ public class FileWriteStoreTest {
           amrorWriter2.close(); // Close this FS and open a new one to test the load.
 
           SlowArmorReader armorReader = new SlowArmorReader(fileReadStore);
-          ColumnMetadata aShard = armorReader.getColumnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ShardId zeroShardId = ShardId.buildShardId(myorg, table, SINGLE, Instant.now(), 0);
+          ColumnMetadata aShard = armorReader.getColumnMetadata(zeroShardId, "vuln");
           assertEquals(DataType.INTEGER, aShard.getColumnType());
           assertEquals(Integer.valueOf(0), Integer.valueOf(aShard.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), aShard.getMaxValue());
@@ -292,7 +293,7 @@ public class FileWriteStoreTest {
               vulnInts.asObjectArray());
 
           FastArmorReader fastArmorReader = new FastArmorReader(fileReadStore);
-          ColumnMetadata rShard = armorReader.getColumnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ColumnMetadata rShard = armorReader.getColumnMetadata(zeroShardId, "vuln");
           assertEquals(DataType.INTEGER, rShard.getColumnType());
           assertEquals(Integer.valueOf(0), Integer.valueOf(rShard.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), rShard.getMaxValue());
@@ -311,7 +312,7 @@ public class FileWriteStoreTest {
           //"1", null, 6
           //"1", null, -1
           //null, null, null
-          FastArmorBlockReader fastReader1 = fastArmorReader.getColumn(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          FastArmorBlockReader fastReader1 = fastArmorReader.getColumn(zeroShardId, "vuln");
           FastArmorBlock a1a = fastReader1.getIntegerBlock(1);
           assertTrue(fastReader1.hasNext());
           FastArmorBlock a2a = fastReader1.getIntegerBlock(1);
@@ -329,14 +330,13 @@ public class FileWriteStoreTest {
           FastArmorBlock a8a = fastReader1.getIntegerBlock(1);
           assertFalse(fastReader1.hasNext());
 
-          FastArmorBlockReader fastReader1a = fastArmorReader.getColumn(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          FastArmorBlockReader fastReader1a = fastArmorReader.getColumn(zeroShardId, "vuln");
           FastArmorBlock a1aa = fastReader1a.getIntegerBlock(2);
           assertTrue(fastReader1a.hasNext());
           FastArmorBlock a2aa = fastReader1a.getIntegerBlock(10);
           assertFalse(fastReader1a.hasNext());
 
-
-          FastArmorBlockReader fastReader2 = fastArmorReader.getColumn(myorg, table, SINGLE, Instant.now(), "name", 0);
+          FastArmorBlockReader fastReader2 = fastArmorReader.getColumn(zeroShardId, "name");
           FastArmorBlock a1b = fastReader2.getStringBlock(1);
           assertTrue(fastReader2.hasNext());
           FastArmorBlock a2b = fastReader2.getStringBlock(1);
@@ -354,7 +354,7 @@ public class FileWriteStoreTest {
           FastArmorBlock a8b = fastReader2.getStringBlock(1);
           assertFalse(fastReader2.hasNext());
 
-          FastArmorBlockReader fastReader2aa = fastArmorReader.getColumn(myorg, table, SINGLE, Instant.now(), "name", 0);
+          FastArmorBlockReader fastReader2aa = fastArmorReader.getColumn(zeroShardId, "name");
           FastArmorBlock a1ba = fastReader2aa.getStringBlock(2);
           assertTrue(fastReader2aa.hasNext());
           FastArmorBlock a2ba = fastReader2aa.getStringBlock(10);

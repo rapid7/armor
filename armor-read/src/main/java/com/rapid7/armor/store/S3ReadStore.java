@@ -86,22 +86,18 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    ShardId shardId = ShardId.buildShardId(tenant, table, interval, timestamp, shardNum);
+  public boolean shardIdExists(ShardId shardId) {
     ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
     lor.withDelimiter(Constants.STORE_DELIMETER);
-    lor.withPrefix(getIntervalPrefix(tenant, table, interval, timestamp) + Constants.STORE_DELIMETER);
+    lor.withPrefix(shardId.shardIdPath() + Constants.STORE_DELIMETER);
     ListObjectsV2Result ol;
     do {
       ol = s3Client.listObjectsV2(lor);
-      List<String> commonPrefixes = ol.getCommonPrefixes();
-      List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(Collectors.toList());
-      if (rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).anyMatch(s -> s.equals(shardId))) {
-        return shardId;
-      }
+      if (ol.getCommonPrefixes().stream().anyMatch(s -> s.contains(shardId.shardIdPath())))
+        return true;
       lor.setContinuationToken(ol.getNextContinuationToken());
     } while (ol.isTruncated());
-    return null;
+    return false;
   }
 
   @Override

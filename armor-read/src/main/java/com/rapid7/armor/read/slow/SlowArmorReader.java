@@ -39,19 +39,17 @@ public class SlowArmorReader extends BaseArmorReader {
     super(store);
   }
 
-  public Column<?> getColumn(String tenant, String table, Interval interval, Instant timestamp, String columnId, int shardNum) throws IOException {
-    ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
-    if (shardId == null)
+  public Column<?> getColumn(ShardId shardId, String columnName) throws IOException {
+    if (!store.shardIdExists(shardId))
       return null;
-    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnId);
+    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);
     return armorShard.getColumn();
   }
 
-  public Column<?> getColumn(String tenant, String table, Interval interval, Instant timestamp, String columnId, int limit, int shardNum) throws IOException {
-    ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
-    if (shardId == null)
+  public Column<?> getColumn(ShardId shardId, String columnName, int limit) throws IOException {
+    if (!store.shardIdExists(shardId))
       return null;
-    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnId);
+    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);
     return armorShard.getColumn().first(limit);
   }
 

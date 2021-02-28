@@ -13,7 +13,6 @@ import com.rapid7.armor.store.S3WriteStore;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.writers.ArmorWriter;
 import com.rapid7.armor.xact.DistXact;
-import com.rapid7.armor.xact.DistXactUtil;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -38,7 +37,6 @@ import org.junit.jupiter.api.Test;
 import static com.rapid7.armor.interval.Interval.SINGLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.findify.s3mock.S3Mock;
 
@@ -164,9 +162,11 @@ public class S3StoreTest {
     assertEquals(shard1, ShardId.buildShardId("org1", "table1", SINGLE, Instant.now(), 1));
 
     S3ReadStore readStore = new S3ReadStore(client, TEST_BUCKET);
-    assertEquals(shard0, readStore.findShardId("org1", "table1", SINGLE, Instant.now(), 0));
-    assertEquals(shard1, readStore.findShardId("org1", "table1", SINGLE, Instant.now(), 1));
-    assertNull(readStore.findShardId("org1", "table1", SINGLE, Instant.now(), 100));
+    ShardId zeroShard0Table1 = ShardId.buildShardId("org1", "table1", SINGLE, Instant.now(), 0);
+    assertTrue(readStore.shardIdExists(zeroShard0Table1));
+    ShardId zeroShard1Table1 = ShardId.buildShardId("org1", "table1", SINGLE, Instant.now(), 1);
+    assertTrue(readStore.shardIdExists(zeroShard1Table1));
+    assertFalse(readStore.shardIdExists(ShardId.buildShardId("org1", "table1", SINGLE, Instant.now(), 100)));
 
     List<ShardId> readShardIds = readStore.findShardIds("org1", "table1", SINGLE, Instant.now());
     assertTrue(readShardIds.contains(shard0));

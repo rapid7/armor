@@ -44,10 +44,6 @@ public class FileReadStore implements ReadStore {
     this.basePath = path;
   }
 
-  private ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
-  }
-
   private ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, String shardNum) {
     return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), Integer.parseInt(shardNum));
   }
@@ -105,13 +101,9 @@ public class FileReadStore implements ReadStore {
 
 
   @Override
-  public ShardId findShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
-    ShardId shardId = buildShardId(tenant, table, interval, timestamp, shardNum);
+  public boolean shardIdExists(ShardId shardId) {
     Path shardIdPath = basePath.resolve(Paths.get(shardId.shardIdPath()));
-    if (Files.exists(shardIdPath))
-      return shardId;
-    else
-      return null;
+    return Files.exists(shardIdPath);
   }
 
   @Override

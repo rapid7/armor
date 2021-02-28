@@ -220,7 +220,7 @@ public class FileStoreV2Test {
     int totalRows = 0;
     FastArmorReader reader = new FastArmorReader(readStore);
     for (ShardId shardId : shardIds) {
-      FastArmorBlockReader far = reader.getColumn(TENANT, TABLE, INTERVAL, TIMESTAMP, column.getName(), shardId.getShardNum());
+      FastArmorBlockReader far = reader.getColumn(shardId, column.getName());
       FastArmorBlock fab = null;
       switch (column.dataType()) {
       case INTEGER:

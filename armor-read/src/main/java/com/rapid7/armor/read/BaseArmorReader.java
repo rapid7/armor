@@ -1,9 +1,7 @@
 package com.rapid7.armor.read;
 
 import java.io.IOException;
-import java.time.Instant;
 
-import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.read.slow.SlowArmorShardColumn;
 import com.rapid7.armor.shard.ShardId;
@@ -16,11 +14,10 @@ public class BaseArmorReader {
     this.store = store;
   }
 
-  public ColumnMetadata getColumnMetadata(String tenant, String table, Interval interval, Instant timestamp, String columnId, int shardNum) throws IOException {
-    ShardId shardId = store.findShardId(tenant, table, interval, timestamp, shardNum);
-    if (shardId == null)
+  public ColumnMetadata getColumnMetadata(ShardId shardId, String columnName) throws IOException {
+    if (!store.shardIdExists(shardId))
       return null;
-    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnId);
+    SlowArmorShardColumn armorShard = store.getSlowArmorShard(shardId, columnName);
     if (armorShard == null)
       return null;
     return armorShard.getMetadata();
