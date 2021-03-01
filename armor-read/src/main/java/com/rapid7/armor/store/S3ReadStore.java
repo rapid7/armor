@@ -347,41 +347,45 @@ public class S3ReadStore implements ReadStore {
   
   @Override
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, InstantPredicate intervalStartPredicate) {
-      if (interval != null && interval == Interval.SINGLE)
-          return findShardIds(tenant, table, interval, Instant.now());
-      Map<Interval, List<String>> intervalStarts = new HashMap<>();
-      if (interval == null) {
-         for (Interval inter : getIntervals(tenant, table)) {
-             intervalStarts.put(inter, getIntervalStarts(tenant, table, inter));
-         }
-      } else 
-          intervalStarts.put(interval, getIntervalStarts(tenant, table, interval));
+    if (interval != null && interval == Interval.SINGLE)
+      return findShardIds(tenant, table, interval, Instant.now());
+    Map<Interval, List<String>> intervalStarts = new HashMap<>();
+    if (interval == null) {
+      for (Interval inter : getIntervals(tenant, table))
+        intervalStarts.put(inter, getIntervalStarts(tenant, table, inter));
+    } else 
+        intervalStarts.put(interval, getIntervalStarts(tenant, table, interval));
       
-      Set<ShardId> shardIds = new HashSet<>();
-      for (Map.Entry<Interval, List<String>> entry : intervalStarts.entrySet()) {
-       List<Instant> intervalStartInstances = entry.getValue().stream().map(is -> Instant.parse(is)).collect(Collectors.toList());
-       List<String> matches = new ArrayList<>();
-       for (Instant intervalStartInstant : intervalStartInstances) {
-           if (intervalStartPredicate == null || intervalStartPredicate.test(intervalStartInstant))
-               matches.add(intervalStartInstant.toString());
-       }
-       
-       // So now we have the matching intervals, next for each interval get the shardIds
-       for (String match : matches) {
-          shardIds.addAll(findShardIds(tenant, table, entry.getKey(), Instant.parse(match)));
-       }
+    Set<ShardId> shardIds = new HashSet<>();
+    for (Map.Entry<Interval, List<String>> entry : intervalStarts.entrySet()) {
+      List<String> intervalStartsValues = entry.getValue();
+      List<Instant> intervalStartInstances = new ArrayList<>();
+      for (String isv : intervalStartsValues) {
+         Instant instant = Instant.parse(isv);
+         intervalStartInstances.add(instant);
       }
-      return new ArrayList<>(shardIds);
+      List<String> matches = new ArrayList<>();
+      for (Instant intervalStartInstant : intervalStartInstances) {
+        if (intervalStartPredicate == null || intervalStartPredicate.test(intervalStartInstant))
+          matches.add(intervalStartInstant.toString());
+      }
+       
+      // So now we have the matching intervals, next for each interval get the shardIds
+      for (String match : matches) {
+        shardIds.addAll(findShardIds(tenant, table, entry.getKey(), Instant.parse(match)));
+      }
+    }
+    return new ArrayList<>(shardIds);
   }
   
   @Override
-  public List<ShardId> findShardIds(String tenant, String table, StringPredicate interval, InstantPredicate intervalStart) {
+  public List<ShardId> findShardIds(String tenant, String table, StringPredicate interval, InstantPredicate intervalStartPredicate) {
       if (interval == null) {
           // This is gonna be slow but we will do it.
           List<ShardId> shardIds = new ArrayList<>();
           List<Interval> intervals = getIntervals(tenant, table);
           for (Interval inter : intervals) {
-              shardIds.addAll(findShardIds(tenant, table, inter, intervalStart));
+              shardIds.addAll(findShardIds(tenant, table, inter, intervalStartPredicate));
           }
           return shardIds;
       } else if (interval.getOperator() == Operator.EQUALS && interval.getValue().equalsIgnoreCase(Interval.SINGLE.getInterval()))
@@ -391,7 +395,7 @@ public class S3ReadStore implements ReadStore {
       List<ShardId> shardIds = new ArrayList<>();
       for (Interval inter : intervals) {
           if (inter != null && interval.test(inter.getInterval()))
-              shardIds.addAll(findShardIds(tenant, table, inter, intervalStart));
+              shardIds.addAll(findShardIds(tenant, table, inter, intervalStartPredicate));
       }
       return shardIds;
   }
