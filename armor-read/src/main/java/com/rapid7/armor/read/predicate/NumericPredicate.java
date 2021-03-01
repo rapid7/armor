@@ -10,13 +10,28 @@ public class NumericPredicate<T extends Number> extends Predicate<T> {
 
     @Override
     public boolean executeTest(T testValue) {
-        // TODO Auto-generated method stub
-        return false;
+      if (operator == Operator.EQUALS) {
+        return executeEquals(testValue);
+      } else if (operator == Operator.NOT_EQUALS) {
+        return executeNotEquals(testValue);
+      } else if (operator == Operator.GREATER_THAN) {
+        return executeNumGreaterThan(testValue);
+      } else if (operator == Operator.GREATER_THAN_EQUAL) {
+        return executeNumGreaterThan(testValue);
+      } else if (operator == Operator.LESS_THAN) {
+        return executeNumLessThan(testValue);
+      } else if (operator == Operator.LESS_THAN_EQUAL) {
+        return executeNumLessThanEqual(testValue);
+      } else if (operator == Operator.BETWEEN) {
+        return executeNumBetween(testValue);
+      } else if (operator == Operator.IN) {
+        return executeIn(testValue);
+      }
+      return false;
     }
 
     @Override
     public Number convertValueToNumber(T value) {
-        // TODO Auto-generated method stub
-        return null;
+        return value;
     }
 }
