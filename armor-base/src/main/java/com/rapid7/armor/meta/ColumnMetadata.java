@@ -26,7 +26,7 @@ public class ColumnMetadata {
   private int numEntities = 0;
   private int cardinality = 0;
   private String lastCompaction;
-
+  
   public void setEntityId(boolean entityId) {
     this.entityId = entityId;
   }

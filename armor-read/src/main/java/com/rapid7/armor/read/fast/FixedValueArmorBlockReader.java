@@ -1,5 +1,7 @@
 package com.rapid7.armor.read.fast;
 
+import com.rapid7.armor.meta.ColumnMetadata;
+
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 
@@ -12,7 +14,7 @@ public class FixedValueArmorBlockReader extends FastArmorBlockReader {
   private Object fixedValue;
 
   public FixedValueArmorBlockReader(Object fixedValue, int numRows) {
-    super(null, null, null, numRows, -1, null, null, null);
+    super(null, null, null, null, numRows, -1, null, null, null);
 
     this.fixedValue = fixedValue;
   }

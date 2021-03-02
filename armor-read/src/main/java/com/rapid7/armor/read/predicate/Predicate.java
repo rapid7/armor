@@ -1,5 +1,6 @@
 package com.rapid7.armor.read.predicate;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -8,7 +9,7 @@ import com.rapid7.armor.store.Operator;
 public abstract class Predicate<T> {
    protected String field;
    protected Operator operator;
-   protected List<T> values;
+   protected List<T> values = new ArrayList<>();
    
    public Predicate(String field, Operator operator, List<T> values) {
      this.field = field;
@@ -33,6 +34,9 @@ public abstract class Predicate<T> {
      return executeTest(testValue);  
    }
    
+   public List<T> getValues() {
+     return values;
+   }
    public T getValue() {
      if (values == null || values.isEmpty())
        return null;

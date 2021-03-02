@@ -2,6 +2,7 @@ package com.rapid7.armor.read.fast;
 
 import java.nio.ByteBuffer;
 
+import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.read.DictionaryReader;
 import com.rapid7.armor.schema.DataType;
 
@@ -26,16 +27,19 @@ public class FastArmorBlockReader {
   private final IntArrayList rowIsNull;
   protected int batchNum = 0;
   private DataType dataType;
+  private ColumnMetadata metadata;
 
   public FastArmorBlockReader(
-      ByteBuffer columnValues,
-      IntArrayList rowIsNull,
-      DictionaryReader strValueDictionary,
-      int numRows,
-      int numEntities,
-      int[] entityDecodedLength,
-      int[] entityNumRows,
-      DataType dataType) {
+    ColumnMetadata metadata,
+    ByteBuffer columnValues,
+    IntArrayList rowIsNull,
+    DictionaryReader strValueDictionary,
+    int numRows,
+    int numEntities,
+    int[] entityDecodedLength,
+    int[] entityNumRows,
+    DataType dataType) {
+    this.metadata = metadata;
     this.columnValues = columnValues;
     this.strValueDictionary = strValueDictionary;
     this.numRows = numRows;
@@ -48,6 +52,9 @@ public class FastArmorBlockReader {
     this.dataType = dataType;
   }
 
+  public ColumnMetadata metadata() {
+    return metadata;    
+  }
   public DataType dataType() {
     return dataType;
   }
@@ -70,6 +77,10 @@ public class FastArmorBlockReader {
 
   public boolean hasNext() {
     return hasNext;
+  }
+  
+  public DictionaryReader valueDictionary() {
+    return strValueDictionary;
   }
 
   public int nextBatchSize(int desiredBatch) {

@@ -1,6 +1,9 @@
 package com.rapid7.armor.read;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rapid7.armor.read.predicate.StringPredicate;
+import com.rapid7.armor.store.Operator;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,6 +35,20 @@ public class DictionaryReader {
       }
     }
     intToBytes.put(0, "".getBytes());
+  }
+
+  public boolean evaulatePredicate(StringPredicate predicate) {
+    if (predicate.getOperator() == Operator.EQUALS) {
+        return strToInt.containsKey(predicate.getValue());
+    } else if (predicate.getOperator() == Operator.NOT_EQUALS) {
+        return !strToInt.containsKey(predicate.getValue());
+    } else {
+        for (String value : strToInt.keySet()) {
+            if (predicate.test(value))
+                return true;
+        }
+    }
+    return false;
   }
 
   public Integer getSurrogate(String value) {

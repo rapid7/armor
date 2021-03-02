@@ -21,6 +21,10 @@ public abstract class BaseArmorShardColumn {
   protected List<EntityRecord> entityRecords;
 
   protected abstract int readRowGroup(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException;
+
+  public ColumnMetadata columnMetadata() {
+    return metadata;
+  }
   
   protected int readValueDictionary(DataInputStream inputStream, int compressed, int uncompressed, ColumnMetadata metadata) throws IOException {
     // Read string value dictionary (if required)

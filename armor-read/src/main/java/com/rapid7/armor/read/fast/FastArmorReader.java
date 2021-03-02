@@ -11,7 +11,7 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.ReadStore;
 
 /**
- * The fast armor reader is primarliy focused on highly optimized reads. This is use for production systems such as
+ * The fast armor reader is primarily focused on highly optimized reads. This is use for production systems such as
  * presto to use.
  */
 public class FastArmorReader extends BaseArmorReader {
@@ -23,12 +23,12 @@ public class FastArmorReader extends BaseArmorReader {
 
   public FastArmorBlockReader getColumn(ShardId shardId, String columnName) throws IOException {
     if (!store.shardIdExists(shardId))
-      return null;
+      return new NullArmorBlockReader(0);
     FastArmorShardColumn armorShard = store.getFastArmorShard(shardId, columnName);
     if (armorShard == null) {
       ShardMetadata metadata = store.getShardMetadata(shardId);
       if (metadata == null)
-        return null;
+        return new NullArmorBlockReader(0);
       int numRows = metadata.getColumnMetadata().get(0).getNumRows();
       // If its null, then we assume the column does exist but perhaps another shard has that column, in that case we should return
       // a block of null values.

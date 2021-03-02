@@ -57,6 +57,7 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
 
   public FastArmorBlockReader getFastArmorColumnReader() {
     return new FastArmorBlockReader(
+        metadata,
         columnValues,
         rowsIsNull,
         strValueDictionary,

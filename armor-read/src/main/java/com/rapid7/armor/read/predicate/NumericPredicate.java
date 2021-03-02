@@ -1,8 +1,14 @@
 package com.rapid7.armor.read.predicate;
 
+import java.util.List;
+
 import com.rapid7.armor.store.Operator;
 
 public class NumericPredicate<T extends Number> extends Predicate<T> {
+
+    public NumericPredicate(String field, Operator operator, List<T> values) {
+        super(field, operator, values);
+    }
 
     public NumericPredicate(String field, Operator operator, T value) {
         super(field, operator, value);

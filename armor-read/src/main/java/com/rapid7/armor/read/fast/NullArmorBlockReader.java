@@ -11,7 +11,7 @@ import java.util.Arrays;
 public class NullArmorBlockReader extends FastArmorBlockReader {
 
   public NullArmorBlockReader(int numRows) {
-    super(null, null, null, numRows, -1, null, null, null);
+    super(null, null, null, null, numRows, -1, null, null, null);
  }
 
   public FastArmorBlock getLongBlock(int batchRows) {
