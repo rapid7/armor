@@ -107,9 +107,9 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnId) {
+  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnName) {
     List<ColumnId> columnIds = getColumnIds(shardId);
-    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
+    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnName)).findFirst();
     if (!option.isPresent())
       return null;
     ColumnId cn = option.get();

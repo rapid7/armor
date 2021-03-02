@@ -101,9 +101,9 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnId) {
+  public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnName) {
     List<ColumnId> columnIds = getColumnIds(shardId);
-    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
+    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnName)).findFirst();
     ColumnId cn = option.get();
     String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), cn.fullName());
     if (!doesObjectExist(bucket, shardIdPath)) {
@@ -119,9 +119,9 @@ public class S3ReadStore implements ReadStore {
   }
 
   @Override
-  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnId) {
+  public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnName) {
     List<ColumnId> columnIds = getColumnIds(shardId);
-    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnId)).findFirst();
+    Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnName)).findFirst();
     ColumnId cn = option.get();
     String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), cn.fullName());
     if (!doesObjectExist(bucket, shardIdPath)) {
