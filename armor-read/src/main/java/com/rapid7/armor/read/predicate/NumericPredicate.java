@@ -23,7 +23,7 @@ public class NumericPredicate<T extends Number> extends Predicate<T> {
       } else if (operator == Operator.GREATER_THAN) {
         return executeNumGreaterThan(testValue);
       } else if (operator == Operator.GREATER_THAN_EQUAL) {
-        return executeNumGreaterThan(testValue);
+        return executeNumGreaterThanEqual(testValue);
       } else if (operator == Operator.LESS_THAN) {
         return executeNumLessThan(testValue);
       } else if (operator == Operator.LESS_THAN_EQUAL) {
@@ -32,6 +32,10 @@ public class NumericPredicate<T extends Number> extends Predicate<T> {
         return executeNumBetween(testValue);
       } else if (operator == Operator.IN) {
         return executeIn(testValue);
+      } else if (operator == Operator.IS_NULL) {
+        return executeIsNull();
+      } else if (operator == Operator.NOT_NULL) {
+        return executeIsNotNull();
       }
       return false;
     }

@@ -31,6 +31,10 @@ public class StringPredicate extends Predicate<String> {
         return executeLexLessThan(testValue);
       } else if (operator == Operator.LESS_THAN_EQUAL) {
         return executeLexLessThanEqual(testValue);
+      } else if (operator == Operator.IS_NULL) {
+        return executeIsNull();
+      } else if (operator == Operator.NOT_NULL) {
+        return executeIsNotNull();
       }
       return false;
     }

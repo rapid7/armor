@@ -31,6 +31,10 @@ public class InstantPredicate extends Predicate<Instant> {
         return executeNumBetween(testValue);
       } else if (operator == Operator.IN) {
         return executeIn(testValue);
+      } else if (operator == Operator.IS_NULL) {
+        return executeIsNull();
+      } else if (operator == Operator.NOT_NULL) {
+        return executeIsNotNull();
       }
       return false;
     }

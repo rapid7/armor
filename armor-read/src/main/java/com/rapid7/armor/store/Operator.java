@@ -8,5 +8,7 @@ public enum Operator {
     LESS_THAN,
     LESS_THAN_EQUAL,
     BETWEEN,
-    IN;
+    IN,
+    IS_NULL,
+    NOT_NULL;
 }

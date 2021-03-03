@@ -78,6 +78,26 @@ public abstract class Predicate<T> {
      return fieldNumber.doubleValue() >= aNum.doubleValue() && fieldNumber.doubleValue() <= bNum.doubleValue();
    }
    
+   protected boolean executeIsNull() {
+      if (values == null || values.isEmpty())
+          return true;
+      for (T value : values) {
+          if (value != null)
+              return false;
+      }
+      return true;
+   }
+   
+   protected boolean executeIsNotNull() {
+     if (values == null || values.isEmpty())
+       return false;
+     for (T value : values) {
+       if (value == null)
+         return false;
+     }
+     return true;
+   }
+   
    protected boolean executeIn(T testValue) {
       if (testValue == null)
         return false;
@@ -98,8 +118,16 @@ public abstract class Predicate<T> {
    protected boolean executeNotEquals(T testValue) {
      if (testValue == null)
        return false;
-     T value = getSingleValue(values);
-     return !testValue.equals(value);
+     if (values.size() > 1) {
+         for (T value : values) {
+             if (testValue.equals(value))
+                 return false;
+         }
+         return true;
+     } else {
+         T value = getSingleValue(values);
+         return !testValue.equals(value);
+     }
    }
    
    protected boolean executeLexGreaterThan(String testValue) {
