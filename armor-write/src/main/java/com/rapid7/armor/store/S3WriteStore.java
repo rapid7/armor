@@ -710,4 +710,52 @@ public class S3WriteStore implements WriteStore {
     }    
     
   }
+
+  @Override
+  public void deleteInterval(String tenant, String table, Interval interval) {
+    try {
+      String toDelete = PathBuilder.buildPath(tenant, table, interval.getInterval()) + Constants.STORE_DELIMETER;
+      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+          .withBucketName(bucket)
+          .withPrefix(toDelete);
+      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+      while (true) {
+        for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
+          s3Client.deleteObject(bucket, objectSummary.getKey());
+        }
+        if (objectListing.isTruncated()) {
+          objectListing = s3Client.listNextBatchOfObjects(objectListing);
+        } else {
+          break;
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+      throw e;
+    }
+  }
+
+  @Override
+  public void deleteIntervalStart(String tenant, String table, Interval interval, String intervalStart) {
+    try {
+      String toDelete = PathBuilder.buildPath(tenant, table, interval.getInterval(), intervalStart) + Constants.STORE_DELIMETER;
+      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+          .withBucketName(bucket)
+          .withPrefix(toDelete);
+      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+      while (true) {
+        for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
+          s3Client.deleteObject(bucket, objectSummary.getKey());
+        }
+        if (objectListing.isTruncated()) {
+          objectListing = s3Client.listNextBatchOfObjects(objectListing);
+        } else {
+          break;
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+      throw e;
+    }
+  }
 }

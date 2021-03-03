@@ -540,4 +540,30 @@ public class FileWriteStore implements WriteStore {
       LOGGER.warn("Unable completely remove tenant {}", tenant, e);
     }
   }
+
+  @Override
+  public void deleteInterval(String tenant, String table, Interval interval) {
+    try {
+      Path toDelete = basePath.resolve(Paths.get(tenant, table, interval.getInterval()));
+      Files.walk(toDelete)
+          .sorted(Comparator.reverseOrder())
+          .map(Path::toFile)
+          .forEach(File::delete);
+    } catch (Exception e) {
+      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+    }    
+  }
+
+  @Override
+  public void deleteIntervalStart(String tenant, String table, Interval interval, String intervalStart) {
+    try {
+      Path toDelete = basePath.resolve(Paths.get(tenant, table, interval.getInterval(), intervalStart));
+      Files.walk(toDelete)
+          .sorted(Comparator.reverseOrder())
+          .map(Path::toFile)
+          .forEach(File::delete);
+    } catch (Exception e) {
+      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+    }
+  }
 }

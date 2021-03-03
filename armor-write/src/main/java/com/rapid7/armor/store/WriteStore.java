@@ -29,8 +29,38 @@ public interface WriteStore {
    * @return A list of all tenant store.
    */
   List<String> getTenants();
+  /**
+   * Delete a tenant.
+   *
+   * @param tenant The tenant to delete.
+   */
   void deleteTenant(String tenant);
+  /**
+   * Deletes a table.
+   *
+   * @param tenant The tenant to find.
+   * @param table The table to delete.
+   */
   void deleteTable(String tenant, String table);
+  
+  /**
+   * Deletes a table's interval.
+   *
+   * @param tenant The tenant to find.
+   * @param table The table to find.
+   * @param interval The interval to delete.
+   */
+  void deleteInterval(String tenant, String table, Interval interval);
+
+  /**
+   * Deletes a table's interval based off matching interval start.
+   *
+   * @param tenant The tenant to find.
+   * @param table The table to find.
+   * @param interval The interval to match.
+   * @param intervalStart The start interval in ISO8601 format.
+   */
+  void deleteIntervalStart(String tenant, String table, Interval interval, String intervalStart);
   
   ShardMetadata getShardMetadata(ShardId shardId);
   TableMetadata getTableMetadata(String tenant, String table);
