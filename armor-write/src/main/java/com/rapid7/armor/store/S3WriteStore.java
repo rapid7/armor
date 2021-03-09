@@ -778,4 +778,14 @@ public class S3WriteStore implements WriteStore {
     ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
     return !objectListing.getObjectSummaries().isEmpty();
   }
+
+  @Override
+  public boolean intervalStartExists(String tenant, String table, Interval interval, String intervalStart) {
+    String intervalPath = PathBuilder.buildPath(tenant, table, interval.getInterval(), intervalStart) + Constants.STORE_DELIMETER;
+    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+        .withBucketName(bucket)
+        .withPrefix(intervalPath);
+    ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+    return !objectListing.getObjectSummaries().isEmpty();
+  }
 }

@@ -60,6 +60,15 @@ public interface WriteStore {
    */
   boolean intervalExists(String tenant, String table, Interval interval);
   /**
+   * Returns whether the table at interval exists.
+   *
+   * @param tenant The tenant to find.
+   * @param table The table to find.
+   * @param interval The interval to find.
+   * @param intervalStart The start interval in ISO8601 format.
+   */
+  boolean intervalStartExists(String tenant, String table, Interval interval, String intervalStart);
+  /**
    * Returns whether the table exists.
    *
    * @param tenant The tenant to find.

@@ -578,4 +578,10 @@ public class FileWriteStore implements WriteStore {
     Path intervalPath = basePath.resolve(Paths.get(tenant, table));
     return Files.exists(intervalPath);
   }
+
+  @Override
+  public boolean intervalStartExists(String tenant, String table, Interval interval, String intervalStart) {
+    Path intervalStartPath = basePath.resolve(Paths.get(tenant, table, interval.getInterval(), intervalStart));
+    return Files.exists(intervalStartPath);
+  }
 }
