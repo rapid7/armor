@@ -51,6 +51,21 @@ public interface WriteStore {
    * @param interval The interval to delete.
    */
   void deleteInterval(String tenant, String table, Interval interval);
+  /**
+   * Returns whether the table at interval exists.
+   *
+   * @param tenant The tenant to find.
+   * @param table The table to find.
+   * @param interval The interval to find.
+   */
+  boolean intervalExists(String tenant, String table, Interval interval);
+  /**
+   * Returns whether the table exists.
+   *
+   * @param tenant The tenant to find.
+   * @param table The table to find.
+   */
+  boolean tableExists(String tenant, String table);
 
   /**
    * Deletes a table's interval based off matching interval start.

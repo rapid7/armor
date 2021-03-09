@@ -566,4 +566,16 @@ public class FileWriteStore implements WriteStore {
       LOGGER.warn("Unable completely remove tenant {}", tenant, e);
     }
   }
+
+  @Override
+  public boolean intervalExists(String tenant, String table, Interval interval) {
+    Path intervalPath = basePath.resolve(Paths.get(tenant, table, interval.getInterval()));
+    return Files.exists(intervalPath);
+  }
+
+  @Override
+  public boolean tableExists(String tenant, String table) {
+    Path intervalPath = basePath.resolve(Paths.get(tenant, table));
+    return Files.exists(intervalPath);
+  }
 }

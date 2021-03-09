@@ -758,4 +758,24 @@ public class S3WriteStore implements WriteStore {
       throw e;
     }
   }
+
+  @Override
+  public boolean intervalExists(String tenant, String table, Interval interval) {
+    String intervalPath = PathBuilder.buildPath(tenant, table, interval.getInterval()) + Constants.STORE_DELIMETER;
+    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+        .withBucketName(bucket)
+        .withPrefix(intervalPath);
+    ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+    return !objectListing.getObjectSummaries().isEmpty();
+  }
+
+  @Override
+  public boolean tableExists(String tenant, String table) {
+    String tablePath = PathBuilder.buildPath(tenant, table) + Constants.STORE_DELIMETER;
+    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+        .withBucketName(bucket)
+        .withPrefix(tablePath);
+    ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+    return !objectListing.getObjectSummaries().isEmpty();
+  }
 }
