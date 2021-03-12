@@ -9,8 +9,11 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
@@ -34,6 +37,7 @@ import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorReader;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
+import com.rapid7.armor.schema.DiffTableName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
@@ -240,6 +244,44 @@ public class FileStoreV2Test {
     assertEquals(expectedNumberRows, totalRows);
   }
 
+  private void verifyTableReaderPOV(
+    int expectedNumberRows, String table, Interval interval, Instant timestamp, Path path, int numShards, Collection<ColumnId> columnIds) {
+    FileReadStore readStore = new FileReadStore(path);
+    List<ShardId> shardIds = readStore.findShardIds(TENANT, table, interval, timestamp);
+    assertEquals(numShards, shardIds.size());
+    int totalRows = 0;
+    for (ShardId shardId : shardIds) {
+      Integer shardRows = null;
+      for (ColumnId columnId : columnIds) {
+        FastArmorShardColumn fas = readStore.getFastArmorShard(shardId, columnId.getName());
+        FastArmorBlockReader far = fas.getFastArmorColumnReader();
+        DataType dt = fas.getDataType();
+        FastArmorBlock fab = null;
+        switch (dt) {
+        case INTEGER:
+          fab = far.getIntegerBlock(5000);
+          break;
+        case LONG:
+          fab = far.getLongBlock(5000);
+          break;
+        case STRING:
+          fab = far.getStringBlock(5000);
+          break;
+        default:
+          throw new RuntimeException("Unsupported");
+        }
+
+        if (shardRows == null) {
+          shardRows = fab.getNumRows();
+        } else if (shardRows != fab.getNumRows()) {
+          throw new RuntimeException("Within a shard the two column row counts do not match");
+        }
+      }
+      totalRows += shardRows;
+    }
+    assertEquals(expectedNumberRows, totalRows);
+  }
+
   private void verifyTableReaderPOV(int expectedNumberRows, Path path, int numShards) {
     FileReadStore readStore = new FileReadStore(path);
     List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE, INTERVAL, TIMESTAMP);
@@ -304,6 +346,122 @@ public class FileStoreV2Test {
       }
     }
   }
+  
+  @Test
+  public void diffTableTest() throws IOException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    Instant baseLineWeek = LocalDate.parse("2021-02-22").atStartOfDay().toInstant(ZoneOffset.UTC);
+    Instant targetWeek = LocalDate.parse("2021-03-03").atStartOfDay().toInstant(ZoneOffset.UTC);
+    ColumnId columnScope = new ColumnId("status", DataType.INTEGER.getCode());
+
+    String plusTable = DiffTableName.generatePlusTableDiffName(TABLE, Interval.WEEKLY, columnScope);
+    String minusTable = DiffTableName.generateMinusTableDiffName(TABLE, Interval.WEEKLY, columnScope);
+
+    try {
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities1 = new ArrayList<>();
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln, caliVuln});
+        entities1.add(entity1);
+        writer.write(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, entities1);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities1 = new ArrayList<>();
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[]{texasVuln});
+        entities1.add(entity1);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities1);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
+      verifyTableReaderPOV(0, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities1 = new ArrayList<>();
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln,caliVuln});
+        entities1.add(entity1);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities1);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(0, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
+      verifyTableReaderPOV(0, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities = new ArrayList<>();
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[]{texasVuln});
+        Entity entity2 = generateEntity("secondEntity", 1, new Row[]{texasVuln, caliVuln});
+        entities.add(entity1);
+        entities.add(entity2);
+        writer.write(xact, TENANT, TABLE, Interval.SINGLE, baseLineWeek, entities);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      verifyTableReaderPOV(2, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities = new ArrayList<>();
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[]{texasVuln});
+        Entity entity2 = generateEntity("secondEntity", 1, new Row[]{texasVuln, caliVuln});
+        entities.add(entity1);
+        entities.add(entity2);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      verifyTableReaderPOV(2, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities = new ArrayList<>();
+        Entity entity2 = generateEntity("secondEntity", 1, new Row[0]);
+        entities.add(entity2);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      verifyTableReaderPOV(1, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities = new ArrayList<>();
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln, zonaVuln});
+        entities.add(entity1);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      verifyTableReaderPOV(2, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities = new ArrayList<>();
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln});
+        entities.add(entity1);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      verifyTableReaderPOV(1, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
+    } finally {
+      removeDirectory(testDirectory);
+    }
+  }
+  
 
   @Test
   public void newColumn() throws IOException {
@@ -314,31 +472,36 @@ public class FileStoreV2Test {
     ColumnId newColumn = new ColumnId("city", DataType.STRING.getCode());
     EXTRA_COLUMNS.add(newColumn);
 
-    for (int i = 0; i < 2; i++) {
-      if (i == 1)
-        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
-      for (Compression compression : Compression.values()) {
-        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10)) {
-          String xact = writer.startTransaction();
-          List<Entity> entities1 = new ArrayList<>();
-          Entity entity1 = generateEntity("firstEntity", 1, rows2);
-          entities1.add(entity1);
-          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities1);
-
-          // Add a column called city to the mix.
-          Row texasVulnExtra = new Row(1, 101l, "texas", "houston");
-          Entity entity2 = Entity.buildEntity(ASSET_ID, "secondEntity", 1, TEST_UUID, EXTRA_COLUMNS, texasVulnExtra);
-          List<Entity> entities2 = new ArrayList<>();
-          entities2.add(entity2);
-          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities2);
-          writer.commit(xact, TENANT, TABLE);
-
-          System.out.println(printTable(testDirectory));
-          verifyTableReaderPOV(3, testDirectory, 2);
-          verifyColumn(3, newColumn, testDirectory, 2);
+    try {
+      for (int i = 0; i < 2; i++) {
+        if (i == 1)
+          RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
+        for (Compression compression : Compression.values()) {
+          try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10)) {
+            String xact = writer.startTransaction();
+            List<Entity> entities1 = new ArrayList<>();
+            Entity entity1 = generateEntity("firstEntity", 1, rows2);
+            entities1.add(entity1);
+            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities1);
+  
+            // Add a column called city to the mix.
+            Row texasVulnExtra = new Row(1, 101l, "texas", "houston");
+            Entity entity2 = Entity.buildEntity(ASSET_ID, "secondEntity", 1, TEST_UUID, EXTRA_COLUMNS, texasVulnExtra);
+            List<Entity> entities2 = new ArrayList<>();
+            entities2.add(entity2);
+            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities2);
+            writer.commit(xact, TENANT, TABLE);
+  
+            System.out.println(printTable(testDirectory));
+            verifyTableReaderPOV(3, testDirectory, 2);
+            verifyColumn(3, newColumn, testDirectory, 2);
+          }
         }
       }
+    } finally {
+      removeDirectory(testDirectory);
     }
+
   }
 
 
@@ -347,21 +510,25 @@ public class FileStoreV2Test {
     Path testDirectory = Files.createTempDirectory("filestore");
 
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
-    for (int ii = 0; ii < 2; ii++) {
-      if (ii == 1)
-        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
-      for (Compression compression : Compression.values()) {
-        int numTries = RANDOM.nextInt(50);
-        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
-          for (int i = 0; i < numTries; i++) {
-            String xact = writer.startTransaction();
-            int randomRows = RANDOM.nextInt(5000);
-            Entity entity = randomEntity(1, randomRows);
-            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(entity));
-            writer.commit(xact, TENANT, TABLE);
+    try {
+      for (int ii = 0; ii < 2; ii++) {
+        if (ii == 1)
+          RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
+        for (Compression compression : Compression.values()) {
+          int numTries = RANDOM.nextInt(50);
+          try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
+            for (int i = 0; i < numTries; i++) {
+              String xact = writer.startTransaction();
+              int randomRows = RANDOM.nextInt(5000);
+              Entity entity = randomEntity(1, randomRows);
+              writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(entity));
+              writer.commit(xact, TENANT, TABLE);
+            }
           }
         }
       }
+    } finally {
+      removeDirectory(testDirectory);
     }
   }
 
@@ -374,68 +541,72 @@ public class FileStoreV2Test {
     Row[] rows6 = new Row[] {texasVuln, caliVuln, zonaVuln, nyVuln, nevadaVuln, oregonVuln};
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
     int numEntities = 1000;
-    for (int ii = 0; ii < 2; ii++) {
-      if (ii == 1)
-        RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
-      for (Compression compression : Compression.values()) {
-        try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
-          String xact = writer.startTransaction();
-          List<Entity> entities4 = new ArrayList<>();
-          for (int i = 0; i < 1000; i++) {
-            Entity random4 = generateEntity(Integer.toString(i), 1, rows4);
-            entities4.add(random4);
+    try {
+      for (int ii = 0; ii < 2; ii++) {
+        if (ii == 1)
+          RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
+        for (Compression compression : Compression.values()) {
+          try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
+            String xact = writer.startTransaction();
+            List<Entity> entities4 = new ArrayList<>();
+            for (int i = 0; i < 1000; i++) {
+              Entity random4 = generateEntity(Integer.toString(i), 1, rows4);
+              entities4.add(random4);
+            }
+  
+            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities4);
+            writer.commit(xact, TENANT, TABLE);
+            verifyTableReaderPOV(numEntities*4, testDirectory, 10);
+            int random = RANDOM.nextInt(999);
+            verifyEntityReaderPOV(entities4.get(random), testDirectory);
+  
+            // Ok now every entity will see an increase of rows from 4 to 6
+            List<Entity> entities6 = new ArrayList<>();
+            for (int i = 0; i < 1000; i++) {
+              Entity random6 = generateEntity(Integer.toString(i), 1, rows6);
+              entities6.add(random6);
+            }
+  
+            xact = writer.startTransaction();
+            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities6);
+            writer.commit(xact, TENANT, TABLE);
+            verifyTableReaderPOV(numEntities*6, testDirectory, 10);
+            random = RANDOM.nextInt(999);
+            verifyEntityReaderPOV(entities6.get(random), testDirectory);
+  
+            // Ok now every entity will see an decrease of rows from 4 to 6
+            List<Entity> entities2 = new ArrayList<>();
+            for (int i = 0; i < 1000; i++) {
+              Entity random2 = generateEntity(Integer.toString(i), 1, rows2);
+              entities2.add(random2);
+            }
+  
+            xact = writer.startTransaction();
+            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities2);
+            writer.commit(xact, TENANT, TABLE);
+            verifyTableReaderPOV(numEntities*2, testDirectory, 10);
+            random = RANDOM.nextInt(999);
+            verifyEntityReaderPOV(entities2.get(random), testDirectory);
+  
+            // Ok now every entity will see a decrease to all null values
+            List<Entity> entitiesNull3 = new ArrayList<>();
+            for (int i = 0; i < 1000; i++) {
+              Entity randomNull3 = generateEntity(Integer.toString(i), 1, rowsNull3);
+              entitiesNull3.add(randomNull3);
+            }
+  
+            xact = writer.startTransaction();
+            writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entitiesNull3);
+            writer.commit(xact, TENANT, TABLE);
+            verifyTableReaderPOV(numEntities*3, testDirectory, 10);
+            random = RANDOM.nextInt(999);
+            verifyEntityReaderPOV(entitiesNull3.get(random), testDirectory);
           }
-
-          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities4);
-          writer.commit(xact, TENANT, TABLE);
-          verifyTableReaderPOV(numEntities*4, testDirectory, 10);
-          int random = RANDOM.nextInt(999);
-          verifyEntityReaderPOV(entities4.get(random), testDirectory);
-
-          // Ok now every entity will see an increase of rows from 4 to 6
-          List<Entity> entities6 = new ArrayList<>();
-          for (int i = 0; i < 1000; i++) {
-            Entity random6 = generateEntity(Integer.toString(i), 1, rows6);
-            entities6.add(random6);
-          }
-
-          xact = writer.startTransaction();
-          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities6);
-          writer.commit(xact, TENANT, TABLE);
-          verifyTableReaderPOV(numEntities*6, testDirectory, 10);
-          random = RANDOM.nextInt(999);
-          verifyEntityReaderPOV(entities6.get(random), testDirectory);
-
-          // Ok now every entity will see an decrease of rows from 4 to 6
-          List<Entity> entities2 = new ArrayList<>();
-          for (int i = 0; i < 1000; i++) {
-            Entity random2 = generateEntity(Integer.toString(i), 1, rows2);
-            entities2.add(random2);
-          }
-
-          xact = writer.startTransaction();
-          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entities2);
-          writer.commit(xact, TENANT, TABLE);
-          verifyTableReaderPOV(numEntities*2, testDirectory, 10);
-          random = RANDOM.nextInt(999);
-          verifyEntityReaderPOV(entities2.get(random), testDirectory);
-
-          // Ok now every entity will see a decrease to all null values
-          List<Entity> entitiesNull3 = new ArrayList<>();
-          for (int i = 0; i < 1000; i++) {
-            Entity randomNull3 = generateEntity(Integer.toString(i), 1, rowsNull3);
-            entitiesNull3.add(randomNull3);
-          }
-
-          xact = writer.startTransaction();
-          writer.write(xact, TENANT, TABLE, INTERVAL, TIMESTAMP, entitiesNull3);
-          writer.commit(xact, TENANT, TABLE);
-          verifyTableReaderPOV(numEntities*3, testDirectory, 10);
-          random = RANDOM.nextInt(999);
-          verifyEntityReaderPOV(entitiesNull3.get(random), testDirectory);
+  
         }
-
       }
+    } finally {
+      removeDirectory(testDirectory);
     }
   }
 

@@ -150,7 +150,7 @@ public class EntityIndexWriter extends FileComponent {
   public EntityRecord delete(int entityUuid, long version, String instanceId) throws IOException {
     // Before executing the delete, first ensure the version is higher or greater than.
     EntityRecord eir = entities.get(entityUuid);
-    if (eir != null && version > eir.getVersion()) {
+    if (eir != null && version >= eir.getVersion()) {
       long prevPosition = position();
       int indexOffset = indexOffsets.get(entityUuid);
       try {

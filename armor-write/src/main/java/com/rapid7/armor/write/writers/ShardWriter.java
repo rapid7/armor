@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Handles writes for one or more columns for a shard in one "atomic" operation.
  */
-public class ShardWriter {
+public class ShardWriter implements IShardWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShardWriter.class);
 
   private Map<ColumnShardId, ColumnFileWriter> columnFileWriters = new ConcurrentHashMap<>();
@@ -120,10 +120,10 @@ public class ShardWriter {
    *
    * @return The metadata of the shard just written.
    */
-  public ShardMetadata commit(String transaction, ColumnId columnEntiyId) throws IOException {
+  public ShardMetadata commit(String transaction, ColumnId columnEntityId) throws IOException {
     boolean committed = false;
     try {
-      ColumnMetadata entityColumnMetadata = consistencyCheck(transaction, columnEntiyId.getName(), columnEntiyId.dataType());
+      ColumnMetadata entityColumnMetadata = consistencyCheck(transaction, columnEntityId.getName(), columnEntityId.dataType());
       for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
         try (InputStream inputStream = streamProduct.getInputStream()) {

@@ -48,10 +48,14 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
   }
 
   public DataType getDataType() {
+    if (metadata == null)
+      return null;
     return metadata.getColumnType();
   }
 
   public String columnName() {
+    if (metadata == null)
+      return null;
     return metadata.getColumnName();
   }
 
@@ -205,7 +209,8 @@ public class FastArmorShardColumn extends BaseArmorShardColumn {
       ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
       int uncompressedRead = loadToByteBuffer(entityRecords, zstdInputStream, metadata);
       if (uncompressed != uncompressedRead) {
-        LOGGER.warn("The expected number of bytes to be read for {} doesn't match {} read vs. {} expected, this can be an issue", this.columnName(), uncompressedRead, uncompressed);
+        LOGGER.warn("The expected number of bytes to be read for {} doesn't match {} read vs. {} expected, this can be an issue", 
+            metadata.getColumnName(), uncompressedRead, uncompressed);
       }
       return compressed;
     } else {

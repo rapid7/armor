@@ -69,6 +69,12 @@ public interface WriteStore {
    */
   boolean intervalStartExists(String tenant, String table, Interval interval, String intervalStart);
   /**
+   * Returns whether the table at interval exists.
+   *
+   * @param columnShardId The column shard exists.
+   */
+  boolean columnShardIdExists(ColumnShardId columnShardId);
+  /**
    * Returns whether the table exists.
    *
    * @param tenant The tenant to find.
