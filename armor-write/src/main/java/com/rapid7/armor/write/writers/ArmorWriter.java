@@ -281,7 +281,7 @@ public class ArmorWriter implements Closeable {
    * @param timestamp
    * @param entities
    */
-  public void writeColumnDiff(String transaction, String tenant, String table, Interval interval, Instant timestamp, ColumnId columnId, List<Entity> entities) {
+  public void writeDiff(String transaction, String tenant, String table, Interval interval, Instant timestamp, ColumnId columnId, List<Entity> entities) {
     if (entities == null || entities.isEmpty())
       return;
     String plusTable = DiffTableName.generatePlusTableDiffName(table, interval, columnId);

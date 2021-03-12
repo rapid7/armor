@@ -52,7 +52,7 @@ public class TableWriter implements Closeable {
       try {
         sw.close();
       } catch (Exception e) {
-        e.printStackTrace();
+        LOGGER.error("Unable to close the shard", e);
       }
     }
   }
@@ -68,7 +68,7 @@ public class TableWriter implements Closeable {
       try {
         shardWriter.close();
       } catch (Exception e) {
-        e.printStackTrace();
+        LOGGER.error("Unable to close the shard", e);
       }
       return sw;
     }
