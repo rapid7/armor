@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -41,8 +40,6 @@ public class ColumnShardDiffWriter implements IShardWriter {
   private final WriteStore store;
   private ColumnId columnId;
 
-  private final ShardId baselineShardId;
-  private final ColumnShardId baselineColumnShardId;
   private ColumnFileWriter baselineColumnFile;
   private boolean diffForNew = false;
   
@@ -59,14 +56,13 @@ public class ColumnShardDiffWriter implements IShardWriter {
 
   public ColumnShardDiffWriter(
     ShardId targetShardId,
-    ShardId baselineShardId,
+    ColumnFileWriter baselineColumnFile,
     boolean diffForNew,
     ColumnId columnId,
     WriteStore store,
     Compression compress,
     Supplier<Integer> compactionTriggerSupplier) {
     this.targetShardId = targetShardId;
-    this.baselineShardId = baselineShardId;
     this.store = store;
     this.compress = compress;
     if (compactionTriggerSupplier == null)
@@ -75,11 +71,9 @@ public class ColumnShardDiffWriter implements IShardWriter {
       this.compactionTrigger = compactionTriggerSupplier;
     this.diffForNew = diffForNew;
     targetColumnShardId = new ColumnShardId(targetShardId, columnId);
-    baselineColumnShardId = new ColumnShardId(baselineShardId, columnId);
     
     targetColumnFile = store.loadColumnWriter(targetColumnShardId);
-    if (store.columnShardIdExists(baselineColumnShardId))
-      baselineColumnFile = store.loadColumnWriter(baselineColumnShardId);
+    this.baselineColumnFile = baselineColumnFile;
   }
 
   public void close() {
@@ -109,6 +103,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
     boolean committed = false;
     try {
       ColumnMetadata entityColumnMetadata = consistencyCheck(transaction, columnEntityId.getName(), columnEntityId.dataType());
+
       StreamProduct streamProduct = targetColumnFile.buildInputStream(compress);
       try (InputStream inputStream = streamProduct.getInputStream()) {
         store.saveColumn(transaction, targetColumnShardId, streamProduct.getByteSize(), inputStream);

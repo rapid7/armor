@@ -35,6 +35,7 @@ import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.schema.DiffTableName;
+import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
 import com.rapid7.armor.write.EntityOffsetException;
@@ -273,13 +274,7 @@ public class ArmorWriter implements Closeable {
 
   /**
    * Writes diff results into corresponding diff tables at the scope of a column.
-   *  
-   * @param tranaction
-   * @param tenant
-   * @param table
-   * @param interval
-   * @param timestamp
-   * @param entities
+   *
    */
   public void writeDiff(String transaction, String tenant, String table, Interval interval, Instant timestamp, ColumnId columnId, List<Entity> entities) {
     if (entities == null || entities.isEmpty())
@@ -342,7 +337,6 @@ public class ArmorWriter implements Closeable {
     } else {
       minusTableWriter = getTableWriter(minusTableId);
     }
-
     
     for (Entity entity : entities) {
       ShardId plusShardId = store.findShardId(tenant, plusTable, interval, timestamp, entity.getEntityId());
@@ -355,6 +349,7 @@ public class ArmorWriter implements Closeable {
     }
 
     int plusNumShards = plusShardsToUpdates.size();
+    ConcurrentHashMap<Integer, ColumnFileWriter> baselineColumnFiles = new ConcurrentHashMap<>();
     ExecutorCompletionService<Void> plusEcs = new ExecutorCompletionService<>(threadPool);
     for (Map.Entry<ShardId, List<Entity>> entry : plusShardsToUpdates.entrySet()) {
       plusEcs.submit(
@@ -368,7 +363,13 @@ public class ArmorWriter implements Closeable {
               if (shardDiffWriter == null) {
                 ShardId baselineShardId = ShardId.buildPreviousIntervalShardId(targetShardId);
                 baselineShardId.setTable(table);
-                shardDiffWriter = plusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineShardId, true, columnId, store, compress, compactionTrigger));
+                ColumnShardId baselineColumnShardId = new ColumnShardId(baselineShardId, columnId);
+                ColumnFileWriter baselineColumnFile = baselineColumnFiles.get(baselineShardId.getShardNum());
+                if (baselineColumnFile == null && store.columnShardIdExists(baselineColumnShardId)) {
+                  baselineColumnFile = store.loadColumnWriter(baselineColumnShardId);
+                  baselineColumnFiles.put(baselineShardId.getShardNum(), baselineColumnFile);
+                }
+                shardDiffWriter = plusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineColumnFile, true, columnId, store, compress, compactionTrigger));
               }
 
               List<Entity> entityUpdates = entry.getValue();
@@ -417,7 +418,13 @@ public class ArmorWriter implements Closeable {
               if (shardDiffWriter == null) {
                 ShardId baselineShardId = ShardId.buildPreviousIntervalShardId(targetShardId);
                 baselineShardId.setTable(table);
-                shardDiffWriter = minusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineShardId, false, columnId, store, compress, compactionTrigger));
+                ColumnShardId baselineColumnShardId = new ColumnShardId(baselineShardId, columnId);
+                ColumnFileWriter baselineColumnFile = baselineColumnFiles.get(baselineShardId.getShardNum());
+                if (baselineColumnFile == null && store.columnShardIdExists(baselineColumnShardId)) {
+                  baselineColumnFile = store.loadColumnWriter(baselineColumnShardId);
+                  baselineColumnFiles.put(baselineShardId.getShardNum(), baselineColumnFile);
+                }
+                shardDiffWriter = minusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineColumnFile, false, columnId, store, compress, compactionTrigger));
               }
 
               List<Entity> entityUpdates = entry.getValue();
