@@ -34,6 +34,7 @@ import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
+import com.rapid7.armor.schema.DiffTableName;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
 import com.rapid7.armor.write.EntityOffsetException;
@@ -116,7 +117,7 @@ public class ArmorWriter implements Closeable {
     if (tableWriter == null) {
         return null;
     } else {
-      ShardWriter sw = tableWriter.getShard(new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shard));
+      IShardWriter sw = tableWriter.getShard(new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shard));
       if (sw == null)
         return null;
       else 
@@ -141,7 +142,7 @@ public class ArmorWriter implements Closeable {
     if (tableWriter == null) {
       return null;
     } else {
-      ShardWriter sw = tableWriter.getShard(new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shard));
+      IShardWriter sw = tableWriter.getShard(new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shard));
       if (sw == null)
         return null;
       else
@@ -169,7 +170,7 @@ public class ArmorWriter implements Closeable {
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter != null) {
       // This occurs if a write happened first then delete.
-      ShardWriter sw = tableWriter.getShard(shardId);
+      IShardWriter sw = tableWriter.getShard(shardId);
       if (sw != null) {
         sw.delete(transaction, entityId, version, instanceId);
         return;
@@ -190,10 +191,9 @@ public class ArmorWriter implements Closeable {
     }
     tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
 
-    ShardWriter sw = tableWriter.getShard(shardId);
+    IShardWriter sw = tableWriter.getShard(shardId);
     if (sw == null) {
-      sw = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
-      sw = tableWriter.addShard(sw);
+      sw = tableWriter.addShard(new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites));
     }
     sw.delete(transaction, entityId, version, instanceId);
   }
@@ -284,8 +284,8 @@ public class ArmorWriter implements Closeable {
   public void writeColumnDiff(String transaction, String tenant, String table, Interval interval, Instant timestamp, ColumnId columnId, List<Entity> entities) {
     if (entities == null || entities.isEmpty())
       return;
-    String plusTable = table + "_" + columnId.getName() + "_plus";
-    String minusTable = table + "_" + columnId.getName() + "_minus";
+    String plusTable = DiffTableName.generatePlusTableDiffName(table, interval, columnId);
+    String minusTable = DiffTableName.generateMinusTableDiffName(table, interval, columnId);
     
     HashMap<ShardId, List<Entity>> plusShardsToUpdates = new HashMap<>();
     HashMap<ShardId, List<Entity>> minusShardsToUpdates = new HashMap<>();
@@ -363,13 +363,12 @@ public class ArmorWriter implements Closeable {
             try {
               MDC.put("tenant_id", tenant);
               ShardId targetShardId = entry.getKey();
-              ColumnShardDiffWriter shardDiffWriter = plusTableWriter.getDiffShard(targetShardId);
+              IShardWriter shardDiffWriter = plusTableWriter.getShard(targetShardId);
               Thread.currentThread().setName(originalThreadName + "(" + targetShardId.toString() + ")");
               if (shardDiffWriter == null) {
                 ShardId baselineShardId = ShardId.buildPreviousIntervalShardId(targetShardId);
                 baselineShardId.setTable(table);
-                shardDiffWriter = new ColumnShardDiffWriter(targetShardId, baselineShardId, true, columnId, store, compress, compactionTrigger);
-                shardDiffWriter = plusTableWriter.addShardDiff(shardDiffWriter);
+                shardDiffWriter = plusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineShardId, true, columnId, store, compress, compactionTrigger));
               }
 
               List<Entity> entityUpdates = entry.getValue();
@@ -386,7 +385,7 @@ public class ArmorWriter implements Closeable {
                   payloads.add(internalRequest);
                 }
               }
-              shardDiffWriter.writeDiff(transaction, payloads);
+              shardDiffWriter.write(transaction, columnId, payloads);
               return null;
             } finally {
               MDC.remove("tenant_id");
@@ -413,13 +412,12 @@ public class ArmorWriter implements Closeable {
             try {
               MDC.put("tenant_id", tenant);
               ShardId targetShardId = entry.getKey();
-              ColumnShardDiffWriter shardDiffWriter = minusTableWriter.getDiffShard(targetShardId);
+              IShardWriter shardDiffWriter = minusTableWriter.getShard(targetShardId);
               Thread.currentThread().setName(originalThreadName + "(" + targetShardId.toString() + ")");
               if (shardDiffWriter == null) {
                 ShardId baselineShardId = ShardId.buildPreviousIntervalShardId(targetShardId);
                 baselineShardId.setTable(table);
-                shardDiffWriter = new ColumnShardDiffWriter(targetShardId, baselineShardId, false, columnId, store, compress, compactionTrigger);
-                shardDiffWriter = minusTableWriter.addShardDiff(shardDiffWriter);
+                shardDiffWriter = minusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineShardId, false, columnId, store, compress, compactionTrigger));
               }
 
               List<Entity> entityUpdates = entry.getValue();
@@ -436,7 +434,7 @@ public class ArmorWriter implements Closeable {
                   payloads.add(internalRequest);
                 }
               }
-              shardDiffWriter.writeDiff(transaction, payloads);
+              shardDiffWriter.write(transaction, columnId, payloads);
               return null;
             } finally {
               MDC.remove("tenant_id");
@@ -497,11 +495,10 @@ public class ArmorWriter implements Closeable {
             try {
               MDC.put("tenant_id", tenant);
               ShardId shardId = entry.getKey();
-              ShardWriter shardWriter = tableWriter.getShard(shardId);
+              IShardWriter shardWriter = tableWriter.getShard(shardId);
               Thread.currentThread().setName(originalThreadName + "(" + shardId.toString() + ")");
               if (shardWriter == null) {
-                shardWriter = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
-                shardWriter = tableWriter.addShard(shardWriter);
+                shardWriter = tableWriter.addShard(new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites));
               }
 
               List<Entity> entityUpdates = entry.getValue();
@@ -576,7 +573,7 @@ public class ArmorWriter implements Closeable {
     int submitted = 0;
     final ColumnId finalEntityColumnId = entityColumnId;
     List<EntityOffsetException> offsetExceptions = new ArrayList<>();
-    for (ShardWriter shardWriter : tableWriter.getShardWriters()) {
+    for (IShardWriter shardWriter : tableWriter.getShardWriters()) {
       std.submit(
           () -> {
             String originalName = Thread.currentThread().getName();

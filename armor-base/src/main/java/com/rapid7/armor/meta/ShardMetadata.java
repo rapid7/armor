@@ -40,6 +40,9 @@ public class ShardMetadata {
   }
   
   public List<ColumnId> columnIds() {
-    return columnMetadatas.stream().map(c -> new ColumnId(c.getColumnName(), c.getColumnType().getCode())).collect(Collectors.toList()); 
+    return columnMetadatas.stream()
+        .filter(c -> c != null)
+        .map(c -> new ColumnId(c.getColumnName(), c.getColumnType().getCode()))
+        .collect(Collectors.toList()); 
   }
 }

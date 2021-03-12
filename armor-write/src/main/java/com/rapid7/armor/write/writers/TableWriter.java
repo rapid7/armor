@@ -1,7 +1,6 @@
 package com.rapid7.armor.write.writers;
 
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.write.diff.writers.ColumnShardDiffWriter;
 
 import java.io.Closeable;
 import java.util.Collection;
@@ -17,15 +16,14 @@ public class TableWriter implements Closeable {
   private final String tableName;
   private final String tenant;
   // Must be have some synchronization to prevent lost shards.
-  private final Map<ShardId, ShardWriter> shards = new HashMap<>();
-  private final Map<ShardId, ColumnShardDiffWriter> diffShards = new HashMap<>();
+  private final Map<ShardId, IShardWriter> shards = new HashMap<>();
 
   public TableWriter(String tenant, String table) {
     this.tenant = tenant;
     this.tableName = table;
   }
 
-  public Collection<ShardWriter> getShardWriters() {
+  public Collection<IShardWriter> getShardWriters() {
     return shards.values();
   }
 
@@ -39,7 +37,7 @@ public class TableWriter implements Closeable {
 
   @Override
   public synchronized void close() {
-    for (ShardWriter sw : shards.values()) {
+    for (IShardWriter sw : shards.values()) {
       try {
         sw.close();
       } catch (Exception e) {
@@ -49,39 +47,32 @@ public class TableWriter implements Closeable {
   }
 
   public synchronized void close(ShardId shardId) {
-    ShardWriter sw = shards.get(shardId);
-    if (sw != null)
-      sw.close();
+    IShardWriter sw = shards.get(shardId);
+    if (sw != null) {
+      try {
+        sw.close();
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
   }
 
-  public ShardWriter getShard(ShardId shardId) {
+  public IShardWriter getShard(ShardId shardId) {
     return shards.get(shardId);
   }
-  
-  public synchronized ColumnShardDiffWriter addShardDiff(ColumnShardDiffWriter columnShardDiffWriter) {
-    ColumnShardDiffWriter csdw = diffShards.get(columnShardDiffWriter.getTargetShardId());
-    if (csdw != null) {
-      // A shard already exists, so close it and move on.
-      columnShardDiffWriter.close();
-      return csdw;
-    }
-    diffShards.put(columnShardDiffWriter.getTargetShardId(), columnShardDiffWriter);
-    return columnShardDiffWriter;
-  }
 
-  public synchronized ShardWriter addShard(ShardWriter shardWriter) {
-    ShardWriter sw = shards.get(shardWriter.getShardId());
+  public synchronized IShardWriter addShard(IShardWriter shardWriter) {
+    IShardWriter sw = shards.get(shardWriter.getShardId());
     if (sw != null) {
       // A shard already exists, so close it and move on.
-      shardWriter.close();
+      try {
+        shardWriter.close();
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
       return sw;
     }
     shards.put(shardWriter.getShardId(), shardWriter);
     return shardWriter;
-  }
-
-  public ColumnShardDiffWriter getDiffShard(ShardId shardId) {
-    // TODO Auto-generated method stub
-    return null;
   }
 }

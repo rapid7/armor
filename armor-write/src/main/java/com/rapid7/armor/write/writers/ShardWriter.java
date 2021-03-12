@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Handles writes for one or more columns for a shard in one "atomic" operation.
  */
-public class ShardWriter {
+public class ShardWriter implements IShardWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShardWriter.class);
 
   private Map<ColumnShardId, ColumnFileWriter> columnFileWriters = new ConcurrentHashMap<>();

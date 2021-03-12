@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
@@ -36,6 +37,7 @@ import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorReader;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
+import com.rapid7.armor.schema.DiffTableName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
@@ -242,6 +244,44 @@ public class FileStoreV2Test {
     assertEquals(expectedNumberRows, totalRows);
   }
 
+  private void verifyTableReaderPOV(
+    int expectedNumberRows, String table, Interval interval, Instant timestamp, Path path, int numShards, Collection<ColumnId> columnIds) {
+    FileReadStore readStore = new FileReadStore(path);
+    List<ShardId> shardIds = readStore.findShardIds(TENANT, table, interval, timestamp);
+    assertEquals(numShards, shardIds.size());
+    int totalRows = 0;
+    for (ShardId shardId : shardIds) {
+      Integer shardRows = null;
+      for (ColumnId columnId : columnIds) {
+        FastArmorShardColumn fas = readStore.getFastArmorShard(shardId, columnId.getName());
+        FastArmorBlockReader far = fas.getFastArmorColumnReader();
+        DataType dt = fas.getDataType();
+        FastArmorBlock fab = null;
+        switch (dt) {
+        case INTEGER:
+          fab = far.getIntegerBlock(5000);
+          break;
+        case LONG:
+          fab = far.getLongBlock(5000);
+          break;
+        case STRING:
+          fab = far.getStringBlock(5000);
+          break;
+        default:
+          throw new RuntimeException("Unsupported");
+        }
+
+        if (shardRows == null) {
+          shardRows = fab.getNumRows();
+        } else if (shardRows != fab.getNumRows()) {
+          throw new RuntimeException("Within a shard the two column row counts do not match");
+        }
+      }
+      totalRows += shardRows;
+    }
+    assertEquals(expectedNumberRows, totalRows);
+  }
+
   private void verifyTableReaderPOV(int expectedNumberRows, Path path, int numShards) {
     FileReadStore readStore = new FileReadStore(path);
     List<ShardId> shardIds = readStore.findShardIds(TENANT, TABLE, INTERVAL, TIMESTAMP);
@@ -312,29 +352,49 @@ public class FileStoreV2Test {
     Path testDirectory = Files.createTempDirectory("filestore");
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
     Row[] rows1 = new Row[] { texasVuln, caliVuln };
+    Instant baseLineWeek = LocalDate.parse("2021-02-22").atStartOfDay().toInstant(ZoneOffset.UTC);
+    Instant targetWeek = LocalDate.parse("2021-03-03").atStartOfDay().toInstant(ZoneOffset.UTC);
+    ColumnId columnScope = new ColumnId("status", DataType.INTEGER.getCode());
+
+    String plusTable = DiffTableName.generatePlusTableDiffName(TABLE, Interval.WEEKLY, columnScope);
+    String minusTable = DiffTableName.generateMinusTableDiffName(TABLE, Interval.WEEKLY, columnScope);
+
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
-      Instant week = LocalDate.parse("2021-02-22").atStartOfDay().toInstant(ZoneOffset.UTC);
       String xact = writer.startTransaction();
       List<Entity> entities1 = new ArrayList<>();
       Entity entity1 = generateEntity("firstEntity", 1, rows1);
       entities1.add(entity1);
-      writer.write(xact, TENANT, TABLE, Interval.WEEKLY, week, entities1);
+      writer.write(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, entities1);
       writer.commit(xact, TENANT, TABLE);
     }
     
     Row[] rows2 = new Row[] { texasVuln };
-    ColumnId columnScope = new ColumnId("status", DataType.INTEGER.getCode());
     try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
-      Instant week = LocalDate.parse("2021-03-03").atStartOfDay().toInstant(ZoneOffset.UTC);
       String xact = writer.startTransaction();
       List<Entity> entities1 = new ArrayList<>();
       Entity entity1 = generateEntity("firstEntity", 1, rows2);
       entities1.add(entity1);
-      writer.writeColumnDiff(xact, TENANT, TABLE, Interval.WEEKLY, week, columnScope, entities1);
+      writer.writeColumnDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities1);
       writer.commit(xact, TENANT, TABLE);
     }
     
-    System.out.println("");
+    verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
+    verifyTableReaderPOV(0, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
+    
+    Row[] rows3 = new Row[] { texasVuln, caliVuln };
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+      String xact = writer.startTransaction();
+      List<Entity> entities1 = new ArrayList<>();
+      Entity entity1 = generateEntity("firstEntity", 1, rows3);
+      entities1.add(entity1);
+      writer.writeColumnDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities1);
+      writer.commit(xact, TENANT, TABLE);
+    }
+    
+    verifyTableReaderPOV(0, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
+    verifyTableReaderPOV(0, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
+
+    removeDirectory(testDirectory);
   }
   
 
@@ -372,6 +432,8 @@ public class FileStoreV2Test {
         }
       }
     }
+    removeDirectory(testDirectory);
+
   }
 
 
@@ -396,6 +458,7 @@ public class FileStoreV2Test {
         }
       }
     }
+    removeDirectory(testDirectory);
   }
 
   @Test
@@ -470,6 +533,7 @@ public class FileStoreV2Test {
 
       }
     }
+    removeDirectory(testDirectory);
   }
 
   @Test

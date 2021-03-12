@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -30,11 +31,12 @@ import com.rapid7.armor.write.StreamProduct;
 import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
+import com.rapid7.armor.write.writers.IShardWriter;
 
 /**
  * Handles writes for one or more columns for a shard in one "atomic" operation.
  */
-public class ColumnShardDiffWriter {
+public class ColumnShardDiffWriter implements IShardWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ColumnShardDiffWriter.class);
   private final WriteStore store;
   private ColumnId columnId;
@@ -113,7 +115,8 @@ public class ColumnShardDiffWriter {
       }
       
       // Do this after the save, to ensure metadata is updated.
-      List<ColumnMetadata> columnMetadata = Arrays.asList(targetColumnFile.getMetadata());
+      List<ColumnMetadata> columnMetadata = new ArrayList<>();
+      columnMetadata.add(targetColumnFile.getMetadata());
       columnMetadata.add(entityColumnMetadata);
       ShardMetadata smd = new ShardMetadata(targetShardId, columnMetadata);
       store.saveShardMetadata(transaction, smd);
@@ -131,7 +134,6 @@ public class ColumnShardDiffWriter {
   }
 
   public void writeDiff(String transaction, List<WriteRequest> writeRequests) throws IOException {
-
     if (baselineColumnFile == null) {
       if (diffForNew) {
         for (WriteRequest wr : writeRequests) {
@@ -162,6 +164,13 @@ public class ColumnShardDiffWriter {
             if (!removedBaselineValues1.isEmpty()) {
               wr.getColumn().setValues(new ArrayList<>(removedBaselineValues1));
               toWrite.add(wr);
+            } else {
+              // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
+              // If so then we should DELETE so that there is no entry.
+              EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
+              if (targetEr != null && targetEr.getDeleted() == 0) {
+                targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
+              }
             }
           }          
         } else if (diffForNew) {
@@ -191,6 +200,8 @@ public class ColumnShardDiffWriter {
     
     // Determines which should be the baseline column which is the one most entities.
     List<EntityRecordSummary> baselineSummaries = targetColumnFile.getEntityRecordSummaries();
+    if (baselineSummaries.isEmpty())
+      return null;
     return buildStoreEntityIdColumn(transaction, baselineSummaries, entityIdColumn, entityIdType);
   }
   
@@ -228,5 +239,25 @@ public class ColumnShardDiffWriter {
         throw e;
       }
     }
+  }
+
+  @Override
+  public ShardId getShardId() {
+    return targetShardId;
+  }
+
+  @Override
+  public ColumnMetadata getMetadata(String columnId) {
+    return targetColumnFile.getMetadata();
+  }
+
+  @Override
+  public void write(String transaction, ColumnId columnId, List<WriteRequest> columns) throws IOException {
+    writeDiff(transaction, columns);
+  }
+
+  @Override
+  public Map<Integer, EntityRecord> getEntities(String columnId) {
+    return targetColumnFile.getEntites();
   }
 }
