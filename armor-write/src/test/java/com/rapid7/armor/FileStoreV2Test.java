@@ -351,7 +351,6 @@ public class FileStoreV2Test {
   public void diffTableTest() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
-    Row[] rows1 = new Row[] { texasVuln, caliVuln };
     Instant baseLineWeek = LocalDate.parse("2021-02-22").atStartOfDay().toInstant(ZoneOffset.UTC);
     Instant targetWeek = LocalDate.parse("2021-03-03").atStartOfDay().toInstant(ZoneOffset.UTC);
     ColumnId columnScope = new ColumnId("status", DataType.INTEGER.getCode());
@@ -363,17 +362,16 @@ public class FileStoreV2Test {
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities1 = new ArrayList<>();
-        Entity entity1 = generateEntity("firstEntity", 1, rows1);
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln, caliVuln});
         entities1.add(entity1);
         writer.write(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, entities1);
         writer.commit(xact, TENANT, TABLE);
       }
       
-      Row[] rows2 = new Row[] { texasVuln };
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities1 = new ArrayList<>();
-        Entity entity1 = generateEntity("firstEntity", 1, rows2);
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[]{texasVuln});
         entities1.add(entity1);
         writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities1);
         writer.commit(xact, TENANT, TABLE);
@@ -382,11 +380,10 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
       verifyTableReaderPOV(0, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
       
-      Row[] rows3 = new Row[] { texasVuln, caliVuln };
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities1 = new ArrayList<>();
-        Entity entity1 = generateEntity("firstEntity", 1, rows3);
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln,caliVuln});
         entities1.add(entity1);
         writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities1);
         writer.commit(xact, TENANT, TABLE);
@@ -395,12 +392,11 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(0, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
       verifyTableReaderPOV(0, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
       
-      Row[] rows4 = new Row[] { texasVuln, caliVuln };
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities = new ArrayList<>();
-        Entity entity1 = generateEntity("firstEntity", 1, rows2);
-        Entity entity2 = generateEntity("secondEntity", 1, rows4);
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[]{texasVuln});
+        Entity entity2 = generateEntity("secondEntity", 1, new Row[]{texasVuln, caliVuln});
         entities.add(entity1);
         entities.add(entity2);
         writer.write(xact, TENANT, TABLE, Interval.SINGLE, baseLineWeek, entities);
@@ -414,8 +410,8 @@ public class FileStoreV2Test {
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities = new ArrayList<>();
-        Entity entity1 = generateEntity("firstEntity", 1, rows2);
-        Entity entity2 = generateEntity("secondEntity", 1, rows4);
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[]{texasVuln});
+        Entity entity2 = generateEntity("secondEntity", 1, new Row[]{texasVuln, caliVuln});
         entities.add(entity1);
         entities.add(entity2);
         writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
@@ -424,6 +420,43 @@ public class FileStoreV2Test {
       
       verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       verifyTableReaderPOV(2, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities = new ArrayList<>();
+        Entity entity2 = generateEntity("secondEntity", 1, new Row[0]);
+        entities.add(entity2);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      verifyTableReaderPOV(1, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities = new ArrayList<>();
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln, zonaVuln});
+        entities.add(entity1);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      verifyTableReaderPOV(2, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        List<Entity> entities = new ArrayList<>();
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln});
+        entities.add(entity1);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      verifyTableReaderPOV(1, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
     } finally {
       removeDirectory(testDirectory);
     }

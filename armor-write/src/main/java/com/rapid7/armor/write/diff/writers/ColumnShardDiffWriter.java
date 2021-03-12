@@ -145,19 +145,27 @@ public class ColumnShardDiffWriter implements IShardWriter {
         EntityRecord er = entityId != null ? baselineColumnFile.getEntites().get(entityId) : null;
         if (er != null) {
           if (diffForNew) {
-            Set<Object> baseLineValues2 = new HashSet<>(rgw.getEntityValues(er));
+            Set<Object> baseLineValues = new HashSet<>(rgw.getEntityValues(er));
             Set<Object> newTargetValues2 = new HashSet<>(wr.getColumn().getValues());
-            newTargetValues2.removeAll(baseLineValues2);
+            newTargetValues2.removeAll(baseLineValues);
             if (!newTargetValues2.isEmpty()) {
               wr.getColumn().setValues(new ArrayList<>(newTargetValues2));
               toWrite.add(wr);
+            } else {
+              // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
+              // If so then we should DELETE so that there is no entry.
+              EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
+              if (targetEr != null && targetEr.getDeleted() == 0) {
+                targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
+              }
             }
+              
           } else {
-            Set<Object> removedBaselineValues1 = new HashSet<>(rgw.getEntityValues(er));
-            Set<Object> targetValues1 = new HashSet<>(wr.getColumn().getValues());
-            removedBaselineValues1.removeAll(targetValues1);
-            if (!removedBaselineValues1.isEmpty()) {
-              wr.getColumn().setValues(new ArrayList<>(removedBaselineValues1));
+            Set<Object> removedBaselineValues = new HashSet<>(rgw.getEntityValues(er));
+            Set<Object> targetValues = new HashSet<>(wr.getColumn().getValues());
+            removedBaselineValues.removeAll(targetValues);
+            if (!removedBaselineValues.isEmpty()) {
+              wr.getColumn().setValues(new ArrayList<>(removedBaselineValues));
               toWrite.add(wr);
             } else {
               // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
