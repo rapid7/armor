@@ -788,4 +788,10 @@ public class S3WriteStore implements WriteStore {
     ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
     return !objectListing.getObjectSummaries().isEmpty();
   }
+
+  @Override
+  public boolean columnShardIdExists(ColumnShardId columnShardId) {
+    String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(columnShardId.getShardId()), columnShardId.getColumnId().fullName());
+    return s3Client.doesObjectExist(bucket, shardIdPath);
+  }
 }

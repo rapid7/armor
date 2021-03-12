@@ -18,8 +18,25 @@ public class ShardId {
   public static ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, int shardNum) {
     return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
   }
+  
+  public static ShardId buildPreviousIntervalShardId(ShardId shardId) {
+    Interval interval = Interval.toInterval(shardId.getInterval());
+    String intervalStart = shardId.getIntervalStart();
+    String previousIntervalStart = interval.getIntervalStart(Instant.parse(intervalStart), -1);
+    ShardId previousShardId = new ShardId(shardId);
+    previousShardId.setIntervalStart(previousIntervalStart);
+    return previousShardId;
+  }
 
   public ShardId() {}
+
+  public ShardId(ShardId copy) {
+    this.tenant = copy.tenant;
+    this.table = copy.table;
+    this.interval = copy.interval;
+    this.intervalStart = copy.intervalStart;
+    this.shardNum = copy.shardNum;
+  }
 
   public ShardId(String tenant, String table, String interval, String intervalStart, int shardNum) {
     this.tenant = tenant;

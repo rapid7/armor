@@ -120,10 +120,10 @@ public class ShardWriter {
    *
    * @return The metadata of the shard just written.
    */
-  public ShardMetadata commit(String transaction, ColumnId columnEntiyId) throws IOException {
+  public ShardMetadata commit(String transaction, ColumnId columnEntityId) throws IOException {
     boolean committed = false;
     try {
-      ColumnMetadata entityColumnMetadata = consistencyCheck(transaction, columnEntiyId.getName(), columnEntiyId.dataType());
+      ColumnMetadata entityColumnMetadata = consistencyCheck(transaction, columnEntityId.getName(), columnEntityId.dataType());
       for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
         try (InputStream inputStream = streamProduct.getInputStream()) {

@@ -11,6 +11,11 @@ public class ColumnId {
   public ColumnId() {
   }
 
+  public ColumnId(ColumnId columnId) {
+    this.name = columnId.getName();
+    this.type = columnId.getType();
+  }
+
   public ColumnId(String fullName) {
     int lastUnderscore = fullName.lastIndexOf(SEPERATOR);
     this.name = fullName.substring(0, lastUnderscore);

@@ -1,22 +1,5 @@
 package com.rapid7.armor.write.writers;
 
-import com.rapid7.armor.entity.Column;
-import com.rapid7.armor.entity.Entity;
-import com.rapid7.armor.entity.EntityRecord;
-import com.rapid7.armor.interval.Interval;
-import com.rapid7.armor.io.Compression;
-import com.rapid7.armor.meta.ColumnMetadata;
-import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
-import com.rapid7.armor.schema.ColumnId;
-import com.rapid7.armor.schema.DataType;
-import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.store.WriteStore;
-import com.rapid7.armor.write.EntityOffsetException;
-import com.rapid7.armor.write.TableId;
-import com.rapid7.armor.write.WriteRequest;
-import com.rapid7.armor.xact.XactError;
-
 import java.io.Closeable;
 import java.nio.channels.ClosedChannelException;
 import java.nio.file.NoSuchFileException;
@@ -41,10 +24,29 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
+import com.rapid7.armor.entity.Column;
+import com.rapid7.armor.entity.Entity;
+import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.interval.Interval;
+import com.rapid7.armor.io.Compression;
+import com.rapid7.armor.meta.ColumnMetadata;
+import com.rapid7.armor.meta.ShardMetadata;
+import com.rapid7.armor.meta.TableMetadata;
+import com.rapid7.armor.schema.ColumnId;
+import com.rapid7.armor.schema.DataType;
+import com.rapid7.armor.shard.ShardId;
+import com.rapid7.armor.store.WriteStore;
+import com.rapid7.armor.write.EntityOffsetException;
+import com.rapid7.armor.write.TableId;
+import com.rapid7.armor.write.WriteRequest;
+import com.rapid7.armor.write.diff.writers.ColumnShardDiffWriter;
+import com.rapid7.armor.xact.XactError;
+
 public class ArmorWriter implements Closeable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ArmorWriter.class);
   private final ExecutorService threadPool;
   private final WriteStore store;
+  private final Map<TableId, Set<TableId>> diffTableWriters = new ConcurrentHashMap<>();
   private final Map<TableId, TableWriter> tableWriters = new ConcurrentHashMap<>();
   private final Map<TableId, ColumnId> tableEntityColumnIds = new ConcurrentHashMap<>();
 
@@ -269,6 +271,189 @@ public class ArmorWriter implements Closeable {
     }
   }
 
+  /**
+   * Writes diff results into corresponding diff tables at the scope of a column.
+   *  
+   * @param tranaction
+   * @param tenant
+   * @param table
+   * @param interval
+   * @param timestamp
+   * @param entities
+   */
+  public void writeColumnDiff(String transaction, String tenant, String table, Interval interval, Instant timestamp, ColumnId columnId, List<Entity> entities) {
+    if (entities == null || entities.isEmpty())
+      return;
+    String plusTable = table + "_" + columnId.getName() + "_plus";
+    String minusTable = table + "_" + columnId.getName() + "_minus";
+    
+    HashMap<ShardId, List<Entity>> plusShardsToUpdates = new HashMap<>();
+    HashMap<ShardId, List<Entity>> minusShardsToUpdates = new HashMap<>();
+
+    TableId baseTableId = new TableId(tenant, table);
+   
+    TableId plusTableId = new TableId(tenant, plusTable);
+    TableId minusTableId = new TableId(tenant, minusTable);
+    Set<TableId> test = diffTableWriters.get(baseTableId);
+    if (test == null) {
+      test = new HashSet<>();
+      diffTableWriters.put(baseTableId, test);
+    }
+    test.add(plusTableId);
+    test.add(minusTableId);
+    final TableWriter plusTableWriter;
+    if (!tableWriters.containsKey(plusTableId)) {
+      TableMetadata tableMeta = store.getTableMetadata(tenant, plusTable);
+      if (tableMeta != null) {
+        // The table exists, load it up then
+        plusTableWriter = getTableWriter(plusTableId);
+        // Make sure the entityid column hasn't changed.
+        String entityIdColumn = tableMeta.getEntityColumnId();
+        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
+          throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
+        tableEntityColumnIds.put(plusTableId, toColumnId(tableMeta)); 
+      } else {
+        Entity entity = entities.get(0);
+        plusTableWriter = getTableWriter(plusTableId);
+        // No shard metadata exists, create the first shard metadata for this.
+        tableEntityColumnIds.put(plusTableId, buildEntityColumnId(entity));
+      }
+    } else {
+      plusTableWriter = tableWriters.get(plusTableId);
+    }
+
+    final TableWriter minusTableWriter;
+    if (!tableWriters.containsKey(minusTableId)) {
+      TableMetadata tableMeta = store.getTableMetadata(tenant, minusTable);
+      if (tableMeta != null) {
+        // Make sure the entityid column hasn't changed.
+        minusTableWriter = getTableWriter(minusTableId);
+
+        String entityIdColumn = tableMeta.getEntityColumnId();
+        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
+          throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
+        tableEntityColumnIds.put(minusTableId, toColumnId(tableMeta)); 
+      } else {
+        Entity entity = entities.get(0);
+        minusTableWriter = getTableWriter(minusTableId);
+        // No shard metadata exists, create the first shard metadata for this.
+        tableEntityColumnIds.put(minusTableId, buildEntityColumnId(entity));
+      }
+    } else {
+      minusTableWriter = getTableWriter(minusTableId);
+    }
+
+    
+    for (Entity entity : entities) {
+      ShardId plusShardId = store.findShardId(tenant, plusTable, interval, timestamp, entity.getEntityId());
+      List<Entity> plusEntityUpdates = plusShardsToUpdates.computeIfAbsent(plusShardId, k -> new ArrayList<>());
+      plusEntityUpdates.add(entity);
+      
+      ShardId minusShardId = store.findShardId(tenant, minusTable, interval, timestamp, entity.getEntityId());
+      List<Entity> minusEntityUpdates = minusShardsToUpdates.computeIfAbsent(minusShardId, k -> new ArrayList<>());
+      minusEntityUpdates.add(entity);
+    }
+
+    int plusNumShards = plusShardsToUpdates.size();
+    ExecutorCompletionService<Void> plusEcs = new ExecutorCompletionService<>(threadPool);
+    for (Map.Entry<ShardId, List<Entity>> entry : plusShardsToUpdates.entrySet()) {
+      plusEcs.submit(
+          () -> {
+            String originalThreadName = Thread.currentThread().getName();
+            try {
+              MDC.put("tenant_id", tenant);
+              ShardId targetShardId = entry.getKey();
+              ColumnShardDiffWriter shardDiffWriter = plusTableWriter.getDiffShard(targetShardId);
+              Thread.currentThread().setName(originalThreadName + "(" + targetShardId.toString() + ")");
+              if (shardDiffWriter == null) {
+                ShardId baselineShardId = ShardId.buildPreviousIntervalShardId(targetShardId);
+                baselineShardId.setTable(table);
+                shardDiffWriter = new ColumnShardDiffWriter(targetShardId, baselineShardId, true, columnId, store, compress, compactionTrigger);
+                shardDiffWriter = plusTableWriter.addShardDiff(shardDiffWriter);
+              }
+
+              List<Entity> entityUpdates = entry.getValue();
+              List<WriteRequest> payloads = new ArrayList<>();
+              for (Entity eu : entityUpdates) {
+                Object entityId = eu.getEntityId();
+                long version = eu.getVersion();
+                String instanceId = eu.getInstanceId();
+                
+                for (Column ec : eu.columns()) {
+                  if (!ec.getColumnId().equals(columnId))
+                    continue;
+                  WriteRequest internalRequest = new WriteRequest(entityId, version, instanceId, ec);
+                  payloads.add(internalRequest);
+                }
+              }
+              shardDiffWriter.writeDiff(transaction, payloads);
+              return null;
+            } finally {
+              MDC.remove("tenant_id");
+              Thread.currentThread().setName(originalThreadName);
+            }
+        }
+      );
+    }
+    for (int i = 0; i < plusNumShards; ++i) {
+      try {
+        plusEcs.take().get();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    
+    
+    int minusNumShards = plusShardsToUpdates.size();
+    ExecutorCompletionService<Void> minusEcs = new ExecutorCompletionService<>(threadPool);
+    for (Map.Entry<ShardId, List<Entity>> entry : minusShardsToUpdates.entrySet()) {
+      minusEcs.submit(
+          () -> {
+            String originalThreadName = Thread.currentThread().getName();
+            try {
+              MDC.put("tenant_id", tenant);
+              ShardId targetShardId = entry.getKey();
+              ColumnShardDiffWriter shardDiffWriter = minusTableWriter.getDiffShard(targetShardId);
+              Thread.currentThread().setName(originalThreadName + "(" + targetShardId.toString() + ")");
+              if (shardDiffWriter == null) {
+                ShardId baselineShardId = ShardId.buildPreviousIntervalShardId(targetShardId);
+                baselineShardId.setTable(table);
+                shardDiffWriter = new ColumnShardDiffWriter(targetShardId, baselineShardId, false, columnId, store, compress, compactionTrigger);
+                shardDiffWriter = minusTableWriter.addShardDiff(shardDiffWriter);
+              }
+
+              List<Entity> entityUpdates = entry.getValue();
+              List<WriteRequest> payloads = new ArrayList<>();
+              for (Entity eu : entityUpdates) {
+                Object entityId = eu.getEntityId();
+                long version = eu.getVersion();
+                String instanceId = eu.getInstanceId();
+                
+                for (Column ec : eu.columns()) {
+                  if (!ec.getColumnId().equals(columnId))
+                    continue;
+                  WriteRequest internalRequest = new WriteRequest(entityId, version, instanceId, ec);
+                  payloads.add(internalRequest);
+                }
+              }
+              shardDiffWriter.writeDiff(transaction, payloads);
+              return null;
+            } finally {
+              MDC.remove("tenant_id");
+              Thread.currentThread().setName(originalThreadName);
+            }
+        }
+      );
+    }
+    for (int i = 0; i < minusNumShards; ++i) {
+      try {
+        minusEcs.take().get();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
   public void write(String transaction, String tenant, String table, Interval interval, Instant timestamp, List<Entity> entities) {
     if (entities == null || entities.isEmpty())
       return;
@@ -357,23 +542,38 @@ public class ArmorWriter implements Closeable {
   }
 
   public void commit(String transaction, String tenant, String table) {
-    CompletionService<ShardMetadata> std = new ExecutorCompletionService<>(threadPool);
-    int submitted = 0;
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter == null) {
-      LOGGER.warn("There are no changes detected, going to skip save operation for {}", tableId);
+      if (diffTableWriters.containsKey(tableId)) {
+        for (TableId diffTableId : diffTableWriters.get(tableId)) {
+          persistTable(transaction, diffTableId, tableWriters.get(diffTableId));
+        }
+      }      
       return;
     }
+    persistTable(transaction, tableId, tableWriter);
+    if (diffTableWriters.containsKey(tableId)) {
+      for (TableId diffTableId : diffTableWriters.get(tableId)) {
+        persistTable(transaction, diffTableId, tableWriters.get(diffTableId));
+      }
+    }
+  }
+  
+  private void persistTable(String transaction, TableId tableId, TableWriter tableWriter) {
+    String tenant = tableId.getTenant();
+    String table = tableId.getTableName();
+    CompletionService<ShardMetadata> std = new ExecutorCompletionService<>(threadPool);
     ColumnId entityColumnId = tableEntityColumnIds.get(tableId);
     TableMetadata tableMetadata = null;
     if (entityColumnId == null) {
-      tableMetadata = this.store.getTableMetadata(tenant, table);
+      tableMetadata = this.store.getTableMetadata(tableWriter.getTenant(), tableWriter.getTableName());
       if (tableMetadata == null) {
         throw new RuntimeException("Unable to determine the entityid column name from store or memory, cannot commit");
       }
       entityColumnId = toColumnId(tableMetadata);
     }
+    int submitted = 0;
     final ColumnId finalEntityColumnId = entityColumnId;
     List<EntityOffsetException> offsetExceptions = new ArrayList<>();
     for (ShardWriter shardWriter : tableWriter.getShardWriters()) {
@@ -382,7 +582,7 @@ public class ArmorWriter implements Closeable {
             String originalName = Thread.currentThread().getName();
             try {
               Thread.currentThread().setName("shardwriter-" + shardWriter.getShardId());
-              MDC.put("tenant_id", tenant);
+              MDC.put("tenant_id", tableWriter.getTenant());
               return shardWriter.commit(transaction, finalEntityColumnId);
             } catch (NoSuchFileException nse) {
               LOGGER.warn("The underlying channels file are missing, most likely closed by another fried due to an issue: {}", nse.getMessage());

@@ -9,6 +9,8 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -304,6 +306,37 @@ public class FileStoreV2Test {
       }
     }
   }
+  
+  @Test
+  public void diffTableTest() throws IOException {
+    Path testDirectory = Files.createTempDirectory("filestore");
+    FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
+    Row[] rows1 = new Row[] { texasVuln, caliVuln };
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+      Instant week = LocalDate.parse("2021-02-22").atStartOfDay().toInstant(ZoneOffset.UTC);
+      String xact = writer.startTransaction();
+      List<Entity> entities1 = new ArrayList<>();
+      Entity entity1 = generateEntity("firstEntity", 1, rows1);
+      entities1.add(entity1);
+      writer.write(xact, TENANT, TABLE, Interval.WEEKLY, week, entities1);
+      writer.commit(xact, TENANT, TABLE);
+    }
+    
+    Row[] rows2 = new Row[] { texasVuln };
+    ColumnId columnScope = new ColumnId("status", DataType.INTEGER.getCode());
+    try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+      Instant week = LocalDate.parse("2021-03-03").atStartOfDay().toInstant(ZoneOffset.UTC);
+      String xact = writer.startTransaction();
+      List<Entity> entities1 = new ArrayList<>();
+      Entity entity1 = generateEntity("firstEntity", 1, rows2);
+      entities1.add(entity1);
+      writer.writeColumnDiff(xact, TENANT, TABLE, Interval.WEEKLY, week, columnScope, entities1);
+      writer.commit(xact, TENANT, TABLE);
+    }
+    
+    System.out.println("");
+  }
+  
 
   @Test
   public void newColumn() throws IOException {

@@ -584,4 +584,11 @@ public class FileWriteStore implements WriteStore {
     Path intervalStartPath = basePath.resolve(Paths.get(tenant, table, interval.getInterval(), intervalStart));
     return Files.exists(intervalStartPath);
   }
+
+  @Override
+  public boolean columnShardIdExists(ColumnShardId columnShardId) {
+    String currentPath = resolveCurrentPath(columnShardId.getShardId());
+    Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnShardId.getColumnId().fullName()));
+    return Files.exists(shardIdPath);
+  }
 }

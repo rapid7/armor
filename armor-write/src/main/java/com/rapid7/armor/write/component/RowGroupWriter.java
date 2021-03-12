@@ -65,7 +65,7 @@ public class RowGroupWriter extends FileComponent {
    * @param er The entity record to extract values from.
    * @param consumer The consumer to listen for objects from.
    */
-  public void customExtractValues(EntityRecord er, Consumer<List<Object>> consumer) throws IOException {
+  public List<Object> getEntityValues(EntityRecord er) throws IOException {
     long previousPosition = position();
     ByteBuffer valBorrow = BYTE_BUFFER_POOL.get();
     ByteBuffer nilBorrow = BYTE_BUFFER_POOL.get();
@@ -98,13 +98,19 @@ public class RowGroupWriter extends FileComponent {
       } else
         nilRb = null;
       List<Object> values = dataType.traverseByteBufferToList(valBuf, er.getValueLength());
-      consumer.accept(Arrays.asList(er, values, nilRb));
+      if (nilRb != null) {
+        for (int rowNum : nilRb.toArray()) {
+          values.set(rowNum-1, null);
+        }
+      }
+      return values;
     } finally {
       BYTE_BUFFER_POOL.release(valBorrow);
       BYTE_BUFFER_POOL.release(nilBorrow);
       position(previousPosition);
     }
   }
+
   /**
    * Given a list of records traverse through the rowgroup and pass back an array with the ER first, the list of values second
    * and finally the null bit map last.

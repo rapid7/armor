@@ -492,9 +492,9 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
 
-  private int getEntityId(Object entity) {
+  public Integer getEntityId(Object entity) {
     Objects.requireNonNull(entity,"The entity parameter cannot be null");
-    Integer entityInt;
+    Integer entityInt = null;
     if (entity instanceof String) {
       entityInt = entityDictionary.getSurrogate((String) entity);
     } else if (entity instanceof Long) {

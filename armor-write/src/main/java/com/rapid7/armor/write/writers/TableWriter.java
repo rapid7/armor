@@ -1,6 +1,7 @@
 package com.rapid7.armor.write.writers;
 
 import com.rapid7.armor.shard.ShardId;
+import com.rapid7.armor.write.diff.writers.ColumnShardDiffWriter;
 
 import java.io.Closeable;
 import java.util.Collection;
@@ -17,6 +18,7 @@ public class TableWriter implements Closeable {
   private final String tenant;
   // Must be have some synchronization to prevent lost shards.
   private final Map<ShardId, ShardWriter> shards = new HashMap<>();
+  private final Map<ShardId, ColumnShardDiffWriter> diffShards = new HashMap<>();
 
   public TableWriter(String tenant, String table) {
     this.tenant = tenant;
@@ -55,6 +57,17 @@ public class TableWriter implements Closeable {
   public ShardWriter getShard(ShardId shardId) {
     return shards.get(shardId);
   }
+  
+  public synchronized ColumnShardDiffWriter addShardDiff(ColumnShardDiffWriter columnShardDiffWriter) {
+    ColumnShardDiffWriter csdw = diffShards.get(columnShardDiffWriter.getTargetShardId());
+    if (csdw != null) {
+      // A shard already exists, so close it and move on.
+      columnShardDiffWriter.close();
+      return csdw;
+    }
+    diffShards.put(columnShardDiffWriter.getTargetShardId(), columnShardDiffWriter);
+    return columnShardDiffWriter;
+  }
 
   public synchronized ShardWriter addShard(ShardWriter shardWriter) {
     ShardWriter sw = shards.get(shardWriter.getShardId());
@@ -65,5 +78,10 @@ public class TableWriter implements Closeable {
     }
     shards.put(shardWriter.getShardId(), shardWriter);
     return shardWriter;
+  }
+
+  public ColumnShardDiffWriter getDiffShard(ShardId shardId) {
+    // TODO Auto-generated method stub
+    return null;
   }
 }
