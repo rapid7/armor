@@ -60,7 +60,7 @@ public class S3WriteStore implements WriteStore {
   private final String bucket;
   private final ShardStrategy shardStrategy;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
+  private static final String INTERVAL_TAG = "interval";
   public S3WriteStore(AmazonS3 s3Client, String bucket, ShardStrategy shardStrategy) {
     this.s3Client = s3Client;
     this.bucket = bucket;
@@ -644,7 +644,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   private ObjectTagging createObjectTagging(String interval) {
-    Tag tag = new Tag("interval", interval);
+    Tag tag = new Tag(INTERVAL_TAG, interval);
     return new ObjectTagging(Stream.of(tag).collect(toList()));
   }
 
