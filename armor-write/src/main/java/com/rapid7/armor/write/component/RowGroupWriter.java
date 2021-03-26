@@ -66,7 +66,7 @@ public class RowGroupWriter extends FileComponent {
    * 
    * @return The list of values for that entity.
    * 
-   * @throw IOException If an IO error occurs.
+   * @throws IOException If an IO error occurs.
    */
   public List<Object> getEntityValues(EntityRecord er) throws IOException {
     long previousPosition = position();
@@ -121,7 +121,7 @@ public class RowGroupWriter extends FileComponent {
    * @param records A list of entity records.
    * @param consumer A consumer to listen for values for each entity.
    * 
-   * @throw IOException If an IO error occurs.
+   * @throws IOException If an IO error occurs.
    */
   public void customTraverseThoughValues(List<EntityRecord> records, Consumer<List<Object>> consumer) throws IOException {
     long previousPosition = position();
@@ -180,7 +180,7 @@ public class RowGroupWriter extends FileComponent {
    * @param metadata The metadata of the columnfile.
    * @param records A list of records to traverse through.
    * 
-   * @throw IOException If an io erorr occurs.
+   * @throws IOException If an io error occurs.
    */
   public void runThoughValues(ColumnMetadata metadata, List<EntityRecord> records) throws IOException {
     long previousPosition = position();
@@ -249,6 +249,8 @@ public class RowGroupWriter extends FileComponent {
    * Appends the values for multiple entities.
    *
    * @param valueArray A list of object array representing the values.
+   * 
+   * @return A list of offset write results.
    * 
    * @throws IOException If an io error occurs.
    */
@@ -397,6 +399,8 @@ public class RowGroupWriter extends FileComponent {
    * scan pass where it copies contents from one file to another.
    * 
    * @param entitiesToKeep A list of records to keep while compacting.
+   * 
+   * @return A list of entity records.
    * 
    * @throws IOException If an io error occurs.
    */

@@ -551,7 +551,10 @@ public class ArmorWriter implements Closeable {
       try {
         ecs.take().get();
       } catch (Exception e) {
-        throw new RuntimeException(e);
+        if (e.getCause() instanceof EntityIdTypeException)
+          throw ((EntityIdTypeException) e.getCause());
+        else
+          throw new RuntimeException(e);
       }
     }
   }

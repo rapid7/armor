@@ -120,7 +120,7 @@ public class ShardWriter implements IShardWriter {
    *
    * @return The metadata of the shard just written.
    * 
-   * @throw IOException If an io error occurs.
+   * @throws IOException If an io error occurs.
    */
   public ShardMetadata commit(String transaction, ColumnId columnEntityId) throws IOException {
     boolean committed = false;

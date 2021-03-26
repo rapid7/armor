@@ -85,6 +85,8 @@ public interface WriteStore {
    *
    * @param tenant The tenant to find.
    * @param table The table to find.
+   *
+   * @return {@code true} if it exists.
    */
   boolean tableExists(String tenant, String table);
 
