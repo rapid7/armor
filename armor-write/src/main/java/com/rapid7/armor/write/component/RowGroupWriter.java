@@ -388,6 +388,8 @@ public class RowGroupWriter extends FileComponent {
    * scan pass where it copies contents from one file to another.
    * 
    * @param entitiesToKeep A list of records to keep while compacting.
+   * 
+   * @throws IOException
    */
   public List<EntityRecord> compact(List<EntityRecord> entitiesToKeep) throws IOException {
     int totalRequiredBytes = entitiesToKeep.stream().mapToInt(EntityRecord::totalLength).sum();

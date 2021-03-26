@@ -212,6 +212,8 @@ public class ArmorWriter implements Closeable {
   
   /**
    * Builds an initial tablemetadata that defines the table's intended id and type from an Entity object.
+   * 
+   * @param The entity object to build the entity column id.
    */
   private ColumnId buildEntityColumnId(Entity entity) {
     Object entityId = entity.getEntityId();
@@ -274,7 +276,13 @@ public class ArmorWriter implements Closeable {
 
   /**
    * Writes diff results into corresponding diff tables at the scope of a column.
-   *
+   * 
+   * @param transaction The transaction id.
+   * @param tenant The tenant of the user.
+   * @param interval The interval to diff against.
+   * @param timestamp The timestamp of the interval to fit into.
+   * @param columnId The choosen column id for the diff.
+   * @param entities The entites to diff against.
    */
   public void writeDiff(String transaction, String tenant, String table, Interval interval, Instant timestamp, ColumnId columnId, List<Entity> entities) {
     if (entities == null || entities.isEmpty())
