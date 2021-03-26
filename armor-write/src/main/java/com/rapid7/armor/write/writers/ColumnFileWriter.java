@@ -473,18 +473,23 @@ public class ColumnFileWriter implements AutoCloseable {
 
   public synchronized boolean delete(String transaction, Object entity, long version, String instanceId) {
     int entityId;
+    boolean hasStringIds = !entityDictionary.isEmpty();
     if (entity instanceof String) {
       entityId = entityDictionary.getSurrogate((String) entity);
-    } else if (entity instanceof Long)
+    } else if (entity instanceof Long) {
+      if (hasStringIds)
+        throw new EntityIdTypeException("Exepected a string type for the entity id but got a numeric type");
       entityId = ((Long) entity).intValue();
-    else if (entity instanceof Integer)
+    } else if (entity instanceof Integer) {
+      if (hasStringIds)
+        throw new EntityIdTypeException("Exepected a string type for the entity id but got a numeric type");
       entityId = ((Integer) entity);
-    else
-      throw new IllegalArgumentException("The entity type of " + entity.getClass().toString() + " is not supported for identity");
+    } else
+      throw new EntityIdTypeException("The entity type of " + entity.getClass().toString() + " is not supported for identity on entites");
     return delete(transaction, entityId, version, instanceId);
   }
 
-  public synchronized boolean delete(String transaction, int entity, long version, String instanceId) {
+  private synchronized boolean delete(String transaction, int entity, long version, String instanceId) {
     try {
       return entityIndexWriter.delete(entity, version, instanceId) != null;
     } catch (IOException ioe) {
@@ -495,14 +500,19 @@ public class ColumnFileWriter implements AutoCloseable {
   public Integer getEntityId(Object entity) {
     Objects.requireNonNull(entity,"The entity parameter cannot be null");
     Integer entityInt = null;
+    boolean hasStringIds = !entityDictionary.isEmpty();
     if (entity instanceof String) {
       entityInt = entityDictionary.getSurrogate((String) entity);
     } else if (entity instanceof Long) {
+      if (hasStringIds)
+        throw new EntityIdTypeException("Exepected a string type for the entity id but got a numeric type");
       entityInt = ((Long) entity).intValue();
     } else if (entity instanceof Integer) {
+      if (hasStringIds)
+        throw new EntityIdTypeException("Exepected a string type for the entity id but got a numeric type");
       entityInt = ((Integer) entity);
     } else
-      throw new IllegalArgumentException("Entity uuids must be string, long or int not " + entity.getClass().getCanonicalName());
+      throw new EntityIdTypeException("Entity uuids must be string, long or int not " + entity.getClass().getCanonicalName());
     return entityInt;
   }
 

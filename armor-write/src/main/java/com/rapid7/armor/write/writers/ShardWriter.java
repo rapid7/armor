@@ -217,7 +217,7 @@ public class ShardWriter implements IShardWriter {
         List<EntityRecordSummary> testSummaries = entry.getValue();
         if (testSummaries.size() > 0) {
           ColumnShardId testColumn = entry.getKey();
-          reportError(transaction, baselineColumn, testColumn, baselineSummaries, testSummaries, "Baseline is but test column is not empty1");
+          reportError(transaction, baselineColumn, testColumn, baselineSummaries, testSummaries, "Baseline is empty but test column is not empty1");
           iterator.remove();
         }
       }
@@ -254,7 +254,7 @@ public class ShardWriter implements IShardWriter {
       List<EntityRecordSummary> testSummaries = cw.getEntityRecordSummaries();
       if (baselineSummaries == null) {
         if (testSummaries.size() > 0)
-          reportError(transaction, baselineColumn, cw.getColumnShardId(), baselineSummaries, testSummaries, "Baseline is but test column is not empty2");
+          reportError(transaction, baselineColumn, cw.getColumnShardId(), baselineSummaries, testSummaries, "Baseline is empty but test column is not empty2");
       } else {
         if (!testSummaries.equals(baselineSummaries)) {
           reportError(transaction, baselineColumn, cw.getColumnShardId(), baselineSummaries, testSummaries, "Baseline and test column fail equality test");

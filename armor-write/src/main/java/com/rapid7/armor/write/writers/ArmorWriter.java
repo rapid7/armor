@@ -182,11 +182,11 @@ public class ArmorWriter implements Closeable {
     }
 
     // If it is null then table doesn't exist yet which means we can just return.
-    // If it is not null then table does exist, in that case load it up and attempt a delete.
     TableMetadata tableMeta = store.getTableMetadata(tenant, table);
     if (tableMeta == null)
       return;
 
+    // TableMeta is not null then table does exist, in that case load it up and attempt a delete.
     if (tableWriter == null) {
       tableWriter = getTableWriter(tableId);
     }
