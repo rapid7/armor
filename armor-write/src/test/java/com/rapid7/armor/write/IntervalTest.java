@@ -59,6 +59,7 @@ public class IntervalTest {
 
   @AfterAll
   public static void shutdown() {
+    client.shutdown();
     S3_MOCK.shutdown();
   }
 

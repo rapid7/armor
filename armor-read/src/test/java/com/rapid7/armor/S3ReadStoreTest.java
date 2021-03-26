@@ -66,6 +66,7 @@ public class S3ReadStoreTest {
 
   @AfterAll
   public static void shutdown() {
+    client.shutdown();
     S3_MOCK.shutdown();
   }
 
