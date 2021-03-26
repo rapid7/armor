@@ -63,7 +63,8 @@ public class RowGroupWriter extends FileComponent {
    * Given a record, go and extract the values for the given record.
    *
    * @param er The entity record to extract values from.
-   * @param consumer The consumer to listen for objects from.
+   * 
+   * @return The list of values for that entity.
    */
   public List<Object> getEntityValues(EntityRecord er) throws IOException {
     long previousPosition = position();
@@ -117,6 +118,8 @@ public class RowGroupWriter extends FileComponent {
    * 
    * @param records A list of entity records.
    * @param consumer A consumer to listen for values for each entity.
+   * 
+   * @throw IOException
    */
   public void customTraverseThoughValues(List<EntityRecord> records, Consumer<List<Object>> consumer) throws IOException {
     long previousPosition = position();
@@ -174,6 +177,8 @@ public class RowGroupWriter extends FileComponent {
    * 
    * @param metadata The metadata of the columnfile.
    * @param records A list of records to traverse through.
+   * 
+   * @throw IOException
    */
   public void runThoughValues(ColumnMetadata metadata, List<EntityRecord> records) throws IOException {
     long previousPosition = position();
@@ -242,6 +247,8 @@ public class RowGroupWriter extends FileComponent {
    * Appends the values for multiple entities.
    *
    * @param valueArray A list of object array representing the values.
+   * 
+   * @throws IOException
    */
   public List<RgOffsetWriteResult> appendEntityValues(List<Object[]> valueArray) throws IOException {
     int totalNumRows = valueArray.stream().mapToInt(l -> l.length).sum();

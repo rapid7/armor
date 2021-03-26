@@ -136,6 +136,8 @@ public class ArmorWriter implements Closeable {
    * @param timestamp The point in time in which to bucket the data as per the interval
    * @param columnId The id of the column.
    * @param shard The shard number.
+   * 
+   * @return The column metadata.
    */
   public ColumnMetadata columnMetadata(String tenant, String table, Interval interval, Instant timestamp, String columnId, int shard) {
     TableId tableId = new TableId(tenant, table);
@@ -279,6 +281,7 @@ public class ArmorWriter implements Closeable {
    * 
    * @param transaction The transaction id.
    * @param tenant The tenant of the user.
+   * @param table The table to diff against.
    * @param interval The interval to diff against.
    * @param timestamp The timestamp of the interval to fit into.
    * @param columnId The choosen column id for the diff.

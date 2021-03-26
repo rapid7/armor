@@ -119,6 +119,8 @@ public class ShardWriter implements IShardWriter {
    * @param columnEntiyId The id for the entity column for this table.
    *
    * @return The metadata of the shard just written.
+   * 
+   * @throw IOException
    */
   public ShardMetadata commit(String transaction, ColumnId columnEntityId) throws IOException {
     boolean committed = false;

@@ -98,6 +98,8 @@ public class ColumnShardDiffWriter implements IShardWriter {
    * @param columnEntiyId The id for the entity column for this table.
    *
    * @return The metadata of the shard just written.
+   * 
+   * @throws IOException
    */
   public ShardMetadata commit(String transaction, ColumnId columnEntityId) throws IOException {
     boolean committed = false;
