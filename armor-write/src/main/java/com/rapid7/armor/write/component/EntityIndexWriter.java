@@ -274,6 +274,8 @@ public class EntityIndexWriter extends FileComponent {
    * the underlying file as well as in-memory records with new ones.
    * 
    * @param entitiesToKeep A list of entity records to keep during compaction.
+   * 
+   * @throws IOException If an IO error ocurrs.
    */
   public void compact(List<EntityRecord> entitiesToKeep) throws IOException {
     Map<Integer, EntityRecord> tempEntities = new HashMap<>();

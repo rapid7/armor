@@ -65,6 +65,8 @@ public class RowGroupWriter extends FileComponent {
    * @param er The entity record to extract values from.
    * 
    * @return The list of values for that entity.
+   * 
+   * @throw IOException If an IO error occurs.
    */
   public List<Object> getEntityValues(EntityRecord er) throws IOException {
     long previousPosition = position();
@@ -119,7 +121,7 @@ public class RowGroupWriter extends FileComponent {
    * @param records A list of entity records.
    * @param consumer A consumer to listen for values for each entity.
    * 
-   * @throw IOException
+   * @throw IOException If an IO error occurs.
    */
   public void customTraverseThoughValues(List<EntityRecord> records, Consumer<List<Object>> consumer) throws IOException {
     long previousPosition = position();
@@ -178,7 +180,7 @@ public class RowGroupWriter extends FileComponent {
    * @param metadata The metadata of the columnfile.
    * @param records A list of records to traverse through.
    * 
-   * @throw IOException
+   * @throw IOException If an io erorr occurs.
    */
   public void runThoughValues(ColumnMetadata metadata, List<EntityRecord> records) throws IOException {
     long previousPosition = position();
@@ -248,7 +250,7 @@ public class RowGroupWriter extends FileComponent {
    *
    * @param valueArray A list of object array representing the values.
    * 
-   * @throws IOException
+   * @throws IOException If an io error occurs.
    */
   public List<RgOffsetWriteResult> appendEntityValues(List<Object[]> valueArray) throws IOException {
     int totalNumRows = valueArray.stream().mapToInt(l -> l.length).sum();
@@ -396,7 +398,7 @@ public class RowGroupWriter extends FileComponent {
    * 
    * @param entitiesToKeep A list of records to keep while compacting.
    * 
-   * @throws IOException
+   * @throws IOException If an io error occurs.
    */
   public List<EntityRecord> compact(List<EntityRecord> entitiesToKeep) throws IOException {
     int totalRequiredBytes = entitiesToKeep.stream().mapToInt(EntityRecord::totalLength).sum();

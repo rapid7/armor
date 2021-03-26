@@ -57,6 +57,8 @@ public interface WriteStore {
    * @param tenant The tenant to find.
    * @param table The table to find.
    * @param interval The interval to find.
+   * 
+   * @return {@code true} if it exists.
    */
   boolean intervalExists(String tenant, String table, Interval interval);
   /**
@@ -66,12 +68,16 @@ public interface WriteStore {
    * @param table The table to find.
    * @param interval The interval to find.
    * @param intervalStart The start interval in ISO8601 format.
+   *
+   * @return {@code true} if it exists.
    */
   boolean intervalStartExists(String tenant, String table, Interval interval, String intervalStart);
   /**
    * Returns whether the table at interval exists.
    *
    * @param columnShardId The column shard exists.
+   *
+   * @return {@code true} if it exists.
    */
   boolean columnShardIdExists(ColumnShardId columnShardId);
   /**
@@ -102,8 +108,6 @@ public interface WriteStore {
   // Loading from store
   List<ColumnFileWriter> loadColumnWriters(ShardId shardId);
   ColumnFileWriter loadColumnWriter(ColumnShardId columnShard);
-
-
 
   // Get style methods
   int findShardNum(Object entityId);
