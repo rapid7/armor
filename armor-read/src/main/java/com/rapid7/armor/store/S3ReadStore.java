@@ -42,7 +42,7 @@ public class S3ReadStore implements ReadStore {
   private final AmazonS3 s3Client;
   private final String bucket;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final String TENANT_EXCLUDE_FILTER_PREFIX = "___";
+  private static final String TENANT_EXCLUDE_FILTER_PREFIX = "__";
 
   public S3ReadStore(AmazonS3 s3Client, String bucket) {
     this.s3Client = s3Client;
@@ -104,6 +104,8 @@ public class S3ReadStore implements ReadStore {
   public SlowArmorShardColumn getSlowArmorShard(ShardId shardId, String columnName) {
     List<ColumnId> columnIds = getColumnIds(shardId);
     Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnName)).findFirst();
+    if (!option.isPresent())
+      return null;
     ColumnId cn = option.get();
     String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), cn.fullName());
     if (!doesObjectExist(bucket, shardIdPath)) {
@@ -122,6 +124,8 @@ public class S3ReadStore implements ReadStore {
   public FastArmorShardColumn getFastArmorShard(ShardId shardId, String columnName) {
     List<ColumnId> columnIds = getColumnIds(shardId);
     Optional<ColumnId> option = columnIds.stream().filter(c -> c.getName().equals(columnName)).findFirst();
+    if (!option.isPresent())
+      return null;
     ColumnId cn = option.get();
     String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), cn.fullName());
     if (!doesObjectExist(bucket, shardIdPath)) {

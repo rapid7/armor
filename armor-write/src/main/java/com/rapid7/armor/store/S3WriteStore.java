@@ -61,6 +61,7 @@ public class S3WriteStore implements WriteStore {
   private final ShardStrategy shardStrategy;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final String INTERVAL_TAG = "interval";
+  
   public S3WriteStore(AmazonS3 s3Client, String bucket, ShardStrategy shardStrategy) {
     this.s3Client = s3Client;
     this.bucket = bucket;
@@ -356,6 +357,8 @@ public class S3WriteStore implements WriteStore {
                 shardDstPath.resolve(shardSrcPath.relativize(Paths.get(current.getKey()))).toString()
             ).withNewObjectTagging(objectTagging)
         );
+      } else {
+        throw new RuntimeException("No current entry found this will be an error");
       }
     } catch (Exception exception) {
       s3Client.listObjectsV2(
