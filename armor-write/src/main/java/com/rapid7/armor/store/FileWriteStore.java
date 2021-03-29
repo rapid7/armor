@@ -494,7 +494,7 @@ public class FileWriteStore implements WriteStore {
       paths.filter(file -> !src.equals(file)).forEach(
           file -> {
             try {
-              if (file.endsWith("CURRENT")) {
+              if (file.endsWith(DistXact.CURRENT_MARKER)) {
                 current.set(file);
               } else {
                 Files.copy(file, dst.resolve(src.relativize(file)), REPLACE_EXISTING);

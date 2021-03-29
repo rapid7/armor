@@ -332,7 +332,7 @@ public class S3WriteStore implements WriteStore {
         if (!first)
           ol = s3Client.listObjectsV2(srcRequest);
         for (S3ObjectSummary objectSummary : ol.getObjectSummaries()) {
-          if (objectSummary.getKey().endsWith("CURRENT")) {
+          if (objectSummary.getKey().endsWith(DistXact.CURRENT_MARKER)) {
             current = objectSummary;
           } else {
             s3Client.copyObject(
