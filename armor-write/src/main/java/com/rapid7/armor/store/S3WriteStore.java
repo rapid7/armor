@@ -301,7 +301,7 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
-    Path shardDstPath = Paths.get(shardIdDst.getTenant(), shardIdDst.getTable(), shardIdDst.getInterval(), shardIdDst.getIntervalStart());
+    Path shardDstPath = Paths.get(shardIdDst.getTenant(), shardIdDst.getTable(), shardIdDst.getInterval(), shardIdDst.getIntervalStart(), Integer.toString(shardIdDst.getShardNum()));
     ListObjectsV2Result ol = s3Client.listObjectsV2(
         new ListObjectsV2Request()
             .withBucketName(bucket)
@@ -312,7 +312,7 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
-    Path shardSrcPath = Paths.get(shardIdSrc.getTenant(), shardIdSrc.getTable(), shardIdSrc.getInterval(), shardIdSrc.getIntervalStart());
+    Path shardSrcPath = Paths.get(shardIdSrc.getTenant(), shardIdSrc.getTable(), shardIdSrc.getInterval(), shardIdSrc.getIntervalStart(), Integer.toString(shardIdSrc.getShardNum()));
     ListObjectsV2Request srcRequest = new ListObjectsV2Request()
       .withBucketName(bucket)
       .withMaxKeys(10000)
@@ -349,7 +349,6 @@ public class S3WriteStore implements WriteStore {
         first = false;
       } while (ol.isTruncated());
       if (current != null) {
-        LOGGER.info("Going to copy from {} to {}", current.getKey(), shardDstPath.resolve(shardSrcPath.relativize(Paths.get(current.getKey()))).toString());
         s3Client.copyObject(
             new CopyObjectRequest(
                 bucket,

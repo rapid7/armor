@@ -213,18 +213,29 @@ public class S3StoreTest {
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
-    S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
-    ArmorWriter aw = new ArmorWriter("test", writeStore, Compression.NONE, 1);
-    Instant now = Instant.now();
-    String interavlStart = Interval.WEEKLY.getIntervalStart(now);
-    aw.snapshotCurrentToInterval("orgA", "table1", Interval.WEEKLY, now);
     
-    String expectedCurrent = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/0/" + DistXact.CURRENT_MARKER;
-    boolean exists = client.doesObjectExist(TEST_BUCKET, expectedCurrent);
-    assertTrue(exists);
-    S3Object object = client.getObject(TEST_BUCKET, expectedCurrent);
-    Map<String, String> currentRead = mapper.readValue(object.getObjectContent(), Map.class);
-    aw.close();
+    // Make these distinct in name to ensure test is valid.
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current1 + "/name_S_a", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current1 + "/level_I_a", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current1 + "/shard-metadata.armora", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+ 
+    S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
+    try (ArmorWriter aw = new ArmorWriter("test", writeStore, Compression.NONE, 1)) {
+      Instant now = Instant.now();
+      String interavlStart = Interval.WEEKLY.getIntervalStart(now);
+      aw.snapshotCurrentToInterval("orgA", "table1", Interval.WEEKLY, now);
+      
+      String expectedCurrent0 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/0/" + DistXact.CURRENT_MARKER;
+      String expectedCurrent1 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/1/" + DistXact.CURRENT_MARKER;
+      assertTrue(client.doesObjectExist(TEST_BUCKET, expectedCurrent0));
+      assertTrue(client.doesObjectExist(TEST_BUCKET, expectedCurrent1));
+      
+      String expectedNameS = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/0/" + current1 + "/name_S";
+      String expectedNameSa = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/1/" + current1 + "/name_S_a";
+      assertTrue(client.doesObjectExist(TEST_BUCKET, expectedNameS));
+      assertTrue(client.doesObjectExist(TEST_BUCKET, expectedNameSa));
+    }
   }
 
   @Test
