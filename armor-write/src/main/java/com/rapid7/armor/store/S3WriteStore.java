@@ -349,6 +349,7 @@ public class S3WriteStore implements WriteStore {
         first = false;
       } while (ol.isTruncated());
       if (current != null) {
+        LOGGER.info("Going to copy from {} to {}", current.getKey(), shardDstPath.resolve(shardSrcPath.relativize(Paths.get(current.getKey()))).toString());
         s3Client.copyObject(
             new CopyObjectRequest(
                 bucket,

@@ -2,6 +2,7 @@ package com.rapid7.armor;
 
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnId;
@@ -20,9 +21,12 @@ import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.S3Object;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
+
+import java.io.IOException;
 import java.text.ParseException;
 import java.time.Instant;
 import java.util.Arrays;
@@ -195,6 +199,32 @@ public class S3StoreTest {
 
     List<String> tables = readStore.getTables("org1");
     assertTrue(tables.contains("table1"));
+  }
+  
+  @Test
+  public void verifyCopyShard() throws AmazonServiceException, SdkClientException, IOException {
+    String current1 = UUID.randomUUID().toString();
+    ObjectMapper mapper = new ObjectMapper();
+    HashMap<String, String> currentValue1 = new HashMap<>();
+    currentValue1.put("current", current1);
+    
+    client.putObject(TEST_BUCKET, "orgA/table1/table-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
+    ArmorWriter aw = new ArmorWriter("test", writeStore, Compression.NONE, 1);
+    Instant now = Instant.now();
+    String interavlStart = Interval.WEEKLY.getIntervalStart(now);
+    aw.snapshotCurrentToInterval("orgA", "table1", Interval.WEEKLY, now);
+    
+    String expectedCurrent = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/0/" + DistXact.CURRENT_MARKER;
+    boolean exists = client.doesObjectExist(TEST_BUCKET, expectedCurrent);
+    assertTrue(exists);
+    S3Object object = client.getObject(TEST_BUCKET, expectedCurrent);
+    Map<String, String> currentRead = mapper.readValue(object.getObjectContent(), Map.class);
+    aw.close();
   }
 
   @Test
