@@ -131,7 +131,7 @@ public class S3ReadStoreTest {
     ShardId shard1Org2Week_11 = new ShardId("org2", "table1", Interval.WEEKLY.getInterval(), "2021-01-11T00:00:00Z", 1);
 
     S3ReadStore readStore = new S3ReadStore(client, TEST_BUCKET);
-    assertEquals(Sets.newHashSet("org1", "org2"), Sets.newHashSet(readStore.getTenants()));
+    assertEquals(Sets.newHashSet("org1", "org2"), Sets.newHashSet(readStore.getTenants(false)));
     assertEquals(Arrays.asList("table1"), readStore.getTables("org2"));
     assertEquals(Arrays.asList("table1"), readStore.getTables("org1"));
     

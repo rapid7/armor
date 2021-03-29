@@ -191,7 +191,7 @@ public class FileReadStore implements ReadStore {
   }
 
   @Override
-  public List<String> getTenants() {
+  public List<String> getTenants(boolean useCache) {
     File[] directories = basePath.toFile().listFiles(File::isDirectory);
     return Arrays.stream(directories).map(File::getName).collect(Collectors.toList());
   }

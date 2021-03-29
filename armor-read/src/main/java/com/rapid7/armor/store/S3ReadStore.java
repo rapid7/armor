@@ -215,40 +215,39 @@ public class S3ReadStore implements ReadStore {
     return tables;
   }
 
-  /**
-   * Attempts exists check, if its errors out it is most likely a slowdown error. So sleep for a second and retry again.
-   */
-  private boolean doesObjectExist(String bucket, String key) {
-    for (int i = 0; i < 10; i++) {
-      try {
-        return s3Client.doesObjectExist(bucket, key);
-      } catch (AmazonS3Exception e) {
-        if (i == 10) {
-          throw e;
-        }
-        try {
-          Thread.sleep((i + 1) * 1000);
-        } catch (InterruptedException ie) {
-          // do nothing
-        }
-      }
-    }
-    throw new IllegalStateException("Should not have dropped into this section");
-  }
-
   @Override
-  public List<String> getTenants() {
-    ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter(Constants.STORE_DELIMETER);
-    
-    Set<String> allPrefixes = new HashSet<>();
-    ListObjectsV2Result result;
-    do {
-      result = s3Client.listObjectsV2(lor);
-      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
-      lor.setContinuationToken(result.getNextContinuationToken());
-    } while (result.isTruncated());
-    return allPrefixes.stream().filter(t -> !t.startsWith(TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+  public List<String> getTenants(boolean useCache) {
+    if (useCache) {
+      // Query a cache directory of tenants
+      ListObjectsV2Request lor = new ListObjectsV2Request()
+          .withBucketName(bucket)
+          .withPrefix(StoreConstants.CACHE_DIR)
+          .withMaxKeys(10000);
+      lor.withDelimiter(Constants.STORE_DELIMETER);
+      
+      Set<String> orgs = new HashSet<>();
+      ListObjectsV2Result result;
+      do {
+        result = s3Client.listObjectsV2(lor);
+        for (S3ObjectSummary summary : result.getObjectSummaries()) {
+          orgs.add(Paths.get(summary.getKey()).getFileName().toString());
+        }
+        lor.setContinuationToken(result.getNextContinuationToken());
+      } while (result.isTruncated());
+      return orgs.stream().filter(t -> !t.startsWith(TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+    } else {
+      ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
+      lor.withDelimiter(Constants.STORE_DELIMETER);
+      
+      Set<String> allPrefixes = new HashSet<>();
+      ListObjectsV2Result result;
+      do {
+        result = s3Client.listObjectsV2(lor);
+        allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
+        lor.setContinuationToken(result.getNextContinuationToken());
+      } while (result.isTruncated());
+      return allPrefixes.stream().filter(t -> !t.startsWith(TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+    }
   }
 
   @Override
@@ -440,5 +439,26 @@ public class S3ReadStore implements ReadStore {
         throw new RuntimeException(ioe);
       }
     }
+  }
+  
+  /**
+   * Attempts exists check, if its errors out it is most likely a slowdown error. So sleep for a second and retry again.
+   */
+  private boolean doesObjectExist(String bucket, String key) {
+    for (int i = 0; i < 10; i++) {
+      try {
+        return s3Client.doesObjectExist(bucket, key);
+      } catch (AmazonS3Exception e) {
+        if (i == 10) {
+          throw e;
+        }
+        try {
+          Thread.sleep((i + 1) * 1000);
+        } catch (InterruptedException ie) {
+          // do nothing
+        }
+      }
+    }
+    throw new IllegalStateException("Should not have dropped into this section");
   }
 }

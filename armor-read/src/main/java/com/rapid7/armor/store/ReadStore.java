@@ -17,9 +17,11 @@ public interface ReadStore {
   /**
    * Returns all the tenants visible to this store.
    * 
+   * @param useCache If avail use a cached list of tenants.
+   * 
    * @return A list of tenants.
    */
-  List<String> getTenants();
+  List<String> getTenants(boolean useCache);
 
   /**
    * Returns a list of intervals that the table has.
