@@ -36,6 +36,8 @@ import com.amazonaws.services.s3.model.Tag;
 import com.amazonaws.util.StringInputStream;
 import com.amazonaws.util.StringUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -47,6 +49,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
@@ -61,6 +64,12 @@ public class S3WriteStore implements WriteStore {
   private final ShardStrategy shardStrategy;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final String INTERVAL_TAG = "interval";
+  private static final String TENANT_CACHE_KEY = "tenants";
+  private Cache<String, Set<String>> tenantCache = CacheBuilder.newBuilder()
+      .maximumSize(10_000)
+      .concurrencyLevel(10)
+      .initialCapacity(1_000)
+      .expireAfterAccess(1, TimeUnit.DAYS).build();
   
   public S3WriteStore(AmazonS3 s3Client, String bucket, ShardStrategy shardStrategy) {
     this.s3Client = s3Client;
@@ -382,6 +391,7 @@ public class S3WriteStore implements WriteStore {
     if (status != null)
       status.validateXact(transaction);
     saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
+    trackTenant(shardId.getTenant());
     try {
       if (status == null || status.getPrevious() == null)
         return;
@@ -687,6 +697,24 @@ public class S3WriteStore implements WriteStore {
       }
     }
     throw new IllegalStateException("Should not have dropped into this section");
+  }
+  
+  private void trackTenant(String tenant) {
+    Set<String> cachedTenants = tenantCache.getIfPresent(TENANT_CACHE_KEY);
+    if (cachedTenants == null) {
+      cachedTenants = new HashSet<>();
+      tenantCache.put(TENANT_CACHE_KEY, cachedTenants);
+    }
+    
+    if (!cachedTenants.contains(tenant)) {
+      String key = PathBuilder.buildPath(StoreConstants.TENANT_CACHE_DIR, tenant);
+      InputStream inputStream = new ByteArrayInputStream(new byte[0]);
+      ObjectMetadata metadata = new ObjectMetadata();
+      metadata.setContentLength(0L);
+      
+      s3Client.putObject(new PutObjectRequest(bucket, key, inputStream, metadata));
+      cachedTenants.add(tenant);
+    }
   }
 
   @Override

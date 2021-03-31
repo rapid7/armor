@@ -21,7 +21,6 @@ import com.amazonaws.auth.AnonymousAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.S3Object;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
@@ -416,6 +415,68 @@ public class S3StoreTest {
           writeStore.deleteTenant(myorg);
         }
       }
+    }
+  }
+  @Test
+  public void getCachedTenantsTest() {
+    String org1 = "org1";
+    String org2 = "org2";
+    String table = "vulntable";
+    ColumnId name = new ColumnId("name", DataType.STRING.getCode());
+    ColumnId time = new ColumnId("time", DataType.LONG.getCode());
+    ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
+    S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
+    
+    try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, Compression.NONE, 10, () -> 1, null)) {
+      String transaction = armorWriter.startTransaction();
+      Entity e11 = Entity.buildEntity("assetId", 1, 1, null, name, time, vuln);
+      e11.addRows(
+          "a", 6L, 1,
+          "b", 5L, 2,
+          "c", 4L, 3,
+          "d", 3L, 4,
+          "e", 2L, 5,
+          "e", 2L, 5,
+          "f", 1L, 6
+      );
+    
+      Entity e12 = Entity.buildEntity("assetId", 1, 2, null, name, time, vuln);  // Should be this one
+      e12.addRows(
+          "a", 7L, 1,
+          "b", 8L, 2,
+          "c", null, 3,
+          "d", 9L, 4,
+          "e", 10L, 5,
+          "e", 11L, 6
+      );
+    
+      Entity e10 = Entity.buildEntity("assetId", 1, 0, null, name, time, vuln);
+      e10.addRows(
+          "a", 6L, null,
+          "a", 5L, null,
+          "a", null, null,
+          "a", 3L, null,
+          "a", 2L, 5,
+          "a", 1L, 6);
+    
+      Entity e20 = Entity.buildEntity("assetId", 2, 0, null, time, vuln);
+      e20.addRows(
+          6L, null,
+          5L, null,
+          null, null,
+          3L, null,
+          2L, 5,
+          null, 6);
+    
+      armorWriter.write(transaction, org1, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+      armorWriter.commit(transaction, org1, table);
+      
+      armorWriter.write(transaction, org2, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+      armorWriter.commit(transaction, org2, table);
+  
+      S3ReadStore s3ReadStore = new S3ReadStore(client, TEST_BUCKET);
+      List<String> tenants = s3ReadStore.getTenants(true);
+      assertEquals(Arrays.asList(org1, org2), tenants);
     }
   }
 }
