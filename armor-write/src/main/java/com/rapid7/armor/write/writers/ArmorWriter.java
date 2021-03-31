@@ -282,16 +282,28 @@ public class ArmorWriter implements Closeable {
    * @param transaction The transaction id.
    * @param tenant The tenant of the user.
    * @param table The table to diff against.
-   * @param interval The interval to diff against.
-   * @param timestamp The timestamp of the interval to fit into.
+   * @param baselineInterval The interval to diff against.
+   * @param baselineTimestamp The timestamp to diff against.
+   * @param targetInterval The interval to write too against.
+   * @param targetTimestamp The timestamp to write too.
    * @param columnId The choosen column id for the diff.
    * @param entities The entites to diff against.
    */
-  public void writeDiff(String transaction, String tenant, String table, Interval interval, Instant timestamp, ColumnId columnId, List<Entity> entities) {
+  public void writeDiff(
+    String transaction,
+    String tenant,
+    String table,
+    Interval baselineInterval,
+    Instant baselineTimestamp,
+    Interval targetInterval,
+    Instant targetTimestamp,
+    ColumnId columnId,
+    List<Entity> entities) {
     if (entities == null || entities.isEmpty())
       return;
-    String plusTable = DiffTableName.generatePlusTableDiffName(table, interval, columnId);
-    String minusTable = DiffTableName.generateMinusTableDiffName(table, interval, columnId);
+
+    String plusTable = DiffTableName.generatePlusTableDiffName(table, targetInterval, columnId);
+    String minusTable = DiffTableName.generateMinusTableDiffName(table, targetInterval, columnId);
     
     HashMap<ShardId, List<Entity>> plusShardsToUpdates = new HashMap<>();
     HashMap<ShardId, List<Entity>> minusShardsToUpdates = new HashMap<>();
@@ -350,11 +362,11 @@ public class ArmorWriter implements Closeable {
     }
     
     for (Entity entity : entities) {
-      ShardId plusShardId = store.findShardId(tenant, plusTable, interval, timestamp, entity.getEntityId());
+      ShardId plusShardId = store.findShardId(tenant, plusTable, targetInterval, targetTimestamp, entity.getEntityId());
       List<Entity> plusEntityUpdates = plusShardsToUpdates.computeIfAbsent(plusShardId, k -> new ArrayList<>());
       plusEntityUpdates.add(entity);
       
-      ShardId minusShardId = store.findShardId(tenant, minusTable, interval, timestamp, entity.getEntityId());
+      ShardId minusShardId = store.findShardId(tenant, minusTable, targetInterval, targetTimestamp, entity.getEntityId());
       List<Entity> minusEntityUpdates = minusShardsToUpdates.computeIfAbsent(minusShardId, k -> new ArrayList<>());
       minusEntityUpdates.add(entity);
     }
@@ -372,7 +384,7 @@ public class ArmorWriter implements Closeable {
               IShardWriter shardDiffWriter = plusTableWriter.getShard(targetShardId);
               Thread.currentThread().setName(originalThreadName + "(" + targetShardId.toString() + ")");
               if (shardDiffWriter == null) {
-                ShardId baselineShardId = ShardId.buildPreviousIntervalShardId(targetShardId);
+                ShardId baselineShardId = ShardId.buildShardId(tenant, table, baselineInterval, baselineTimestamp, targetShardId.getShardNum());
                 baselineShardId.setTable(table);
                 ColumnShardId baselineColumnShardId = new ColumnShardId(baselineShardId, columnId);
                 ColumnFileWriter baselineColumnFile = baselineColumnFiles.get(baselineShardId.getShardNum());
@@ -427,8 +439,7 @@ public class ArmorWriter implements Closeable {
               IShardWriter shardDiffWriter = minusTableWriter.getShard(targetShardId);
               Thread.currentThread().setName(originalThreadName + "(" + targetShardId.toString() + ")");
               if (shardDiffWriter == null) {
-                ShardId baselineShardId = ShardId.buildPreviousIntervalShardId(targetShardId);
-                baselineShardId.setTable(table);
+                ShardId baselineShardId = ShardId.buildShardId(tenant, table, baselineInterval, baselineTimestamp, targetShardId.getShardNum());
                 ColumnShardId baselineColumnShardId = new ColumnShardId(baselineShardId, columnId);
                 ColumnFileWriter baselineColumnFile = baselineColumnFiles.get(baselineShardId.getShardNum());
                 if (baselineColumnFile == null && store.columnShardIdExists(baselineColumnShardId)) {

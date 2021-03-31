@@ -402,10 +402,10 @@ public class FileStoreV2Test {
   public void diffTableTest() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");
     FileWriteStore store = new FileWriteStore(testDirectory, new ModShardStrategy(10));
-    Instant baseLineWeek = LocalDate.parse("2021-02-22").atStartOfDay().toInstant(ZoneOffset.UTC);
     Instant targetWeek = LocalDate.parse("2021-03-03").atStartOfDay().toInstant(ZoneOffset.UTC);
     ColumnId columnScope = new ColumnId("status", DataType.INTEGER.getCode());
-
+    String baselineWeekIntervalStart = Interval.WEEKLY.getIntervalStart(targetWeek, -1);
+    Instant baseLineWeek = Instant.parse(baselineWeekIntervalStart);
     String plusTable = DiffTableName.generatePlusTableDiffName(TABLE, Interval.WEEKLY, columnScope);
     String minusTable = DiffTableName.generateMinusTableDiffName(TABLE, Interval.WEEKLY, columnScope);
 
@@ -424,7 +424,7 @@ public class FileStoreV2Test {
         List<Entity> entities1 = new ArrayList<>();
         Entity entity1 = generateEntity("firstEntity", 1, new Row[]{texasVuln});
         entities1.add(entity1);
-        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities1);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, entities1);
         writer.commit(xact, TENANT, TABLE);
       }
       
@@ -436,7 +436,7 @@ public class FileStoreV2Test {
         List<Entity> entities1 = new ArrayList<>();
         Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln,caliVuln});
         entities1.add(entity1);
-        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities1);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, entities1);
         writer.commit(xact, TENANT, TABLE);
       }
       
@@ -451,7 +451,7 @@ public class FileStoreV2Test {
         entities.add(entity1);
         entities.add(entity2);
         writer.write(xact, TENANT, TABLE, Interval.SINGLE, baseLineWeek, entities);
-        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, entities);
         writer.commit(xact, TENANT, TABLE);
       }
       
@@ -465,7 +465,7 @@ public class FileStoreV2Test {
         Entity entity2 = generateEntity("secondEntity", 1, new Row[]{texasVuln, caliVuln});
         entities.add(entity1);
         entities.add(entity2);
-        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, entities);
         writer.commit(xact, TENANT, TABLE);
       }
       
@@ -477,7 +477,7 @@ public class FileStoreV2Test {
         List<Entity> entities = new ArrayList<>();
         Entity entity2 = generateEntity("secondEntity", 1, new Row[0]);
         entities.add(entity2);
-        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, entities);
         writer.commit(xact, TENANT, TABLE);
       }
       
@@ -489,7 +489,7 @@ public class FileStoreV2Test {
         List<Entity> entities = new ArrayList<>();
         Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln, zonaVuln});
         entities.add(entity1);
-        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, entities);
         writer.commit(xact, TENANT, TABLE);
       }
       
@@ -501,7 +501,7 @@ public class FileStoreV2Test {
         List<Entity> entities = new ArrayList<>();
         Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln});
         entities.add(entity1);
-        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, targetWeek, columnScope, entities);
+        writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, entities);
         writer.commit(xact, TENANT, TABLE);
       }
       

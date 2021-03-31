@@ -19,10 +19,10 @@ public class ShardId {
     return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), shardNum);
   }
   
-  public static ShardId buildPreviousIntervalShardId(ShardId shardId) {
+  public static ShardId buildShardId(ShardId shardId, int offset) {
     Interval interval = Interval.toInterval(shardId.getInterval());
     String intervalStart = shardId.getIntervalStart();
-    String previousIntervalStart = interval.getIntervalStart(Instant.parse(intervalStart), -1);
+    String previousIntervalStart = interval.getIntervalStart(Instant.parse(intervalStart), offset);
     ShardId previousShardId = new ShardId(shardId);
     previousShardId.setIntervalStart(previousIntervalStart);
     return previousShardId;
