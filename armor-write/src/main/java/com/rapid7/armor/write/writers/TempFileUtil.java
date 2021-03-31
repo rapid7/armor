@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileAttribute;
+import java.util.UUID;
 
 public class TempFileUtil {
 
@@ -14,7 +15,7 @@ public class TempFileUtil {
     tempFileLocation = tmpFileLocation;
   }
   
-  public Path getTempFileLocation() {
+  public static Path getTempFileLocation() {
     if (tempFileLocation != null)
       return tempFileLocation;
     String tmpDir = System.getProperty("java.io.tmpdir");
@@ -27,7 +28,10 @@ public class TempFileUtil {
     if (tempFileLocation == null)
       return Files.createTempFile(prefix, suffix, attrs);
     else {
-       return Files.createFile(tempFileLocation, attrs);
+       String random = UUID.randomUUID().toString();
+       String file = prefix + "-" + random + suffix;
+       Path target = Paths.get(tempFileLocation.toString(), file);
+       return Files.createFile(target, attrs);
     }
   }
   

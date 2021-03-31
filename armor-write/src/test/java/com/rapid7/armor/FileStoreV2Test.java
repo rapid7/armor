@@ -46,6 +46,7 @@ import com.rapid7.armor.store.FileWriteStore;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.writers.ArmorWriter;
 import com.rapid7.armor.write.writers.EntityIdTypeException;
+import com.rapid7.armor.write.writers.TempFileUtil;
 import com.rapid7.armor.xact.XactError;
 
 import tech.tablesaw.api.IntColumn;
@@ -124,6 +125,13 @@ public class FileStoreV2Test {
       rows.add(STATE_ROWS[RANDOM.nextInt(7)]);
     }
     return rows;
+  }
+  
+  private long numFilesInDirectory(Path directory) throws IOException {
+    return Files.walk(directory)
+        .parallel()
+        .filter(p -> !p.toFile().isDirectory())
+        .count();
   }
 
   private void removeDirectory(Path removeDirectory) throws IOException {
@@ -409,6 +417,10 @@ public class FileStoreV2Test {
     String plusTable = DiffTableName.generatePlusTableDiffName(TABLE, Interval.WEEKLY, columnScope);
     String minusTable = DiffTableName.generateMinusTableDiffName(TABLE, Interval.WEEKLY, columnScope);
 
+    Path originalTemp = TempFileUtil.getTempFileLocation();
+    Path targetTempPath = Files.createTempDirectory("tempPath");
+    TempFileUtil.setTempFileLocation(targetTempPath);
+    
     try {
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
@@ -508,7 +520,11 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       verifyTableReaderPOV(1, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       
+      // Verify the tmp file is empty
+      assertEquals(0, numFilesInDirectory(targetTempPath));
+      
     } finally {
+      TempFileUtil.setTempFileLocation(originalTemp);
       removeDirectory(testDirectory);
     }
   }
