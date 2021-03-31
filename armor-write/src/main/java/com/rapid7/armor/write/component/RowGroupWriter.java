@@ -6,6 +6,7 @@ import com.rapid7.armor.io.FixedCapacityByteBufferPool;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ColumnShardId;
+import com.rapid7.armor.write.writers.TempFileUtil;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 
@@ -407,7 +408,7 @@ public class RowGroupWriter extends FileComponent {
   public List<EntityRecord> compact(List<EntityRecord> entitiesToKeep) throws IOException {
     int totalRequiredBytes = entitiesToKeep.stream().mapToInt(EntityRecord::totalLength).sum();
     ByteBuffer output = ByteBuffer.allocate(totalRequiredBytes * 2);
-    Path path = Files.createTempFile(columnShardId.alternateString() + ROWGROUP_COMPACTION_SUFFIX, ".armor");
+    Path path = TempFileUtil.createTempFile(columnShardId.alternateString() + ROWGROUP_COMPACTION_SUFFIX, ".armor");
     boolean copied = false;
     try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
       for (EntityRecord er : entitiesToKeep) {

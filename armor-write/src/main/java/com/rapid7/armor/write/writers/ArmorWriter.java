@@ -51,6 +51,7 @@ public class ArmorWriter implements Closeable {
   private final Map<TableId, Set<TableId>> diffTableWriters = new ConcurrentHashMap<>();
   private final Map<TableId, TableWriter> tableWriters = new ConcurrentHashMap<>();
   private final Map<TableId, ColumnId> tableEntityColumnIds = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<ShardId, ColumnFileWriter> baselineColumnDiffWriters = new ConcurrentHashMap<>();
 
   private final Supplier<Integer> compactionTrigger;
   private boolean selfPool = true;
@@ -154,8 +155,21 @@ public class ArmorWriter implements Closeable {
   }
 
   public void close() {
-    if (selfPool)
-      threadPool.shutdown();
+    if (selfPool) {
+      try {
+        threadPool.shutdown();
+      } catch (Exception e) {
+        LOGGER.warn("Unable to close pool");
+      }
+    }
+
+    for (ColumnFileWriter cfw : baselineColumnDiffWriters.values()) {
+      try {
+        cfw.close();
+      } catch (Exception e) {
+        LOGGER.warn("Unable to close baseline diff column writer", e);
+      }
+    }
     for (TableWriter table : tableWriters.values()) {
       try {
         table.close();
@@ -302,6 +316,15 @@ public class ArmorWriter implements Closeable {
     if (entities == null || entities.isEmpty())
       return;
 
+    // Do a validation which are 
+    // a) Not diffing itself
+    // b) Not diffing current month interval.
+    String baselineIntervalStart = baselineInterval.getIntervalStart(baselineTimestamp);
+    String targetIntervalStart = targetInterval.getIntervalStart(targetTimestamp);
+    if (baselineIntervalStart.equals(targetIntervalStart) && baselineInterval.equals(targetInterval)) {
+       throw new RuntimeException("Cannot diff the same interval/starts to each other");
+    }
+    
     String plusTable = DiffTableName.generatePlusTableDiffName(table, targetInterval, columnId);
     String minusTable = DiffTableName.generateMinusTableDiffName(table, targetInterval, columnId);
     
@@ -372,7 +395,6 @@ public class ArmorWriter implements Closeable {
     }
 
     int plusNumShards = plusShardsToUpdates.size();
-    ConcurrentHashMap<Integer, ColumnFileWriter> baselineColumnFiles = new ConcurrentHashMap<>();
     ExecutorCompletionService<Void> plusEcs = new ExecutorCompletionService<>(threadPool);
     for (Map.Entry<ShardId, List<Entity>> entry : plusShardsToUpdates.entrySet()) {
       plusEcs.submit(
@@ -387,12 +409,12 @@ public class ArmorWriter implements Closeable {
                 ShardId baselineShardId = ShardId.buildShardId(tenant, table, baselineInterval, baselineTimestamp, targetShardId.getShardNum());
                 baselineShardId.setTable(table);
                 ColumnShardId baselineColumnShardId = new ColumnShardId(baselineShardId, columnId);
-                ColumnFileWriter baselineColumnFile = baselineColumnFiles.get(baselineShardId.getShardNum());
-                if (baselineColumnFile == null && store.columnShardIdExists(baselineColumnShardId)) {
-                  baselineColumnFile = store.loadColumnWriter(baselineColumnShardId);
-                  baselineColumnFiles.put(baselineShardId.getShardNum(), baselineColumnFile);
+                ColumnFileWriter baselineColumnWriter = baselineColumnDiffWriters.get(baselineShardId);
+                if (baselineColumnWriter == null && store.columnShardIdExists(baselineColumnShardId)) {                  
+                  baselineColumnWriter = store.loadColumnWriter(baselineColumnShardId);
+                  baselineColumnDiffWriters.put(baselineShardId, baselineColumnWriter);
                 }
-                shardDiffWriter = plusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineColumnFile, true, columnId, store, compress, compactionTrigger));
+                shardDiffWriter = plusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineColumnWriter, true, columnId, store, compress, compactionTrigger));
               }
 
               List<Entity> entityUpdates = entry.getValue();
@@ -441,12 +463,12 @@ public class ArmorWriter implements Closeable {
               if (shardDiffWriter == null) {
                 ShardId baselineShardId = ShardId.buildShardId(tenant, table, baselineInterval, baselineTimestamp, targetShardId.getShardNum());
                 ColumnShardId baselineColumnShardId = new ColumnShardId(baselineShardId, columnId);
-                ColumnFileWriter baselineColumnFile = baselineColumnFiles.get(baselineShardId.getShardNum());
-                if (baselineColumnFile == null && store.columnShardIdExists(baselineColumnShardId)) {
-                  baselineColumnFile = store.loadColumnWriter(baselineColumnShardId);
-                  baselineColumnFiles.put(baselineShardId.getShardNum(), baselineColumnFile);
+                ColumnFileWriter baselineColumnFileWriter = baselineColumnDiffWriters.get(baselineShardId);
+                if (baselineColumnFileWriter == null && store.columnShardIdExists(baselineColumnShardId)) {
+                  baselineColumnFileWriter = store.loadColumnWriter(baselineColumnShardId);
+                  baselineColumnDiffWriters.put(baselineShardId, baselineColumnFileWriter);
                 }
-                shardDiffWriter = minusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineColumnFile, false, columnId, store, compress, compactionTrigger));
+                shardDiffWriter = minusTableWriter.addShard(new ColumnShardDiffWriter(targetShardId, baselineColumnFileWriter, false, columnId, store, compress, compactionTrigger));
               }
 
               List<Entity> entityUpdates = entry.getValue();

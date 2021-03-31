@@ -8,7 +8,6 @@ import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.PathBuilder;
 
 public class ShardId {
-
   private String table;
   private String tenant;
   private String interval;
