@@ -3,6 +3,7 @@ package com.rapid7.armor.write.writers;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.attribute.FileAttribute;
 
 public class TempFileUtil {
@@ -14,7 +15,12 @@ public class TempFileUtil {
   }
   
   public Path getTempFileLocation() {
-    return tempFileLocation;
+    if (tempFileLocation != null)
+      return tempFileLocation;
+    String tmpDir = System.getProperty("java.io.tmpdir");
+    if (tmpDir == null)
+      return null;
+    return Paths.get(tmpDir);
   }
 
   public static Path createTempFile(String prefix, String suffix, FileAttribute<?>... attrs) throws IOException {
