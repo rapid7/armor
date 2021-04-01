@@ -422,6 +422,7 @@ public class FileStoreV2Test {
     TempFileUtil.setTempFileLocation(targetTempPath);
     
     try {
+      // Baseline is first firstEntity with 2 instances
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities1 = new ArrayList<>();
@@ -431,6 +432,7 @@ public class FileStoreV2Test {
         writer.commit(xact, TENANT, TABLE);
       }
       
+      // Subtract an instance
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities1 = new ArrayList<>();
@@ -443,6 +445,7 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
       verifyTableReaderPOV(0, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
       
+      // Evens out
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities1 = new ArrayList<>();
@@ -455,6 +458,7 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(0, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
       verifyTableReaderPOV(0, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 1, Arrays.asList(columnScope));
       
+      // Subtract an entity and add 2 from new entity
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities = new ArrayList<>();
@@ -470,6 +474,8 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       verifyTableReaderPOV(2, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       
+      
+      // Nothing happens
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities = new ArrayList<>();
@@ -484,10 +490,11 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       verifyTableReaderPOV(2, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       
+      // Only change entity 2 to go down by one with a NULL value
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities = new ArrayList<>();
-        Entity entity2 = generateEntity("secondEntity", 1, new Row[0]);
+        Entity entity2 = generateEntity("secondEntity", 1, new Row[0]); // This is a NULL value.
         entities.add(entity2);
         writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, entities);
         writer.commit(xact, TENANT, TABLE);
@@ -496,10 +503,11 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       verifyTableReaderPOV(1, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       
+      // Only change entity 1 with same number but 1 different vuln
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities = new ArrayList<>();
-        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln, zonaVuln});
+        Entity entity1 = generateEntity("firstEntity", 1, new Row[] {texasVuln, zonaVuln}); // Not cali anymore
         entities.add(entity1);
         writer.writeDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, entities);
         writer.commit(xact, TENANT, TABLE);
@@ -508,6 +516,7 @@ public class FileStoreV2Test {
       verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       verifyTableReaderPOV(2, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       
+      // Change back to 1
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
         String xact = writer.startTransaction();
         List<Entity> entities = new ArrayList<>();
@@ -518,6 +527,16 @@ public class FileStoreV2Test {
       }
       
       verifyTableReaderPOV(1, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      verifyTableReaderPOV(1, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
+      
+      // Delete entity 1
+      try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.ZSTD, 10, null, null)) {
+        String xact = writer.startTransaction();
+        writer.deleteDiff(xact, TENANT, TABLE, Interval.WEEKLY, baseLineWeek, Interval.WEEKLY, targetWeek, columnScope, "firstEntity", 2, null);
+        writer.commit(xact, TENANT, TABLE);
+      }
+      
+      verifyTableReaderPOV(2, minusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       verifyTableReaderPOV(1, plusTable, Interval.WEEKLY, targetWeek, testDirectory, 2, Arrays.asList(columnScope));
       
       // Verify the tmp file is empty

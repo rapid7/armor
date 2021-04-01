@@ -9,7 +9,11 @@ import java.util.Objects;
 public class Column {
   private ColumnId columnId;
   private List<Object> values = new ArrayList<>();
+  private boolean returnNull = true;
 
+  public void returnNull(boolean returnNull) {
+    this.returnNull = returnNull;
+  }
   public Column() {}
 
   public Column(ColumnId columnId) {
@@ -55,8 +59,12 @@ public class Column {
   }
 
   public Object[] values() {
-    if (values == null || values.isEmpty())
-      return new Object[] {null};    // Never return zero rows always have one row.
+    if (values == null || values.isEmpty()) {
+      if (returnNull)
+        return new Object[] {null};    // Never return zero rows always have one row.
+      else
+        return new Object[] {};
+    }
     return values.toArray();
   }
 

@@ -1,6 +1,7 @@
 package com.rapid7.armor.write.writers;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.file.NoSuchFileException;
 import java.time.Instant;
@@ -216,6 +217,81 @@ public class ArmorWriter implements Closeable {
     sw.delete(transaction, entityId, version, instanceId);
   }
   
+  public void deleteDiff(
+    String transaction,
+    String tenant,
+    String table,
+    Interval baselineInterval,
+    Instant baselineTimestamp,
+    Interval targetInterval,
+    Instant targetTimestamp,
+    ColumnId diffColumn,
+    Object entityId,
+    long version,
+    String instanceId) {
+    String plusTable = DiffTableName.generatePlusTableDiffName(table, targetInterval, diffColumn);
+    String minusTable = DiffTableName.generateMinusTableDiffName(table, targetInterval, diffColumn);
+    TableId baseTableId = new TableId(tenant, table);
+    Set<TableId> test = diffTableWriters.get(baseTableId);
+    if (test == null) {
+      test = new HashSet<>();
+      diffTableWriters.put(baseTableId, test);
+    }
+    TableId plusTableId = new TableId(tenant, plusTable);
+    TableId minusTableId = new TableId(tenant, minusTable);
+    test.add(plusTableId);
+    test.add(minusTableId);
+    delete(transaction, tenant, plusTable, targetInterval, targetTimestamp, entityId, version, instanceId);
+
+    // Minus is a special case where we need to add records completely based on the baseline column. Most important we cannot 
+    // mark the asset record as deleted, otherwise it won't account for minuses.
+    final TableWriter minusTableWriter;
+    if (!tableWriters.containsKey(minusTableId)) {
+      TableMetadata tableMeta = store.getTableMetadata(tenant, minusTable);
+      if (tableMeta != null) {
+        // Make sure the entityid column hasn't changed.
+        minusTableWriter = getTableWriter(minusTableId);
+
+        String entityIdColumn = tableMeta.getEntityColumnId();
+        tableEntityColumnIds.put(minusTableId, toColumnId(tableMeta)); 
+      } else {
+        // There is no minus table
+        return;
+      }
+    } else {
+      minusTableWriter = getTableWriter(minusTableId);
+    }
+    
+    ShardId targetShardId = store.findShardId(tenant, minusTable, targetInterval, targetTimestamp, entityId);
+    IShardWriter shardDiffWriter = minusTableWriter.getShard(targetShardId);
+    if (shardDiffWriter == null) {
+      ShardId baselineShardId = ShardId.buildShardId(tenant, table, baselineInterval, baselineTimestamp, targetShardId.getShardNum());
+      ColumnShardId baselineColumnShardId = new ColumnShardId(baselineShardId, diffColumn);
+      ColumnFileWriter baselineColumnFileWriter = baselineColumnDiffWriters.get(baselineShardId);
+      if (baselineColumnFileWriter == null && store.columnShardIdExists(baselineColumnShardId)) {
+        baselineColumnFileWriter = store.loadColumnWriter(baselineColumnShardId);
+        baselineColumnDiffWriters.put(baselineShardId, baselineColumnFileWriter);
+      }
+      shardDiffWriter = minusTableWriter.addShard(new ColumnShardDiffWriter(
+          targetShardId,
+          baselineColumnFileWriter,
+          false,
+          diffColumn,
+          store,
+          compress,
+          compactionTrigger));
+    }
+
+    Column column = new Column(diffColumn);
+    column.returnNull(false);
+    WriteRequest internalRequest = new WriteRequest(entityId, version, instanceId, column);
+    try {
+      shardDiffWriter.write(transaction, diffColumn, Arrays.asList(internalRequest));
+    } catch (IOException ioe) {
+      throw new RuntimeException(ioe);
+    }
+  }
+  
   public synchronized TableWriter getTableWriter(TableId tableId) {
     TableWriter existing = tableWriters.get(tableId);
     if (existing == null) {
@@ -289,40 +365,6 @@ public class ArmorWriter implements Closeable {
           shardIdSrc
       );
     }
-  }
-
-  public void deleteDiff(
-    String transaction,
-    String tenant,
-    String table,
-    Interval baselineInterval,
-    Instant baselineTimestamp,
-    Interval targetInterval,
-    Instant targetTimestamp,
-    ColumnId diffColumn,
-    Object entityId,
-    long version,
-    String instanceId) {
-    
-    TableId tableId = new TableId(tenant, table);
-    
-    ColumnId entityIdColumn = tableEntityColumnIds.get(tableId);
-    if (entityIdColumn == null) {
-      // If it is null then table doesn't exist yet which means we can just return.
-      TableMetadata tableMeta = store.getTableMetadata(tenant, table);
-      if (tableMeta == null)
-        return;
-      else {
-        entityIdColumn = toColumnId(tableMeta);
-        tableEntityColumnIds.put(tableId, entityIdColumn);
-      }
-    }
-
-    List<Entity> deletedEntities = new ArrayList<>();
-    List<ColumnId> schema = Arrays.asList(diffColumn);
-    Entity entity = new Entity(entityIdColumn.getName(), entityId, version, instanceId, schema);
-    deletedEntities.add(entity);
-    writeDiff(transaction, tenant, table, baselineInterval, baselineTimestamp, targetInterval, targetTimestamp, diffColumn, deletedEntities);
   }
 
   /**
@@ -505,7 +547,13 @@ public class ArmorWriter implements Closeable {
                   baselineColumnDiffWriters.put(baselineShardId, baselineColumnFileWriter);
                 }
                 shardDiffWriter = minusTableWriter.addShard(new ColumnShardDiffWriter(
-                    targetShardId, baselineColumnFileWriter, false, diffColumn, store, compress, compactionTrigger));
+                    targetShardId,
+                    baselineColumnFileWriter,
+                    false,
+                    diffColumn,
+                    store,
+                    compress,
+                    compactionTrigger));
               }
 
               List<Entity> entityUpdates = entry.getValue();
