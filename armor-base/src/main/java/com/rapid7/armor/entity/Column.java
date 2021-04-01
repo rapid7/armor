@@ -9,10 +9,10 @@ import java.util.Objects;
 public class Column {
   private ColumnId columnId;
   private List<Object> values = new ArrayList<>();
-  private boolean returnNull = true;
+  private boolean defaultToNullForEmpty = true;
 
-  public void returnNull(boolean returnNull) {
-    this.returnNull = returnNull;
+  public void defaultToNullForEmpty(boolean defaultToNullForEmpty) {
+    this.defaultToNullForEmpty = defaultToNullForEmpty;
   }
   public Column() {}
 
@@ -60,10 +60,10 @@ public class Column {
 
   public Object[] values() {
     if (values == null || values.isEmpty()) {
-      if (returnNull)
+      if (defaultToNullForEmpty)
         return new Object[] {null};    // Never return zero rows always have one row.
       else
-        return new Object[] {};
+        return new Object[] {};        // Special case to return zero.
     }
     return values.toArray();
   }

@@ -283,7 +283,7 @@ public class ArmorWriter implements Closeable {
     }
 
     Column column = new Column(diffColumn);
-    column.returnNull(false);
+    column.defaultToNullForEmpty(false);
     WriteRequest internalRequest = new WriteRequest(entityId, version, instanceId, column);
     try {
       shardDiffWriter.write(transaction, diffColumn, Arrays.asList(internalRequest));
