@@ -26,9 +26,11 @@ public interface WriteStore {
   /**
    * Returns a list of all tenants stored.
    *
+   * @param useCache If avail use a cached list of tenants.
+   *
    * @return A list of all tenant store.
    */
-  List<String> getTenants();
+  List<String> getTenants(boolean useCache);
   /**
    * Delete a tenant.
    *

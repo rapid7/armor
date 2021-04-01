@@ -61,6 +61,7 @@ public class S3WriteStore implements WriteStore {
   private final ShardStrategy shardStrategy;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final String INTERVAL_TAG = "interval";
+  private static final Set<String> tenantCache = new HashSet<>();
   
   public S3WriteStore(AmazonS3 s3Client, String bucket, ShardStrategy shardStrategy) {
     this.s3Client = s3Client;
@@ -382,6 +383,7 @@ public class S3WriteStore implements WriteStore {
     if (status != null)
       status.validateXact(transaction);
     saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
+    trackTenant(shardId.getTenant());
     try {
       if (status == null || status.getPrevious() == null)
         return;
@@ -563,18 +565,40 @@ public class S3WriteStore implements WriteStore {
   }
   
   @Override
-  public List<String> getTenants() {
-    ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter(Constants.STORE_DELIMETER);
+  public List<String> getTenants(boolean useCache) {
+    if (useCache) {
+      ListObjectsV2Request lor = new ListObjectsV2Request()
+          .withBucketName(bucket)
+          .withPrefix(StoreConstants.TENANT_CACHE_DIR)
+          .withMaxKeys(10000);
     
-    Set<String> allPrefixes = new HashSet<>();
-    ListObjectsV2Result result;
-    do {
-      result = s3Client.listObjectsV2(lor);
-      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
-      lor.setContinuationToken(result.getNextContinuationToken());
-    } while (result.isTruncated());
-    return new ArrayList<>(allPrefixes);
+      Set<String> orgs = new HashSet<>();
+      ListObjectsV2Result result;
+      do {
+        result = s3Client.listObjectsV2(lor);
+        for (S3ObjectSummary summary : result.getObjectSummaries()) {
+          orgs.add(Paths.get(summary.getKey()).getFileName().toString());
+        }
+        lor.setContinuationToken(result.getNextContinuationToken());
+      } while (result.isTruncated());
+      return orgs.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+    } else {
+      ListObjectsV2Request lor = new ListObjectsV2Request()
+          .withBucketName(bucket)
+          .withDelimiter(Constants.STORE_DELIMETER)
+          .withMaxKeys(10000);
+  
+      Set<String> allPrefixes = new HashSet<>();
+      ListObjectsV2Result result;
+      do {
+        result = s3Client.listObjectsV2(lor);
+        allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
+        lor.setContinuationToken(result.getNextContinuationToken());
+      } while (result.isTruncated());
+      List<String> tenants = allPrefixes.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(toList());
+      tenantCache.addAll(tenants);
+      return tenants;
+    }
   }
   
   private String resolveCurrentPath(String tenant, String table) {
@@ -687,6 +711,18 @@ public class S3WriteStore implements WriteStore {
       }
     }
     throw new IllegalStateException("Should not have dropped into this section");
+  }
+  
+  private void trackTenant(String tenant) {
+    if (!tenantCache.contains(tenant)) {
+      String key = PathBuilder.buildPath(StoreConstants.TENANT_CACHE_DIR, tenant);
+      InputStream inputStream = new ByteArrayInputStream(new byte[0]);
+      ObjectMetadata metadata = new ObjectMetadata();
+      metadata.setContentLength(0L);
+      
+      s3Client.putObject(new PutObjectRequest(bucket, key, inputStream, metadata));
+      tenantCache.add(tenant);
+    }
   }
 
   @Override
