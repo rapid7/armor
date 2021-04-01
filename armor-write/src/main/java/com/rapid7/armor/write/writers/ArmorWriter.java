@@ -241,18 +241,18 @@ public class ArmorWriter implements Closeable {
     TableId minusTableId = new TableId(tenant, minusTable);
     test.add(plusTableId);
     test.add(minusTableId);
+    
+    // Plus is simple for delete, just delete it.
     delete(transaction, tenant, plusTable, targetInterval, targetTimestamp, entityId, version, instanceId);
 
     // Minus is a special case where we need to add records completely based on the baseline column. Most important we cannot 
-    // mark the asset record as deleted, otherwise it won't account for minuses.
+    // mark the entity as deleted, otherwise it won't account for minuses.
     final TableWriter minusTableWriter;
     if (!tableWriters.containsKey(minusTableId)) {
       TableMetadata tableMeta = store.getTableMetadata(tenant, minusTable);
       if (tableMeta != null) {
         // Make sure the entityid column hasn't changed.
         minusTableWriter = getTableWriter(minusTableId);
-
-        String entityIdColumn = tableMeta.getEntityColumnId();
         tableEntityColumnIds.put(minusTableId, toColumnId(tableMeta)); 
       } else {
         // There is no minus table
@@ -283,6 +283,8 @@ public class ArmorWriter implements Closeable {
     }
 
     Column column = new Column(diffColumn);
+    // Must have this otherwise it will return 1 row of null value, we want zero rows
+    // for when it does its diffing portion.
     column.defaultToNullForEmpty(false);
     WriteRequest internalRequest = new WriteRequest(entityId, version, instanceId, column);
     try {

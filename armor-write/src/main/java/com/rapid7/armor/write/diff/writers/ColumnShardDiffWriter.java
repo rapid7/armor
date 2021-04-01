@@ -42,7 +42,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
   private ColumnId diffColumnId;
 
   private ColumnFileWriter baselineColumnFile;
-  private boolean plus = false;
+  private boolean forPluses = false;
   
   private final ShardId targetShardId;
   private final ColumnShardId targetColumnShardId;
@@ -58,7 +58,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
   public ColumnShardDiffWriter(
     ShardId targetShardId,
     ColumnFileWriter baselineColumnFile,
-    boolean plus,
+    boolean forPluses,
     ColumnId diffColumnId,
     WriteStore store,
     Compression compress,
@@ -70,7 +70,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
       this.compactionTrigger = () -> 90;
     else
       this.compactionTrigger = compactionTriggerSupplier;
-    this.plus = plus;
+    this.forPluses = forPluses;
     this.diffColumnId = diffColumnId;
     targetColumnShardId = new ColumnShardId(targetShardId, diffColumnId);
     
@@ -129,7 +129,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
   }
 
   public void delete(String transaction, Object entity, long version, String instanceId) {
-    if (plus)
+    if (forPluses)
       targetColumnFile.delete(transaction, entity, version, instanceId);
     else {
       if (baselineColumnFile != null) {
@@ -138,10 +138,10 @@ public class ColumnShardDiffWriter implements IShardWriter {
           Integer entityId = baselineColumnFile.getEntityId(entity);
           EntityRecord baselineEr = entityId != null ? baselineColumnFile.getEntites().get(entityId) : null;
           if (baselineEr != null) {
-            Set<Object> removedBaselineValues = new HashSet<>(baselineRgw.getEntityValues(baselineEr));
+            List<Object> removedBaselineValues = baselineRgw.getEntityValues(baselineEr);
             WriteRequest wr = new WriteRequest(entityId, version, instanceId, new Column(diffColumnId));
             if (!removedBaselineValues.isEmpty()) {
-              wr.getColumn().setValues(new ArrayList<>(removedBaselineValues));
+              wr.getColumn().setValues(removedBaselineValues);
               targetColumnFile.write(transaction, Arrays.asList(wr));
             } else {
               // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
@@ -161,7 +161,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
 
   public void writeDiff(String transaction, List<WriteRequest> writeRequests) throws IOException {
     if (baselineColumnFile == null) {
-      if (plus) {
+      if (forPluses) {
         for (WriteRequest wr : writeRequests) {
           Set<Object> newValues = new HashSet<>(wr.getColumn().getValues());
           wr.getColumn().setValues(new ArrayList<>(newValues));
@@ -175,7 +175,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
         Integer entityId = baselineColumnFile.getEntityId(wr.getEntityId());
         EntityRecord baselineEr = entityId != null ? baselineColumnFile.getEntites().get(entityId) : null;
         if (baselineEr != null) {
-          if (plus) {
+          if (forPluses) {
             Set<Object> baseLineValues = new HashSet<>(baselineRgw.getEntityValues(baselineEr));
             Set<Object> newTargetValues2 = new HashSet<>(wr.getColumn().getValues());
             newTargetValues2.removeAll(baseLineValues);
@@ -207,7 +207,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
               }
             }
           }          
-        } else if (plus) {
+        } else if (forPluses) {
           Set<Object> newValues = new HashSet<>(wr.getColumn().getValues());
           wr.getColumn().setValues(new ArrayList<>(newValues));
           toWrite.add(wr);
