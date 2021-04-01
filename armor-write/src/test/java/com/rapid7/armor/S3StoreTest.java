@@ -477,6 +477,9 @@ public class S3StoreTest {
       S3ReadStore s3ReadStore = new S3ReadStore(client, TEST_BUCKET);
       List<String> tenants = s3ReadStore.getTenants(true);
       assertEquals(Arrays.asList(org1, org2), tenants);
+      
+      tenants = writeStore.getTenants();
+      assertEquals(Arrays.asList(org1, org2), tenants);
     }
   }
 }

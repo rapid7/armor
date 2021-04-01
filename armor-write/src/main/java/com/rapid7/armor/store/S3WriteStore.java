@@ -566,17 +566,21 @@ public class S3WriteStore implements WriteStore {
   
   @Override
   public List<String> getTenants() {
-    ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-    lor.withDelimiter(Constants.STORE_DELIMETER);
+    ListObjectsV2Request lor = new ListObjectsV2Request()
+        .withBucketName(bucket)
+        .withPrefix(StoreConstants.TENANT_CACHE_DIR)
+        .withMaxKeys(10000);
     
-    Set<String> allPrefixes = new HashSet<>();
+    Set<String> orgs = new HashSet<>();
     ListObjectsV2Result result;
     do {
       result = s3Client.listObjectsV2(lor);
-      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
+      for (S3ObjectSummary summary : result.getObjectSummaries()) {
+        orgs.add(Paths.get(summary.getKey()).getFileName().toString());
+      }
       lor.setContinuationToken(result.getNextContinuationToken());
     } while (result.isTruncated());
-    return new ArrayList<>(allPrefixes);
+    return orgs.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
   }
   
   private String resolveCurrentPath(String tenant, String table) {
