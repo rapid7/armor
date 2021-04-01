@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,10 +39,10 @@ import com.rapid7.armor.write.writers.IShardWriter;
 public class ColumnShardDiffWriter implements IShardWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ColumnShardDiffWriter.class);
   private final WriteStore store;
-  private ColumnId columnId;
+  private ColumnId diffColumnId;
 
   private ColumnFileWriter baselineColumnFile;
-  private boolean diffForNew = false;
+  private boolean forPluses = false;
   
   private final ShardId targetShardId;
   private final ColumnShardId targetColumnShardId;
@@ -57,8 +58,8 @@ public class ColumnShardDiffWriter implements IShardWriter {
   public ColumnShardDiffWriter(
     ShardId targetShardId,
     ColumnFileWriter baselineColumnFile,
-    boolean diffForNew,
-    ColumnId columnId,
+    boolean forPluses,
+    ColumnId diffColumnId,
     WriteStore store,
     Compression compress,
     Supplier<Integer> compactionTriggerSupplier) {
@@ -69,8 +70,9 @@ public class ColumnShardDiffWriter implements IShardWriter {
       this.compactionTrigger = () -> 90;
     else
       this.compactionTrigger = compactionTriggerSupplier;
-    this.diffForNew = diffForNew;
-    targetColumnShardId = new ColumnShardId(targetShardId, columnId);
+    this.forPluses = forPluses;
+    this.diffColumnId = diffColumnId;
+    targetColumnShardId = new ColumnShardId(targetShardId, diffColumnId);
     
     targetColumnFile = store.loadColumnWriter(targetColumnShardId);
     this.baselineColumnFile = baselineColumnFile;
@@ -80,13 +82,13 @@ public class ColumnShardDiffWriter implements IShardWriter {
     try {
       targetColumnFile.close();
     } catch (Exception e) {
-      LOGGER.warn("Unable to close column {}", columnId, e);
+      LOGGER.warn("Unable to close column {}", diffColumnId, e);
     }
     if (baselineColumnFile != null) {
       try {
         baselineColumnFile.close();
       } catch (Exception e) {
-        LOGGER.warn("Unable to close column {}", columnId, e);
+        LOGGER.warn("Unable to close column {}", diffColumnId, e);
       }
     }
   }
@@ -127,12 +129,39 @@ public class ColumnShardDiffWriter implements IShardWriter {
   }
 
   public void delete(String transaction, Object entity, long version, String instanceId) {
-    targetColumnFile.delete(transaction, entity, version, instanceId);
+    if (forPluses)
+      targetColumnFile.delete(transaction, entity, version, instanceId);
+    else {
+      if (baselineColumnFile != null) {
+        try {
+          RowGroupWriter baselineRgw = baselineColumnFile.getRowGroupWriter();
+          Integer entityId = baselineColumnFile.getEntityId(entity);
+          EntityRecord baselineEr = entityId != null ? baselineColumnFile.getEntites().get(entityId) : null;
+          if (baselineEr != null) {
+            List<Object> removedBaselineValues = baselineRgw.getEntityValues(baselineEr);
+            WriteRequest wr = new WriteRequest(entityId, version, instanceId, new Column(diffColumnId));
+            if (!removedBaselineValues.isEmpty()) {
+              wr.getColumn().setValues(removedBaselineValues);
+              targetColumnFile.write(transaction, Arrays.asList(wr));
+            } else {
+              // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
+              // If so then we should DELETE so that there is no entry.
+              EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
+              if (targetEr != null && targetEr.getDeleted() == 0) {
+                targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
+              }
+            }           
+          }
+        } catch (IOException ioe) {
+          throw new RuntimeException(ioe);
+        }
+      }
+    }
   }
 
   public void writeDiff(String transaction, List<WriteRequest> writeRequests) throws IOException {
     if (baselineColumnFile == null) {
-      if (diffForNew) {
+      if (forPluses) {
         for (WriteRequest wr : writeRequests) {
           Set<Object> newValues = new HashSet<>(wr.getColumn().getValues());
           wr.getColumn().setValues(new ArrayList<>(newValues));
@@ -140,14 +169,14 @@ public class ColumnShardDiffWriter implements IShardWriter {
         targetColumnFile.write(transaction, writeRequests);
       }
     } else {
-      RowGroupWriter rgw = baselineColumnFile.getRowGroupWriter();
+      RowGroupWriter baselineRgw = baselineColumnFile.getRowGroupWriter();
       List<WriteRequest> toWrite = new ArrayList<>();
       for (WriteRequest wr : writeRequests) {
         Integer entityId = baselineColumnFile.getEntityId(wr.getEntityId());
-        EntityRecord er = entityId != null ? baselineColumnFile.getEntites().get(entityId) : null;
-        if (er != null) {
-          if (diffForNew) {
-            Set<Object> baseLineValues = new HashSet<>(rgw.getEntityValues(er));
+        EntityRecord baselineEr = entityId != null ? baselineColumnFile.getEntites().get(entityId) : null;
+        if (baselineEr != null) {
+          if (forPluses) {
+            Set<Object> baseLineValues = new HashSet<>(baselineRgw.getEntityValues(baselineEr));
             Set<Object> newTargetValues2 = new HashSet<>(wr.getColumn().getValues());
             newTargetValues2.removeAll(baseLineValues);
             if (!newTargetValues2.isEmpty()) {
@@ -163,7 +192,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
             }
               
           } else {
-            Set<Object> removedBaselineValues = new HashSet<>(rgw.getEntityValues(er));
+            Set<Object> removedBaselineValues = new HashSet<>(baselineRgw.getEntityValues(baselineEr));
             Set<Object> targetValues = new HashSet<>(wr.getColumn().getValues());
             removedBaselineValues.removeAll(targetValues);
             if (!removedBaselineValues.isEmpty()) {
@@ -178,7 +207,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
               }
             }
           }          
-        } else if (diffForNew) {
+        } else if (forPluses) {
           Set<Object> newValues = new HashSet<>(wr.getColumn().getValues());
           wr.getColumn().setValues(new ArrayList<>(newValues));
           toWrite.add(wr);
