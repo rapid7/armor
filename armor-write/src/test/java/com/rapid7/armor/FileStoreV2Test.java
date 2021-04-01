@@ -406,6 +406,14 @@ public class FileStoreV2Test {
     }
   }
   
+  
+  @Test
+  public void diffTableTestEdge() {
+     // Delete table when nothing is there.
+    
+    
+  }
+  
   @Test
   public void diffTableTest() throws IOException {
     Path testDirectory = Files.createTempDirectory("filestore");

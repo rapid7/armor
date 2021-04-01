@@ -379,7 +379,7 @@ public class ArmorWriter implements Closeable {
    * @param baselineTimestamp The timestamp to diff against.
    * @param targetInterval The interval to write too against.
    * @param targetTimestamp The timestamp to write too.
-   * @param columnId The choosen column id for the diff.
+   * @param diffColumn The choosen column id for the diff.
    * @param entities The entites to diff against.
    */
   public void writeDiff(
