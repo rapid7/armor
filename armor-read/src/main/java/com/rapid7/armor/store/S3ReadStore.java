@@ -42,7 +42,6 @@ public class S3ReadStore implements ReadStore {
   private final AmazonS3 s3Client;
   private final String bucket;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final String TENANT_EXCLUDE_FILTER_PREFIX = "__";
 
   public S3ReadStore(AmazonS3 s3Client, String bucket) {
     this.s3Client = s3Client;
@@ -221,9 +220,8 @@ public class S3ReadStore implements ReadStore {
       // Query a cache directory of tenants
       ListObjectsV2Request lor = new ListObjectsV2Request()
           .withBucketName(bucket)
-          .withPrefix(StoreConstants.CACHE_DIR)
+          .withPrefix(StoreConstants.TENANT_CACHE_DIR)
           .withMaxKeys(10000);
-      lor.withDelimiter(Constants.STORE_DELIMETER);
       
       Set<String> orgs = new HashSet<>();
       ListObjectsV2Result result;
@@ -234,7 +232,7 @@ public class S3ReadStore implements ReadStore {
         }
         lor.setContinuationToken(result.getNextContinuationToken());
       } while (result.isTruncated());
-      return orgs.stream().filter(t -> !t.startsWith(TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+      return orgs.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
     } else {
       ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
       lor.withDelimiter(Constants.STORE_DELIMETER);
@@ -246,7 +244,7 @@ public class S3ReadStore implements ReadStore {
         allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
         lor.setContinuationToken(result.getNextContinuationToken());
       } while (result.isTruncated());
-      return allPrefixes.stream().filter(t -> !t.startsWith(TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+      return allPrefixes.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
     }
   }
 

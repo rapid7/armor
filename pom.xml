@@ -4,7 +4,7 @@
 
     <groupId>com.rapid7</groupId>
     <artifactId>armor-parent</artifactId>
-    <version>0.0.19-SNAPSHOT</version>
+    <version>0.0.21-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>armor</name>
