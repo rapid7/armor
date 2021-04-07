@@ -26,7 +26,7 @@ public interface WriteStore {
   /**
    * Returns a list of all tenants stored.
    *
-   * @param useCache If avail use a cached list of tenants.
+   * @param useCache attempt to use a cached list of tenants.
    *
    * @return A list of all tenant store.
    */

@@ -596,7 +596,7 @@ public class S3WriteStore implements WriteStore {
         lor.setContinuationToken(result.getNextContinuationToken());
       } while (result.isTruncated());
       List<String> tenants = allPrefixes.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(toList());
-      tenantCache.addAll(tenants);
+      tenants.forEach(this::trackTenant);
       return tenants;
     }
   }

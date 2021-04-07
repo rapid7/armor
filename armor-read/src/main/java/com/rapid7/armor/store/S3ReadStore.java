@@ -17,13 +17,17 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -217,37 +221,49 @@ public class S3ReadStore implements ReadStore {
   @Override
   public List<String> getTenants(boolean useCache) {
     if (useCache) {
-      // Query a cache directory of tenants
-      ListObjectsV2Request lor = new ListObjectsV2Request()
-          .withBucketName(bucket)
-          .withPrefix(StoreConstants.TENANT_CACHE_DIR)
-          .withMaxKeys(10000);
-      
-      Set<String> orgs = new HashSet<>();
-      ListObjectsV2Result result;
-      do {
-        result = s3Client.listObjectsV2(lor);
-        for (S3ObjectSummary summary : result.getObjectSummaries()) {
-          orgs.add(Paths.get(summary.getKey()).getFileName().toString());
-        }
-        lor.setContinuationToken(result.getNextContinuationToken());
-      } while (result.isTruncated());
-      return orgs.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+      List<String> tenantsInCache = listTenantsFromCache();
+      return tenantsInCache.isEmpty() ? listTenantsFromBucket() : tenantsInCache;
     } else {
-      ListObjectsV2Request lor = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(10000);
-      lor.withDelimiter(Constants.STORE_DELIMETER);
-      
-      Set<String> allPrefixes = new HashSet<>();
-      ListObjectsV2Result result;
-      do {
-        result = s3Client.listObjectsV2(lor);
-        allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
-        lor.setContinuationToken(result.getNextContinuationToken());
-      } while (result.isTruncated());
-      return allPrefixes.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+      return listTenantsFromBucket();
     }
   }
 
+  private List<String> listTenantsFromBucket() {
+    ListObjectsV2Request lor = new ListObjectsV2Request()
+        .withBucketName(bucket)
+        .withMaxKeys(10000)
+        .withDelimiter(Constants.STORE_DELIMETER);
+    
+    Set<String> allPrefixes = new HashSet<>();
+    ListObjectsV2Result result;
+    do {
+      result = s3Client.listObjectsV2(lor);
+      allPrefixes.addAll(result.getCommonPrefixes().stream().map(o -> o.replace(Constants.STORE_DELIMETER, "")).collect(Collectors.toList()));
+      lor.setContinuationToken(result.getNextContinuationToken());
+    } while (result.isTruncated());
+    List<String> tenants = allPrefixes.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+    tenants.forEach(this::trackTenant);
+    return tenants;
+  }
+  
+  private List<String> listTenantsFromCache() {
+    ListObjectsV2Request lor = new ListObjectsV2Request()
+        .withBucketName(bucket)
+        .withPrefix(StoreConstants.TENANT_CACHE_DIR)
+        .withMaxKeys(10000);
+    
+    Set<String> orgs = new HashSet<>();
+    ListObjectsV2Result result;
+    do {
+      result = s3Client.listObjectsV2(lor);
+      for (S3ObjectSummary summary : result.getObjectSummaries()) {
+        orgs.add(Paths.get(summary.getKey()).getFileName().toString());
+      }
+      lor.setContinuationToken(result.getNextContinuationToken());
+    } while (result.isTruncated());
+    return orgs.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
+  }
+  
   @Override
   public ColumnId getColumnId(String tenant, String table, Interval interval, Instant timestamp, String columnName) {
     List<ColumnId> columnIds = getColumnIds(tenant, table, interval, timestamp);
@@ -458,5 +474,14 @@ public class S3ReadStore implements ReadStore {
       }
     }
     throw new IllegalStateException("Should not have dropped into this section");
+  }
+  
+  private void trackTenant(String tenant) {
+    String key = PathBuilder.buildPath(StoreConstants.TENANT_CACHE_DIR, tenant);
+    InputStream inputStream = new ByteArrayInputStream(new byte[0]);
+    ObjectMetadata metadata = new ObjectMetadata();
+    metadata.setContentLength(0L);
+    
+    s3Client.putObject(new PutObjectRequest(bucket, key, inputStream, metadata));
   }
 }
