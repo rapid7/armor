@@ -6,6 +6,7 @@ import com.rapid7.armor.io.FixedCapacityByteBufferPool;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.write.EntityOffsetException;
+import com.rapid7.armor.write.writers.TempFileUtil;
 
 import static com.rapid7.armor.Constants.RECORD_SIZE_BYTES;
 
@@ -280,7 +281,7 @@ public class EntityIndexWriter extends FileComponent {
   public void compact(List<EntityRecord> entitiesToKeep) throws IOException {
     Map<Integer, EntityRecord> tempEntities = new HashMap<>();
     Map<Integer, Integer> tempIndexOffsets = new HashMap<>();
-    Path path = Files.createTempFile(columnShardId.alternateString() + ENTITY_INDEX_COMPACTION_SUFFIX, ".armor");
+    Path path = TempFileUtil.createTempFile(columnShardId.alternateString() + ENTITY_INDEX_COMPACTION_SUFFIX, ".armor");
     boolean copied = false;
     ByteBuffer buffer = BYTE_BUFFER_POOL.get();
     try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {

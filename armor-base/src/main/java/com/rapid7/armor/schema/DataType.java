@@ -133,6 +133,11 @@ public enum DataType {
   
   /**
    * Traverses the given value byte buffer and return it in list format.
+   * 
+   * @param valueByteBuffer The buffer to traverse.
+   * @param length The total number of bytes to traverse.
+   * 
+   * @return The values.
    */
   public List<Object> traverseByteBufferToList(ByteBuffer valueByteBuffer, int length) {
     List<Object> values = new ArrayList<>();
