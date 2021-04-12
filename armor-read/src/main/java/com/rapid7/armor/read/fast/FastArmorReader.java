@@ -41,6 +41,15 @@ public class FastArmorReader extends BaseArmorReader {
     if (!store.shardIdExists(shardId))
       return null;
     ShardMetadata metadata = store.getShardMetadata(shardId);
+    if (metadata == null) {
+        LOGGER.error("The metadata for {} is empty", shardId);
+        throw new RuntimeException("The metadata for shard " + shardId + " is empty");
+    }
+    
+    if (metadata.getColumnMetadata() == null || metadata.getColumnMetadata().isEmpty()) {
+        LOGGER.error("The metadata for {} is has no column metadata", shardId);
+        throw new RuntimeException("The metadata for shard " + shardId + " has no column metadata");
+    }
     int numRows = metadata.getColumnMetadata().get(0).getNumRows();
 
     return new FixedValueArmorBlockReader(fixedValue, numRows);
