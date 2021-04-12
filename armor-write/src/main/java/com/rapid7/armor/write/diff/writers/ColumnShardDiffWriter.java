@@ -174,43 +174,48 @@ public class ColumnShardDiffWriter implements IShardWriter {
       for (WriteRequest wr : writeRequests) {
         Integer entityId = baselineColumnFile.getEntityId(wr.getEntityId());
         EntityRecord baselineEr = entityId != null ? baselineColumnFile.getEntites().get(entityId) : null;
-        if (baselineEr != null) {
-          if (forPluses) {
-            Set<Object> baseLineValues = new HashSet<>(baselineRgw.getEntityValues(baselineEr));
-            Set<Object> newTargetValues2 = new HashSet<>(wr.getColumn().getValues());
-            newTargetValues2.removeAll(baseLineValues);
-            if (!newTargetValues2.isEmpty()) {
-              wr.getColumn().setValues(new ArrayList<>(newTargetValues2));
-              toWrite.add(wr);
-            } else {
-              // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
-              // If so then we should DELETE so that there is no entry.
-              EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
-              if (targetEr != null && targetEr.getDeleted() == 0) {
-                targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
+        try {
+          if (baselineEr != null) {
+            if (forPluses) {
+              Set<Object> baseLineValues = new HashSet<>(baselineRgw.getEntityValues(baselineEr));
+              Set<Object> newTargetValues2 = new HashSet<>(wr.getColumn().getValues());
+              newTargetValues2.removeAll(baseLineValues);
+              if (!newTargetValues2.isEmpty()) {
+                wr.getColumn().setValues(new ArrayList<>(newTargetValues2));
+                toWrite.add(wr);
+              } else {
+                // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
+                // If so then we should DELETE so that there is no entry.
+                EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
+                if (targetEr != null && targetEr.getDeleted() == 0) {
+                  targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
+                }
               }
-            }
-              
-          } else {
-            Set<Object> removedBaselineValues = new HashSet<>(baselineRgw.getEntityValues(baselineEr));
-            Set<Object> targetValues = new HashSet<>(wr.getColumn().getValues());
-            removedBaselineValues.removeAll(targetValues);
-            if (!removedBaselineValues.isEmpty()) {
-              wr.getColumn().setValues(new ArrayList<>(removedBaselineValues));
-              toWrite.add(wr);
+                
             } else {
-              // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
-              // If so then we should DELETE so that there is no entry.
-              EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
-              if (targetEr != null && targetEr.getDeleted() == 0) {
-                targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
+              Set<Object> removedBaselineValues = new HashSet<>(baselineRgw.getEntityValues(baselineEr));
+              Set<Object> targetValues = new HashSet<>(wr.getColumn().getValues());
+              removedBaselineValues.removeAll(targetValues);
+              if (!removedBaselineValues.isEmpty()) {
+                wr.getColumn().setValues(new ArrayList<>(removedBaselineValues));
+                toWrite.add(wr);
+              } else {
+                // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
+                // If so then we should DELETE so that there is no entry.
+                EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
+                if (targetEr != null && targetEr.getDeleted() == 0) {
+                  targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
+                }
               }
-            }
-          }          
-        } else if (forPluses) {
-          Set<Object> newValues = new HashSet<>(wr.getColumn().getValues());
-          wr.getColumn().setValues(new ArrayList<>(newValues));
-          toWrite.add(wr);
+            }          
+          } else if (forPluses) {
+            Set<Object> newValues = new HashSet<>(wr.getColumn().getValues());
+            wr.getColumn().setValues(new ArrayList<>(newValues));
+            toWrite.add(wr);
+          }
+        } catch (Exception e) {
+          LOGGER.error("Detected an issue with diffing on {}", baselineColumnFile.getColumnShardId().toSimpleString(), e);
+          throw e;
         }
       }
       targetColumnFile.write(transaction, toWrite);
