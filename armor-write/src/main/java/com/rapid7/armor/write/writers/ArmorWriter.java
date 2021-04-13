@@ -535,7 +535,7 @@ public class ArmorWriter implements Closeable {
     }
     
     
-    int minusNumShards = plusShardsToUpdates.size();
+    int minusNumShards = minusShardsToUpdates.size();
     ExecutorCompletionService<Void> minusEcs = new ExecutorCompletionService<>(threadPool);
     for (Map.Entry<ShardId, List<Entity>> entry : minusShardsToUpdates.entrySet()) {
       minusEcs.submit(
