@@ -494,7 +494,13 @@ public class ArmorWriter implements Closeable {
                   baselineColumnDiffWriters.put(baselineShardId, baselineColumnWriter);
                 }
                 shardDiffWriter = plusTableWriter.addShard(new ColumnShardDiffWriter(
-                    targetShardId, baselineColumnWriter, true, diffColumn, store, compress, compactionTrigger));
+                    targetShardId,
+                    baselineColumnWriter,
+                    true,
+                    diffColumn,
+                    store,
+                    compress,
+                    compactionTrigger));
               }
 
               List<Entity> entityUpdates = entry.getValue();
@@ -699,13 +705,15 @@ public class ArmorWriter implements Closeable {
   }
   
   private void persistTable(String transaction, TableId tableId, TableWriter tableWriter) {
+    if (tableWriter == null)
+      throw new IllegalStateException("The tablewriter is null for table " + tableId + " on transcation " + transaction);
     String tenant = tableId.getTenant();
     String table = tableId.getTableName();
     CompletionService<ShardMetadata> std = new ExecutorCompletionService<>(threadPool);
     ColumnId entityColumnId = tableEntityColumnIds.get(tableId);
     TableMetadata tableMetadata = null;
     if (entityColumnId == null) {
-      tableMetadata = this.store.getTableMetadata(tableWriter.getTenant(), tableWriter.getTableName());
+      tableMetadata = store.getTableMetadata(tableWriter.getTenant(), tableWriter.getTableName());
       if (tableMetadata == null) {
         throw new RuntimeException("Unable to determine the entityid column name from store or memory, cannot commit");
       }
