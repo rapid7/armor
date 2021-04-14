@@ -328,49 +328,36 @@ public class S3WriteStore implements WriteStore {
       putObject(shardDstPath + "COPYING", "", shardIdDst.getInterval());
 
       ObjectTagging objectTagging = createObjectTagging(shardIdDst.getInterval());
-      S3ObjectSummary current = null;
-      boolean first = true;
-      do {
-        if (!first)
-          ol = s3Client.listObjectsV2(srcRequest);
-        for (S3ObjectSummary objectSummary : ol.getObjectSummaries()) {
-          if (objectSummary.getKey().endsWith(DistXact.CURRENT_MARKER)) {
-            current = objectSummary;
-          } else {
-            s3Client.copyObject(
-                new CopyObjectRequest(
-                    bucket,
-                    objectSummary.getKey(),
-                    bucket,
-                    shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectSummary.getKey()))).toString()
-                ).withNewObjectTagging(objectTagging)
-            );
-          }
-        }
-        srcRequest.setContinuationToken(ol.getNextContinuationToken());
-        first = false;
-      } while (ol.isTruncated());
-      if (current != null) {
-        int tries = 0;
-        while(tries < COPY_SHARD_MAX_TRIES) {
-          try {
-            s3Client.copyObject(
-                new CopyObjectRequest(
-                    bucket,
-                    current.getKey(),
-                    bucket,
-                    shardDstPath.resolve(shardSrcPath.relativize(Paths.get(current.getKey()))).toString()
-                ).withNewObjectTagging(objectTagging)
-            );
-            break;
-          } catch (SdkClientException e) {
-            if (++tries >= COPY_SHARD_MAX_TRIES) {
-              throw new RuntimeException("Failed to find current shard after " + tries + " attempts", e);
+  
+      DistXact currentValues = getCurrentValues(shardIdSrc);
+      if (currentValues != null) {
+        String currentShardKey = PathBuilder.buildPath(shardIdSrc.shardIdPath(), currentValues.getCurrent());
+    
+        try {
+          ObjectListing objectListing = s3Client.listObjects(bucket, currentShardKey);
+          List<S3ObjectSummary> objectSummaries = objectListing.getObjectSummaries();
+      
+          while (true) {
+            for (S3ObjectSummary objectSummary : objectSummaries) {
+              s3Client.copyObject(
+                  new CopyObjectRequest(
+                      bucket,
+                      objectSummary.getKey(),
+                      bucket,
+                      shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectSummary.getKey()))).toString()
+                  ).withNewObjectTagging(objectTagging)
+              );
+            }
+            if (objectListing.isTruncated()) {
+              objectListing = s3Client.listNextBatchOfObjects(objectListing);
+            } else {
+              break;
             }
           }
+          saveCurrentValues(shardIdDst, currentValues);
+        } catch (Exception e) {
+          LOGGER.error("Unable to copy shard");
         }
-      } else {
-        throw new RuntimeException("No current entry found this will be an error");
       }
     } catch (Exception exception) {
       s3Client.listObjectsV2(
