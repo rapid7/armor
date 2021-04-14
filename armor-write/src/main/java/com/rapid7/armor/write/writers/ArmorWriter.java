@@ -168,6 +168,7 @@ public class ArmorWriter implements Closeable {
     for (ColumnFileWriter cfw : baselineColumnDiffWriters.values()) {
       try {
         cfw.close();
+        LOGGER.info("Closed baseline column diff at {}", cfw.getColumnShardId());
       } catch (Exception e) {
         LOGGER.warn("Unable to close baseline diff column writer", e);
       }
