@@ -62,6 +62,7 @@ public class S3WriteStore implements WriteStore {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final String INTERVAL_TAG = "interval";
   private static final Set<String> tenantCache = new HashSet<>();
+  private static final int COPY_SHARD_MAX_TRIES = 5;
   
   public S3WriteStore(AmazonS3 s3Client, String bucket, ShardStrategy shardStrategy) {
     this.s3Client = s3Client;
@@ -350,14 +351,24 @@ public class S3WriteStore implements WriteStore {
         first = false;
       } while (ol.isTruncated());
       if (current != null) {
-        s3Client.copyObject(
-            new CopyObjectRequest(
-                bucket,
-                current.getKey(),
-                bucket,
-                shardDstPath.resolve(shardSrcPath.relativize(Paths.get(current.getKey()))).toString()
-            ).withNewObjectTagging(objectTagging)
-        );
+        int tries = 0;
+        while(tries < COPY_SHARD_MAX_TRIES) {
+          try {
+            s3Client.copyObject(
+                new CopyObjectRequest(
+                    bucket,
+                    current.getKey(),
+                    bucket,
+                    shardDstPath.resolve(shardSrcPath.relativize(Paths.get(current.getKey()))).toString()
+                ).withNewObjectTagging(objectTagging)
+            );
+            break;
+          } catch (SdkClientException e) {
+            if (++tries >= COPY_SHARD_MAX_TRIES) {
+              throw new RuntimeException("Failed to find current shard after " + tries + " attempts", e);
+            }
+          }
+        }
       } else {
         throw new RuntimeException("No current entry found this will be an error");
       }
