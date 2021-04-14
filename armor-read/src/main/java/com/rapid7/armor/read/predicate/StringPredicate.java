@@ -1,16 +1,35 @@
 package com.rapid7.armor.read.predicate;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.rapid7.armor.store.Operator;
 
 public class StringPredicate extends Predicate<String> {
+    private boolean caseSensitive = true;
+    
     public StringPredicate(String field, Operator operator, List<String> values) {
-        super(field, operator, values);
+      super(field, operator, values);
     }
  
     public StringPredicate(String field, Operator operator, String value) {
-        super(field, operator, value);
+      super(field, operator, value);
+    }
+
+    public void setCaseSensitive(boolean caseSensitive) {
+      this.caseSensitive = caseSensitive;
+    }
+
+    public boolean isCaseSensitive() {
+      return caseSensitive;
+    }
+    
+    @Override
+    public List<String> getValues() {
+      if (caseSensitive)
+        return values;
+      else
+        return values.stream().map(v -> v.toLowerCase()).collect(Collectors.toList());
     }
 
     @Override

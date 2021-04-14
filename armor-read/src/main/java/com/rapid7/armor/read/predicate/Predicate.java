@@ -52,6 +52,7 @@ public abstract class Predicate<T> {
    public abstract Number convertValueToNumber(T value);
  
    protected boolean executeLexBetween(T testValue) {
+     List<T> values = getValues();
      if (values.size() != 2)
        throw new RuntimeException("You must have two values setup in this predicate to execute between");
      if (testValue == null)
@@ -70,6 +71,7 @@ public abstract class Predicate<T> {
    }
    
    protected boolean executeNumBetween(T testValue) {
+     List<T> values = getValues();
      if (values == null || values.size() != 2)
        throw new RuntimeException("You must have two values to execute between predicate");
      Number fieldNumber = convertValueToNumber(testValue);
@@ -79,6 +81,7 @@ public abstract class Predicate<T> {
    }
    
    protected boolean executeIsNull() {
+     List<T> values = getValues();
       if (values == null || values.isEmpty())
           return true;
       for (T value : values) {
@@ -89,6 +92,7 @@ public abstract class Predicate<T> {
    }
    
    protected boolean executeIsNotNull() {
+     List<T> values = getValues();
      if (values == null || values.isEmpty())
        return false;
      for (T value : values) {
@@ -101,6 +105,7 @@ public abstract class Predicate<T> {
    protected boolean executeIn(T testValue) {
       if (testValue == null)
         return false;
+      List<T> values = getValues();
       for (T value : values) {
         if (testValue != null && testValue.equals(value))
           return true;
@@ -111,6 +116,7 @@ public abstract class Predicate<T> {
    protected boolean executeEquals(T testValue) {
      if (testValue == null)
        return false;
+     List<T> values = getValues();
      T value = getSingleValue(values);
      return testValue.equals(value);
    }
@@ -118,6 +124,7 @@ public abstract class Predicate<T> {
    protected boolean executeNotEquals(T testValue) {
      if (testValue == null)
        return false;
+     List<T> values = getValues();
      if (values.size() > 1) {
          for (T value : values) {
              if (testValue.equals(value))
@@ -133,6 +140,7 @@ public abstract class Predicate<T> {
    protected boolean executeLexGreaterThan(String testValue) {
      if (testValue == null)
        return false;
+     List<T> values = getValues();
      T value = getSingleValue(values);
      if (value == null)
        return false;
@@ -143,6 +151,7 @@ public abstract class Predicate<T> {
    protected boolean executeLexGreaterThanEqual(String testValue) {
      if (testValue == null)
        return false;
+     List<T> values = getValues();
      T value = getSingleValue(values);
      if (value == null)
        return false;
@@ -153,6 +162,7 @@ public abstract class Predicate<T> {
    protected boolean executeLexLessThan(String testValue) {
      if (testValue == null)
        return false;
+     List<T> values = getValues();
      T value = getSingleValue(values);
      if (value == null)
        return false;
@@ -163,6 +173,7 @@ public abstract class Predicate<T> {
    protected boolean executeLexLessThanEqual(String testValue) {
      if (testValue == null)
        return false;
+     List<T> values = getValues();
      T value = getSingleValue(values);
      if (value == null)
        return false;
@@ -173,6 +184,7 @@ public abstract class Predicate<T> {
    protected boolean executeNumGreaterThan(T testValue) {
      if (testValue == null)
         return false;
+     List<T> values = getValues();
      T value = getSingleValue(values);
      if (value == null)
         return false;
@@ -182,6 +194,7 @@ public abstract class Predicate<T> {
    protected boolean executeNumGreaterThanEqual(T testValue) {
      if (testValue == null)
         return false;
+     List<T> values = getValues();
      T value = getSingleValue(values);
      if (value == null)
         return false;
@@ -191,6 +204,7 @@ public abstract class Predicate<T> {
    protected boolean executeNumLessThan(T testValue) {
      if (testValue == null)
        return false;
+     List<T> values = getValues();
      T value = getSingleValue(values);
      if (value == null)
        return false;
@@ -200,6 +214,7 @@ public abstract class Predicate<T> {
   protected boolean executeNumLessThanEqual(T testValue) {
     if (testValue == null)
       return false;
+    List<T> values = getValues();
     T value = getSingleValue(values);
     if (value == null)
       return false;

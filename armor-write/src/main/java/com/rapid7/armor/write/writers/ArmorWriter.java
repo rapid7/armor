@@ -526,7 +526,7 @@ public class ArmorWriter implements Closeable {
         }
       );
     }
-    for (int i = 0; i < plusNumShards; ++i) {
+    for (int i = 0; i < plusNumShards; i++) {
       try {
         plusEcs.take().get();
       } catch (Exception e) {
@@ -587,7 +587,7 @@ public class ArmorWriter implements Closeable {
         }
       );
     }
-    for (int i = 0; i < minusNumShards; ++i) {
+    for (int i = 0; i < minusNumShards; i++) {
       try {
         minusEcs.take().get();
       } catch (Exception e) {
