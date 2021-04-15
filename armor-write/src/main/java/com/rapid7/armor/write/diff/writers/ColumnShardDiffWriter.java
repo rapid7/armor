@@ -78,19 +78,20 @@ public class ColumnShardDiffWriter implements IShardWriter {
     this.baselineColumnFile = baselineColumnFile;
   }
 
+  @Override
   public void close() {
     try {
       targetColumnFile.close();
     } catch (Exception e) {
       LOGGER.warn("Unable to close column {}", diffColumnId, e);
     }
-    if (baselineColumnFile != null) {
-      try {
-        baselineColumnFile.close();
-      } catch (Exception e) {
-        LOGGER.warn("Unable to close column {}", diffColumnId, e);
-      }
-    }
+//    if (baselineColumnFile != null) {
+//      try {
+//        baselineColumnFile.close();
+//      } catch (Exception e) {
+//        LOGGER.warn("Unable to close column {}", diffColumnId, e);
+//      }
+//    }
   }
 
   /**
