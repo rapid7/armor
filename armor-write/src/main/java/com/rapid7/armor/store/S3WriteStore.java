@@ -44,6 +44,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -741,26 +742,27 @@ public class S3WriteStore implements WriteStore {
   }
 
   private List<S3ObjectSummary> getCurrentShardObjects(ShardId shardId) {
-    List<S3ObjectSummary> objects = new ArrayList<>();
-    
+    String currentShardKey = null;
     for (int i = 0; i < 10; i++) {
       DistXact currentValues = getCurrentValues(shardId);
       if (currentValues != null) {
-        String currentShardKey = PathBuilder.buildPath(shardId.shardIdPath(), currentValues.getCurrent());
-        ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucket).withPrefix(currentShardKey);
-        ListObjectsV2Result result;
-        do {
-          result = s3Client.listObjectsV2(request);
-          objects.addAll(result.getObjectSummaries());
-          request.setContinuationToken(result.getNextContinuationToken());
-        } while (result.isTruncated());
-      }
-      
-      if (!objects.isEmpty()) {
-        break;
+        List<S3ObjectSummary> objects = new ArrayList<>();
+        try {
+          currentShardKey = PathBuilder.buildPath(shardId.shardIdPath(), currentValues.getCurrent());
+          ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucket).withPrefix(currentShardKey);
+          ListObjectsV2Result result;
+          do {
+            result = s3Client.listObjectsV2(request);
+            objects.addAll(result.getObjectSummaries());
+            request.setContinuationToken(result.getNextContinuationToken());
+          } while (result.isTruncated());
+          return objects;
+        } catch (Exception e) {
+          LOGGER.warn("Error retrieving current shard objects for shard: " +  currentShardKey, e);
+        }
       }
     }
-    return objects;
+    return Collections.emptyList();
   }
 
   @Override
