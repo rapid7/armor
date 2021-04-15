@@ -368,25 +368,6 @@ public class S3WriteStore implements WriteStore {
       }
     }
   }
-
-  private String getCurrentShardKey(Path shardSrcPath, List<S3ObjectSummary> currentShardObjects) {
-    // armor-bucket/org1/tag/weekly/2021-04-12T00:00:00Z/15/
-    // |___________________shardSrcPath____________________|
-    
-    // shardObjectKey =
-    // armor-bucket/org1/tag/weekly/2021-04-12T00:00:00Z/15/4419aee7-4c45-433e-a2bd-5a71c1b3ec1b/.../.../.../
-    //                                                     |____shardSrcPath.relativize(shardObjectKey)_____|
-    //                                                     |_____________getName(0)_____________|___________|
-    //                                                     |__________currentShardName__________|
-    // currentShardKey = shardSrcPath + currentShardName
-    
-    if (!currentShardObjects.isEmpty()) {
-      Path shardObjectKey = Paths.get(currentShardObjects.get(0).getKey());
-      Path currentShardName = shardSrcPath.relativize(shardObjectKey).getName(0);
-      return shardSrcPath.resolve(currentShardName).toString();
-    }
-    return null;
-  }
   
   @Override
   public void commit(String transaction, ShardId shardId) {
@@ -629,6 +610,26 @@ public class S3WriteStore implements WriteStore {
     if (status == null || status.getCurrent() == null)
       return null;
     return PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent());
+  }
+  
+  private String getCurrentShardKey(Path shardSrcPath, List<S3ObjectSummary> currentShardObjects) {
+    // armor-bucket/org1/tag/weekly/2021-04-12T00:00:00Z/15/
+    // |___________________shardSrcPath____________________|
+    
+    // currentShardObjectKey =
+    // armor-bucket/org1/tag/weekly/2021-04-12T00:00:00Z/15/4419aee7-4c45-433e-a2bd-5a71c1b3ec1b/.../.../.../
+    //                                                     |_shardSrcPath.relativize(currentShardObjectKey)_|
+    //                                                     |_____________getName(0)_____________|___________|
+    //                                                     |__________currentShardName__________|
+    // currentShardKey = shardSrcPath + currentShardName
+    // currentShardKey = armor-bucket/org1/tag/weekly/2021-04-12T00:00:00Z/15/4419aee7-4c45-433e-a2bd-5a71c1b3ec1b/
+    
+    if (!currentShardObjects.isEmpty()) {
+      Path currentShardObjectKey = Paths.get(currentShardObjects.get(0).getKey());
+      Path currentShardName = shardSrcPath.relativize(currentShardObjectKey).getName(0);
+      return shardSrcPath.resolve(currentShardName).toString();
+    }
+    return null;
   }
 
   private DistXact getCurrentValues(String tenant, String table) {
