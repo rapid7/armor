@@ -326,7 +326,7 @@ public class S3WriteStore implements WriteStore {
 
     String currentShardKey = null;
     try {
-      List<S3ObjectSummary> shardObjects = getShardObjects(shardIdSrc);
+      List<S3ObjectSummary> shardObjects = getCurrentShardObjects(shardIdSrc);
       if (shardObjects.isEmpty()) {
         throw new RuntimeException("Could not retrieve current contents of shard: " + shardIdSrc.shardIdPath());
       }
@@ -720,8 +720,8 @@ public class S3WriteStore implements WriteStore {
     }
   }
 
-  private List<S3ObjectSummary> getShardObjects(ShardId shardId) {
-    List<S3ObjectSummary> objectsToCopy = new ArrayList<>();
+  private List<S3ObjectSummary> getCurrentShardObjects(ShardId shardId) {
+    List<S3ObjectSummary> objects = new ArrayList<>();
     
     for (int i = 0; i < 10; i++) {
       DistXact currentValues = getCurrentValues(shardId);
@@ -731,16 +731,16 @@ public class S3WriteStore implements WriteStore {
         ListObjectsV2Result result;
         do {
           result = s3Client.listObjectsV2(request);
-          objectsToCopy.addAll(result.getObjectSummaries());
+          objects.addAll(result.getObjectSummaries());
           request.setContinuationToken(result.getNextContinuationToken());
         } while (result.isTruncated());
       }
       
-      if (!objectsToCopy.isEmpty()) {
+      if (!objects.isEmpty()) {
         break;
       }
     }
-    return objectsToCopy;
+    return objects;
   }
 
   @Override
