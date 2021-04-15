@@ -1,5 +1,7 @@
 package com.rapid7.armor;
 
+import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.interval.Interval;
@@ -36,6 +38,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static com.rapid7.armor.interval.Interval.SINGLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,6 +63,21 @@ public class S3StoreTest {
         .withCredentials(new AWSStaticCredentialsProvider(new AnonymousAWSCredentials()))
         .build();
     client.createBucket(TEST_BUCKET);
+  }
+  
+  @BeforeEach
+  public void clearBucket() {
+    ObjectListing objectListing = client.listObjects(TEST_BUCKET);
+    while (true) {
+      for (S3ObjectSummary s3ObjectSummary : objectListing.getObjectSummaries()) {
+        client.deleteObject(TEST_BUCKET, s3ObjectSummary.getKey());
+      }
+      if (objectListing.isTruncated()) {
+        objectListing = client.listNextBatchOfObjects(objectListing);
+      } else {
+        break;
+      }
+    }
   }
 
   @AfterAll
