@@ -79,6 +79,7 @@ public class ArmorAnalyzer {
                 new ColumnShardId(shardId, columnId)
             )
         ) {
+          writer.getRowGroupWriter().getEntityValues(null);
           ObjectMapper objectMapper = new ObjectMapper();
           Files.copy(
               new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getMetadata())),

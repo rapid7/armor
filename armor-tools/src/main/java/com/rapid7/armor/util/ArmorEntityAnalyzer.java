@@ -104,9 +104,9 @@ public class ArmorEntityAnalyzer {
               if (er != null) {
                 // Write info
                 List<Object> results = new ArrayList<>();
-                writer.getRowGroupWriter().customExtractValues(er, (a) -> {
-                  results.addAll(a);
-                });
+//                writer.getRowGroupWriter().runThoughValues(er, (a) -> {
+//                  results.addAll(a);
+//                });
                 
                 EntityRecord writeRecord  = (EntityRecord) results.get(0);
                 List<Object> writeValues = (List<Object>) results.get(1);
@@ -139,9 +139,9 @@ public class ArmorEntityAnalyzer {
             if (er != null) {
               // Write info
               List<Object> results = new ArrayList<>();
-              writer.getRowGroupWriter().customExtractValues(er, (a) -> {
-                results.addAll(a);
-              });
+//              writer.getRowGroupWriter().customExtractValues(er, (a) -> {
+//                results.addAll(a);
+//              });
               
               EntityRecord writeRecord  = (EntityRecord) results.get(0);
               List<Object> writeValues = (List<Object>) results.get(1);
