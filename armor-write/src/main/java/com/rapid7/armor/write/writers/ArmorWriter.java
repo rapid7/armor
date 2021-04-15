@@ -168,9 +168,7 @@ public class ArmorWriter implements Closeable {
 
     for (ColumnFileWriter cfw : baselineColumnDiffWriters.values()) {
       try {
-        LOGGER.info("Closing baseline column diff at {}", cfw.getColumnShardId());
         cfw.close();
-        LOGGER.info("Closed baseline column diff at {}", cfw.getColumnShardId());
       } catch (Exception e) {
         LOGGER.warn("Unable to close baseline diff column writer", e);
       }
@@ -276,9 +274,8 @@ public class ArmorWriter implements Closeable {
       if (baselineColumnFileWriter == null && store.columnShardIdExists(baselineColumnShardId)) {
         baselineColumnFileWriter = store.loadColumnWriter(baselineColumnShardId);
         baselineColumnDiffWriters.put(baselineShardId, baselineColumnFileWriter);
-        LOGGER.info("Loaded baseline column diff at {}", baselineColumnFileWriter.getColumnShardId());
-
       }
+
       shardDiffWriter = minusTableWriter.addShard(new ColumnShardDiffWriter(
           targetShardId,
           baselineColumnFileWriter,
@@ -502,7 +499,6 @@ public class ArmorWriter implements Closeable {
                 if (baselineColumnWriter == null && store.columnShardIdExists(baselineColumnShardId)) {                  
                   baselineColumnWriter = store.loadColumnWriter(baselineColumnShardId);
                   baselineColumnDiffWriters.put(baselineShardId, baselineColumnWriter);
-                  LOGGER.info("Loaded baseline column diff at {}", baselineColumnWriter.getColumnShardId());
                 }
                 shardDiffWriter = plusTableWriter.addShard(new ColumnShardDiffWriter(
                     targetShardId,
@@ -564,8 +560,6 @@ public class ArmorWriter implements Closeable {
                 if (baselineColumnFileWriter == null && store.columnShardIdExists(baselineColumnShardId)) {
                   baselineColumnFileWriter = store.loadColumnWriter(baselineColumnShardId);
                   baselineColumnDiffWriters.put(baselineShardId, baselineColumnFileWriter);
-                  LOGGER.info("Loaded baseline column diff at {}", baselineColumnFileWriter.getColumnShardId());
-
                 }
                 shardDiffWriter = minusTableWriter.addShard(new ColumnShardDiffWriter(
                     targetShardId,
