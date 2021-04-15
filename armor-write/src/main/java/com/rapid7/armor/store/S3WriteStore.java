@@ -61,8 +61,8 @@ public class S3WriteStore implements WriteStore {
   private final ShardStrategy shardStrategy;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final String INTERVAL_TAG = "interval";
+  private static final String ARCHIVING_MARKER = "ARCHIVING";
   private static final Set<String> tenantCache = new HashSet<>();
-  private static final int COPY_SHARD_MAX_TRIES = 5;
   
   public S3WriteStore(AmazonS3 s3Client, String bucket, ShardStrategy shardStrategy) {
     this.s3Client = s3Client;
@@ -303,7 +303,7 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
-    Path shardDstPath = Paths.get(shardIdDst.getTenant(), shardIdDst.getTable(), shardIdDst.getInterval(), shardIdDst.getIntervalStart(), Integer.toString(shardIdDst.getShardNum()));
+    Path shardDstPath = Paths.get(shardIdDst.shardIdPath());
     ListObjectsV2Result ol = s3Client.listObjectsV2(
         new ListObjectsV2Request()
             .withBucketName(bucket)
@@ -314,7 +314,7 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
-    Path shardSrcPath = Paths.get(shardIdSrc.getTenant(), shardIdSrc.getTable(), shardIdSrc.getInterval(), shardIdSrc.getIntervalStart(), Integer.toString(shardIdSrc.getShardNum()));
+    Path shardSrcPath = Paths.get(shardIdSrc.shardIdPath());
     ListObjectsV2Request srcRequest = new ListObjectsV2Request()
       .withBucketName(bucket)
       .withMaxKeys(10000)
@@ -324,41 +324,30 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
+    String currentShardKey = null;
     try {
+      List<S3ObjectSummary> shardObjects = getShardObjects(shardIdSrc);
+      if (shardObjects.isEmpty()) {
+        throw new RuntimeException("Could not retrieve current contents of shard: " + shardIdSrc.shardIdPath());
+      }
+      
+      currentShardKey = shardSrcPath.resolve(shardSrcPath.relativize(Paths.get(shardObjects.get(0).getKey())).getName(0)).toString();
       putObject(shardDstPath + "COPYING", "", shardIdDst.getInterval());
-
+      putObject(PathBuilder.buildPath(currentShardKey, ARCHIVING_MARKER), "", shardIdSrc.getInterval());
       ObjectTagging objectTagging = createObjectTagging(shardIdDst.getInterval());
   
-      DistXact currentValues = getCurrentValues(shardIdSrc);
-      if (currentValues != null) {
-        String currentShardKey = PathBuilder.buildPath(shardIdSrc.shardIdPath(), currentValues.getCurrent());
-    
-        try {
-          ObjectListing objectListing = s3Client.listObjects(bucket, currentShardKey);
-          List<S3ObjectSummary> objectSummaries = objectListing.getObjectSummaries();
-      
-          while (true) {
-            for (S3ObjectSummary objectSummary : objectSummaries) {
-              s3Client.copyObject(
-                  new CopyObjectRequest(
-                      bucket,
-                      objectSummary.getKey(),
-                      bucket,
-                      shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectSummary.getKey()))).toString()
-                  ).withNewObjectTagging(objectTagging)
-              );
-            }
-            if (objectListing.isTruncated()) {
-              objectListing = s3Client.listNextBatchOfObjects(objectListing);
-            } else {
-              break;
-            }
-          }
-          saveCurrentValues(shardIdDst, currentValues);
-        } catch (Exception e) {
-          LOGGER.error("Unable to copy shard");
-        }
+      for (S3ObjectSummary objectToCopy : shardObjects) {
+        s3Client.copyObject(
+            new CopyObjectRequest(
+                bucket,
+                objectToCopy.getKey(),
+                bucket,
+                shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectToCopy.getKey()))).toString()
+            ).withNewObjectTagging(objectTagging)
+        );
       }
+      saveCurrentValues(shardIdDst, new DistXact(Paths.get(currentShardKey).getFileName().toString(), null));
+      
     } catch (Exception exception) {
       s3Client.listObjectsV2(
           new ListObjectsV2Request()
@@ -371,7 +360,11 @@ public class S3WriteStore implements WriteStore {
 
       throw new RuntimeException(exception);
     } finally {
-      s3Client.deleteObject(new DeleteObjectRequest(bucket, shardDstPath + "COPYING"));
+      boolean shardCopyWasAttempted = currentShardKey != null;
+      if (shardCopyWasAttempted) {
+        s3Client.deleteObject(new DeleteObjectRequest(bucket, shardDstPath + "COPYING"));
+        s3Client.deleteObject(new DeleteObjectRequest(bucket, PathBuilder.buildPath(currentShardKey, ARCHIVING_MARKER)));
+      }
     }
   }
 
@@ -380,28 +373,32 @@ public class S3WriteStore implements WriteStore {
     DistXact status = getCurrentValues(shardId);
     if (status != null)
       status.validateXact(transaction);
-    saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
-    trackTenant(shardId.getTenant());
-    try {
-      if (status == null || status.getPrevious() == null)
-        return;
-      String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), status.getPrevious());
-      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
-          .withBucketName(bucket)
-          .withPrefix(toDelete);
-      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
-      while (true) {
-        for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
-          s3Client.deleteObject(bucket, objectSummary.getKey());
+  
+    boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
+    if (!isArchiving) {
+      saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
+      trackTenant(shardId.getTenant());
+      try {
+        if (status == null || status.getPrevious() == null)
+          return;
+        String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), status.getPrevious());
+        ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+            .withBucketName(bucket)
+            .withPrefix(toDelete);
+        ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+        while (true) {
+          for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
+            s3Client.deleteObject(bucket, objectSummary.getKey());
+          }
+          if (objectListing.isTruncated()) {
+            objectListing = s3Client.listNextBatchOfObjects(objectListing);
+          } else {
+            break;
+          }
         }
-        if (objectListing.isTruncated()) {
-          objectListing = s3Client.listNextBatchOfObjects(objectListing);
-        } else {
-          break;
-        }
+      } catch (Exception e) {
+        LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
       }
-    } catch (Exception e) {
-      LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
     }
   }
 
@@ -721,6 +718,29 @@ public class S3WriteStore implements WriteStore {
       s3Client.putObject(new PutObjectRequest(bucket, key, inputStream, metadata));
       tenantCache.add(tenant);
     }
+  }
+
+  private List<S3ObjectSummary> getShardObjects(ShardId shardId) {
+    List<S3ObjectSummary> objectsToCopy = new ArrayList<>();
+    
+    for (int i = 0; i < 10; i++) {
+      DistXact currentValues = getCurrentValues(shardId);
+      if (currentValues != null) {
+        String currentShardKey = PathBuilder.buildPath(shardId.shardIdPath(), currentValues.getCurrent());
+        ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucket).withPrefix(currentShardKey);
+        ListObjectsV2Result result;
+        do {
+          result = s3Client.listObjectsV2(request);
+          objectsToCopy.addAll(result.getObjectSummaries());
+          request.setContinuationToken(result.getNextContinuationToken());
+        } while (result.isTruncated());
+      }
+      
+      if (!objectsToCopy.isEmpty()) {
+        break;
+      }
+    }
+    return objectsToCopy;
   }
 
   @Override
