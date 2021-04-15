@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import static com.rapid7.armor.interval.Interval.SINGLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.findify.s3mock.S3Mock;
 
@@ -234,6 +235,46 @@ public class S3StoreTest {
       String expectedNameSa = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/1/" + current1 + "/name_S_a";
       assertTrue(client.doesObjectExist(TEST_BUCKET, expectedNameS));
       assertTrue(client.doesObjectExist(TEST_BUCKET, expectedNameSa));
+    }
+  }
+  
+  @Test
+  public void verifyCopyShardRetry() throws AmazonServiceException, SdkClientException, IOException {
+    String currentId = UUID.randomUUID().toString();
+    ObjectMapper mapper = new ObjectMapper();
+    HashMap<String, String> currentData = new HashMap<>();
+    
+    String wrongCurrentId = UUID.randomUUID().toString();
+    currentData.put("current", wrongCurrentId);
+    
+    client.putObject(TEST_BUCKET, "orgA/table1/table-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + currentId + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + currentId + "/level_I", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + currentId + "/shard-metadata.armor", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentData));
+    
+    // Make these distinct in name to ensure test is valid.
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + currentId + "/name_S_a", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + currentId + "/level_I_a", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + currentId + "/shard-metadata.armora", " Empty content");
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentData));
+    
+    S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
+    try (ArmorWriter aw = new ArmorWriter("test", writeStore, Compression.NONE, 1)) {
+      Instant now = Instant.now();
+      RuntimeException runtimeException = assertThrows(RuntimeException.class, () -> aw.snapshotCurrentToInterval("orgA", "table1", Interval.WEEKLY, now));
+      assertTrue(runtimeException.getMessage().contains("Expected current shard to contain objects"));
+      
+      String intervalStart = Interval.WEEKLY.getIntervalStart(now);
+      String copiedWeeklyShard0 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + intervalStart + "/0/" + DistXact.CURRENT_MARKER;
+      String copiedWeeklyShard1 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + intervalStart + "/1/" + DistXact.CURRENT_MARKER;
+      assertFalse(client.doesObjectExist(TEST_BUCKET, copiedWeeklyShard0));
+      assertFalse(client.doesObjectExist(TEST_BUCKET, copiedWeeklyShard1));
+  
+      String wrongCopiedWeeklyShard0Data = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + intervalStart + "/0/" + wrongCurrentId + "/name_S";
+      String wrongCopiedWeeklyShard1Data = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + intervalStart + "/1/" + wrongCurrentId + "/name_S_a";
+      assertFalse(client.doesObjectExist(TEST_BUCKET, wrongCopiedWeeklyShard0Data));
+      assertFalse(client.doesObjectExist(TEST_BUCKET, wrongCopiedWeeklyShard1Data));
     }
   }
 

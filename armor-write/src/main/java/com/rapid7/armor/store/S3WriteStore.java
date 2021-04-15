@@ -44,6 +44,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -61,6 +62,7 @@ public class S3WriteStore implements WriteStore {
   private final ShardStrategy shardStrategy;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final String INTERVAL_TAG = "interval";
+  private static final String ARCHIVING_MARKER = "ARCHIVING";
   private static final Set<String> tenantCache = new HashSet<>();
   
   public S3WriteStore(AmazonS3 s3Client, String bucket, ShardStrategy shardStrategy) {
@@ -302,7 +304,7 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
-    Path shardDstPath = Paths.get(shardIdDst.getTenant(), shardIdDst.getTable(), shardIdDst.getInterval(), shardIdDst.getIntervalStart(), Integer.toString(shardIdDst.getShardNum()));
+    Path shardDstPath = Paths.get(shardIdDst.shardIdPath());
     ListObjectsV2Result ol = s3Client.listObjectsV2(
         new ListObjectsV2Request()
             .withBucketName(bucket)
@@ -313,7 +315,7 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
-    Path shardSrcPath = Paths.get(shardIdSrc.getTenant(), shardIdSrc.getTable(), shardIdSrc.getInterval(), shardIdSrc.getIntervalStart(), Integer.toString(shardIdSrc.getShardNum()));
+    Path shardSrcPath = Paths.get(shardIdSrc.shardIdPath());
     ListObjectsV2Request srcRequest = new ListObjectsV2Request()
       .withBucketName(bucket)
       .withMaxKeys(10000)
@@ -323,44 +325,30 @@ public class S3WriteStore implements WriteStore {
       return;
     }
 
+    String currentShardKey = null;
     try {
+      List<S3ObjectSummary> currentShardObjects = getCurrentShardObjects(shardIdSrc);
+      if (currentShardObjects.isEmpty()) {
+        throw new RuntimeException("Expected current shard to contain objects. shard: " + shardIdSrc.shardIdPath());
+      }
+      
+      currentShardKey = getCurrentShardKey(shardSrcPath, currentShardObjects);
       putObject(shardDstPath + "COPYING", "", shardIdDst.getInterval());
-
+      putObject(PathBuilder.buildPath(currentShardKey, ARCHIVING_MARKER), "", shardIdSrc.getInterval());
       ObjectTagging objectTagging = createObjectTagging(shardIdDst.getInterval());
-      S3ObjectSummary current = null;
-      boolean first = true;
-      do {
-        if (!first)
-          ol = s3Client.listObjectsV2(srcRequest);
-        for (S3ObjectSummary objectSummary : ol.getObjectSummaries()) {
-          if (objectSummary.getKey().endsWith(DistXact.CURRENT_MARKER)) {
-            current = objectSummary;
-          } else {
-            s3Client.copyObject(
-                new CopyObjectRequest(
-                    bucket,
-                    objectSummary.getKey(),
-                    bucket,
-                    shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectSummary.getKey()))).toString()
-                ).withNewObjectTagging(objectTagging)
-            );
-          }
-        }
-        srcRequest.setContinuationToken(ol.getNextContinuationToken());
-        first = false;
-      } while (ol.isTruncated());
-      if (current != null) {
+  
+      for (S3ObjectSummary objectToCopy : currentShardObjects) {
         s3Client.copyObject(
             new CopyObjectRequest(
                 bucket,
-                current.getKey(),
+                objectToCopy.getKey(),
                 bucket,
-                shardDstPath.resolve(shardSrcPath.relativize(Paths.get(current.getKey()))).toString()
+                shardDstPath.resolve(shardSrcPath.relativize(Paths.get(objectToCopy.getKey()))).toString()
             ).withNewObjectTagging(objectTagging)
         );
-      } else {
-        throw new RuntimeException("No current entry found this will be an error");
       }
+      saveCurrentValues(shardIdDst, new DistXact(Paths.get(currentShardKey).getFileName().toString(), null));
+      
     } catch (Exception exception) {
       s3Client.listObjectsV2(
           new ListObjectsV2Request()
@@ -373,37 +361,46 @@ public class S3WriteStore implements WriteStore {
 
       throw new RuntimeException(exception);
     } finally {
-      s3Client.deleteObject(new DeleteObjectRequest(bucket, shardDstPath + "COPYING"));
+      boolean shardCopyWasAttempted = currentShardKey != null;
+      if (shardCopyWasAttempted) {
+        s3Client.deleteObject(new DeleteObjectRequest(bucket, shardDstPath + "COPYING"));
+        s3Client.deleteObject(new DeleteObjectRequest(bucket, PathBuilder.buildPath(currentShardKey, ARCHIVING_MARKER)));
+      }
     }
   }
-
+  
   @Override
   public void commit(String transaction, ShardId shardId) {
     DistXact status = getCurrentValues(shardId);
     if (status != null)
       status.validateXact(transaction);
+  
     saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
     trackTenant(shardId.getTenant());
-    try {
-      if (status == null || status.getPrevious() == null)
-        return;
-      String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), status.getPrevious());
-      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
-          .withBucketName(bucket)
-          .withPrefix(toDelete);
-      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
-      while (true) {
-        for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
-          s3Client.deleteObject(bucket, objectSummary.getKey());
+    
+    boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
+    if (!isArchiving) {
+      try {
+        if (status == null || status.getPrevious() == null)
+          return;
+        String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), status.getPrevious());
+        ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+            .withBucketName(bucket)
+            .withPrefix(toDelete);
+        ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+        while (true) {
+          for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
+            s3Client.deleteObject(bucket, objectSummary.getKey());
+          }
+          if (objectListing.isTruncated()) {
+            objectListing = s3Client.listNextBatchOfObjects(objectListing);
+          } else {
+            break;
+          }
         }
-        if (objectListing.isTruncated()) {
-          objectListing = s3Client.listNextBatchOfObjects(objectListing);
-        } else {
-          break;
-        }
+      } catch (Exception e) {
+        LOGGER.warn("Unable to delete previous shard version under {}", status.getPrevious(), e);
       }
-    } catch (Exception e) {
-      LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
     }
   }
 
@@ -614,6 +611,26 @@ public class S3WriteStore implements WriteStore {
       return null;
     return PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent());
   }
+  
+  private String getCurrentShardKey(Path shardSrcPath, List<S3ObjectSummary> currentShardObjects) {
+    // armor-bucket/org1/tag/weekly/2021-04-12T00:00:00Z/15/
+    // |___________________shardSrcPath____________________|
+    
+    // currentShardObjectKey =
+    // armor-bucket/org1/tag/weekly/2021-04-12T00:00:00Z/15/4419aee7-4c45-433e-a2bd-5a71c1b3ec1b/.../.../.../
+    //                                                     |_shardSrcPath.relativize(currentShardObjectKey)_|
+    //                                                     |_____________getName(0)_____________|___________|
+    //                                                     |__________currentShardName__________|
+    // currentShardKey = shardSrcPath + currentShardName
+    // currentShardKey = armor-bucket/org1/tag/weekly/2021-04-12T00:00:00Z/15/4419aee7-4c45-433e-a2bd-5a71c1b3ec1b/
+    
+    if (!currentShardObjects.isEmpty()) {
+      Path currentShardObjectKey = Paths.get(currentShardObjects.get(0).getKey());
+      Path currentShardName = shardSrcPath.relativize(currentShardObjectKey).getName(0);
+      return shardSrcPath.resolve(currentShardName).toString();
+    }
+    return null;
+  }
 
   private DistXact getCurrentValues(String tenant, String table) {
     String key = DistXactUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
@@ -723,6 +740,30 @@ public class S3WriteStore implements WriteStore {
       s3Client.putObject(new PutObjectRequest(bucket, key, inputStream, metadata));
       tenantCache.add(tenant);
     }
+  }
+
+  private List<S3ObjectSummary> getCurrentShardObjects(ShardId shardId) {
+    String currentShardKey = null;
+    for (int i = 0; i < 10; i++) {
+      DistXact currentValues = getCurrentValues(shardId);
+      if (currentValues != null) {
+        List<S3ObjectSummary> objects = new ArrayList<>();
+        try {
+          currentShardKey = PathBuilder.buildPath(shardId.shardIdPath(), currentValues.getCurrent());
+          ListObjectsV2Request request = new ListObjectsV2Request().withBucketName(bucket).withPrefix(currentShardKey);
+          ListObjectsV2Result result;
+          do {
+            result = s3Client.listObjectsV2(request);
+            objects.addAll(result.getObjectSummaries());
+            request.setContinuationToken(result.getNextContinuationToken());
+          } while (result.isTruncated());
+          return objects;
+        } catch (Exception e) {
+          LOGGER.warn("Error retrieving current shard objects for shard: " +  currentShardKey, e);
+        }
+      }
+    }
+    return Collections.emptyList();
   }
 
   @Override
