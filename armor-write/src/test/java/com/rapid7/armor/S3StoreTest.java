@@ -263,7 +263,7 @@ public class S3StoreTest {
     try (ArmorWriter aw = new ArmorWriter("test", writeStore, Compression.NONE, 1)) {
       Instant now = Instant.now();
       RuntimeException runtimeException = assertThrows(RuntimeException.class, () -> aw.snapshotCurrentToInterval("orgA", "table1", Interval.WEEKLY, now));
-      assertTrue(runtimeException.getMessage().contains("Could not retrieve current contents of shard"));
+      assertTrue(runtimeException.getMessage().contains("Expected current shard to contain objects"));
       
       String intervalStart = Interval.WEEKLY.getIntervalStart(now);
       String copiedWeeklyShard0 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + intervalStart + "/0/" + DistXact.CURRENT_MARKER;

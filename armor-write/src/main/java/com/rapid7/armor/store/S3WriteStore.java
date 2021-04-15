@@ -328,7 +328,7 @@ public class S3WriteStore implements WriteStore {
     try {
       List<S3ObjectSummary> currentShardObjects = getCurrentShardObjects(shardIdSrc);
       if (currentShardObjects.isEmpty()) {
-        throw new RuntimeException("Could not retrieve current contents of shard: " + shardIdSrc.shardIdPath());
+        throw new RuntimeException("Expected current shard to contain objects. shard: " + shardIdSrc.shardIdPath());
       }
       
       currentShardKey = getCurrentShardKey(shardSrcPath, currentShardObjects);
