@@ -199,7 +199,6 @@ public class ArmorWriter implements Closeable {
       } else {
         // NOTE: Let it fall through, since its a new shard we haven't loaded yet.
       }
-      
     }
 
     // If it is null then table doesn't exist yet which means we can just return.
@@ -235,18 +234,19 @@ public class ArmorWriter implements Closeable {
     String plusTable = DiffTableName.generatePlusTableDiffName(table, targetInterval, diffColumn);
     String minusTable = DiffTableName.generateMinusTableDiffName(table, targetInterval, diffColumn);
     TableId baseTableId = new TableId(tenant, table);
-    Set<TableId> test = diffTableWriters.get(baseTableId);
-    if (test == null) {
-      test = new HashSet<>();
-      diffTableWriters.put(baseTableId, test);
+    Set<TableId> diffTables = diffTableWriters.get(baseTableId);
+    if (diffTables == null) {
+      diffTables = new HashSet<>();
+      diffTableWriters.put(baseTableId, diffTables);
     }
     TableId plusTableId = new TableId(tenant, plusTable);
     TableId minusTableId = new TableId(tenant, minusTable);
-    test.add(plusTableId);
-    test.add(minusTableId);
     
     // Plus is simple for delete, just delete it.
     delete(transaction, tenant, plusTable, targetInterval, targetTimestamp, entityId, version, instanceId);
+    // Check to see if the call to delete loaded a plus table writer.
+    if (tableWriters.containsKey(plusTableId))
+      diffTables.add(plusTableId);
 
     // Minus is a special case where we need to add records completely based on the baseline column. Most important we cannot 
     // mark the entity as deleted, otherwise it won't account for minuses.
@@ -256,6 +256,7 @@ public class ArmorWriter implements Closeable {
       if (tableMeta != null) {
         // Make sure the entityid column hasn't changed.
         minusTableWriter = getTableWriter(minusTableId);
+        diffTables.add(minusTableId);
         tableEntityColumnIds.put(minusTableId, toColumnId(tableMeta)); 
       } else {
         // There is no minus table
@@ -263,6 +264,7 @@ public class ArmorWriter implements Closeable {
       }
     } else {
       minusTableWriter = getTableWriter(minusTableId);
+      diffTables.add(minusTableId);
     }
     
     ShardId targetShardId = store.findShardId(tenant, minusTable, targetInterval, targetTimestamp, entityId);
@@ -416,22 +418,20 @@ public class ArmorWriter implements Closeable {
     HashMap<ShardId, List<Entity>> minusShardsToUpdates = new HashMap<>();
 
     TableId baseTableId = new TableId(tenant, table);
-   
     TableId plusTableId = new TableId(tenant, plusTable);
     TableId minusTableId = new TableId(tenant, minusTable);
-    Set<TableId> test = diffTableWriters.get(baseTableId);
-    if (test == null) {
-      test = new HashSet<>();
-      diffTableWriters.put(baseTableId, test);
+    Set<TableId> diffTablesIds = diffTableWriters.get(baseTableId);
+    if (diffTablesIds == null) {
+      diffTablesIds = new HashSet<>();
+      diffTableWriters.put(baseTableId, diffTablesIds);
     }
-    test.add(plusTableId);
-    test.add(minusTableId);
     final TableWriter plusTableWriter;
     if (!tableWriters.containsKey(plusTableId)) {
       TableMetadata tableMeta = store.getTableMetadata(tenant, plusTable);
       if (tableMeta != null) {
         // The table exists, load it up then
         plusTableWriter = getTableWriter(plusTableId);
+        diffTablesIds.add(plusTableId);
         // Make sure the entityid column hasn't changed.
         String entityIdColumn = tableMeta.getEntityColumnId();
         if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
@@ -440,11 +440,13 @@ public class ArmorWriter implements Closeable {
       } else {
         Entity entity = entities.get(0);
         plusTableWriter = getTableWriter(plusTableId);
+        diffTablesIds.add(plusTableId);
         // No shard metadata exists, create the first shard metadata for this.
         tableEntityColumnIds.put(plusTableId, buildEntityColumnId(entity));
       }
     } else {
       plusTableWriter = tableWriters.get(plusTableId);
+      diffTablesIds.add(plusTableId);
     }
 
     final TableWriter minusTableWriter;
@@ -453,6 +455,7 @@ public class ArmorWriter implements Closeable {
       if (tableMeta != null) {
         // Make sure the entityid column hasn't changed.
         minusTableWriter = getTableWriter(minusTableId);
+        diffTablesIds.add(minusTableId);
 
         String entityIdColumn = tableMeta.getEntityColumnId();
         if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
@@ -461,11 +464,13 @@ public class ArmorWriter implements Closeable {
       } else {
         Entity entity = entities.get(0);
         minusTableWriter = getTableWriter(minusTableId);
+        diffTablesIds.add(minusTableId);
         // No shard metadata exists, create the first shard metadata for this.
         tableEntityColumnIds.put(minusTableId, buildEntityColumnId(entity));
       }
     } else {
       minusTableWriter = getTableWriter(minusTableId);
+      diffTablesIds.add(minusTableId);
     }
     
     for (Entity entity : entities) {
