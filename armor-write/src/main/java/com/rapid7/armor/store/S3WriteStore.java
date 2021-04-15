@@ -374,10 +374,11 @@ public class S3WriteStore implements WriteStore {
     if (status != null)
       status.validateXact(transaction);
   
+    saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
+    trackTenant(shardId.getTenant());
+    
     boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
     if (!isArchiving) {
-      saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
-      trackTenant(shardId.getTenant());
       try {
         if (status == null || status.getPrevious() == null)
           return;
@@ -397,7 +398,7 @@ public class S3WriteStore implements WriteStore {
           }
         }
       } catch (Exception e) {
-        LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
+        LOGGER.warn("Unable to delete previous shard version under {}", status.getPrevious(), e);
       }
     }
   }
