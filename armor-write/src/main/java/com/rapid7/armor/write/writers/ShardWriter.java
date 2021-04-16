@@ -180,6 +180,7 @@ public class ShardWriter implements IShardWriter {
    */
   private ColumnMetadata consistencyCheck(String transaction, String entityIdColumn, DataType entityIdType) throws IOException {
     // First for all columns do check and do a compaction before continuing.
+    Instant startTime = Instant.now();
     for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
       ColumnFileWriter cw = columnFileWriters.get(entry.getKey());
       ColumnMetadata md = cw.getMetadata();
@@ -264,7 +265,9 @@ public class ShardWriter implements IShardWriter {
       }
     }
 
-    return buildStoreEntityIdColumn(transaction, baselineSummaries, entityIdColumn, entityIdType);
+    ColumnMetadata meta = buildStoreEntityIdColumn(transaction, baselineSummaries, entityIdColumn, entityIdType);
+    LOGGER.warn("consistency check took {}", Duration.between(startTime, Instant.now()));
+    return meta;
   }
   
   /**
