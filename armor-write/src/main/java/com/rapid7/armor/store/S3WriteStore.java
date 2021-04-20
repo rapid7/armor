@@ -16,6 +16,7 @@ import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
 import com.rapid7.armor.xact.DistXact;
 import com.rapid7.armor.xact.DistXactUtil;
+import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.ResetException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
@@ -538,7 +539,14 @@ public class S3WriteStore implements WriteStore {
       ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
       while (true) {
         for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
-          s3Client.deleteObject(bucket, objectSummary.getKey());
+          try {
+            s3Client.deleteObject(bucket, objectSummary.getKey());
+          } catch (AmazonS3Exception e) {
+            // Not found could mean another process has already removed it.
+            if (e.getStatusCode() != 404) {
+              throw e;
+            }
+          }
         }
         if (objectListing.isTruncated()) {
           objectListing = s3Client.listNextBatchOfObjects(objectListing);
