@@ -380,14 +380,16 @@ public class S3WriteStore implements WriteStore {
   
   @Override
   public void commit(String transaction, ShardId shardId) {
+    long mark = System.currentTimeMillis();
     DistXact status = getCurrentValues(shardId);
     if (status != null)
       status.validateXact(transaction);
   
     saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
     trackTenant(shardId.getTenant());
-    
     boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
+    
+    LOGGER.info("The commit for {} transaction on shard {} took {} seconds", transaction, shardId, (System.currentTimeMillis() - mark / 1000));
     if (!isArchiving) {
       tpool.execute(new Runnable() {
         @Override
@@ -749,6 +751,7 @@ public class S3WriteStore implements WriteStore {
           LOGGER.error("Unable to execute existance check on {}:{}..quitting", bucket, key, e);
           throw e;
         }
+        LOGGER.info("!!!!Got a s3 throttle error, so going to sleep for some seconds");
         try {
           Thread.sleep((i + 1) * 1000);
         } catch (InterruptedException ie) {
