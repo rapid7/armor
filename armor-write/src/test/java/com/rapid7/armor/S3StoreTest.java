@@ -471,11 +471,7 @@ public class S3StoreTest {
 
           amrorWriter2.close(); // Close this FS and open a new one to test the load.
         } finally {
-          try {
-            writeStore.deleteTenant(myorg);
-          } catch (Exception e) {
-            
-          }
+          writeStore.deleteTenant(myorg);
         }
       }
     }
