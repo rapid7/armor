@@ -16,6 +16,7 @@ import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
 import com.rapid7.armor.xact.DistXact;
 import com.rapid7.armor.xact.DistXactUtil;
+import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.ResetException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
@@ -48,6 +49,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
@@ -64,11 +67,17 @@ public class S3WriteStore implements WriteStore {
   private static final String INTERVAL_TAG = "interval";
   private static final String ARCHIVING_MARKER = "ARCHIVING";
   private static final Set<String> tenantCache = new HashSet<>();
-  
+  private Executor tpool;
+
+  public void setThreadPool(int threads) {
+    this.tpool = Executors.newFixedThreadPool(threads);
+  }
+
   public S3WriteStore(AmazonS3 s3Client, String bucket, ShardStrategy shardStrategy) {
     this.s3Client = s3Client;
     this.bucket = bucket;
     this.shardStrategy = shardStrategy;
+    this.tpool = Executors.newFixedThreadPool(10);
   }
 
   @Override
@@ -380,27 +389,32 @@ public class S3WriteStore implements WriteStore {
     
     boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
     if (!isArchiving) {
-      try {
-        if (status == null || status.getPrevious() == null)
-          return;
-        String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), status.getPrevious());
-        ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
-            .withBucketName(bucket)
-            .withPrefix(toDelete);
-        ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
-        while (true) {
-          for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
-            s3Client.deleteObject(bucket, objectSummary.getKey());
-          }
-          if (objectListing.isTruncated()) {
-            objectListing = s3Client.listNextBatchOfObjects(objectListing);
-          } else {
-            break;
+      tpool.execute(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            if (status == null || status.getPrevious() == null)
+              return;
+            String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), status.getPrevious());
+            ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+                .withBucketName(bucket)
+                .withPrefix(toDelete);
+            ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+            while (true) {
+              for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
+                s3Client.deleteObject(bucket, objectSummary.getKey());
+              }
+              if (objectListing.isTruncated()) {
+                objectListing = s3Client.listNextBatchOfObjects(objectListing);
+              } else {
+                break;
+              }
+            }
+          } catch (Throwable t) {
+            LOGGER.warn("Unable to delete previous shard version under {}", status.getPrevious(), t);
           }
         }
-      } catch (Exception e) {
-        LOGGER.warn("Unable to delete previous shard version under {}", status.getPrevious(), e);
-      }
+      });
     }
   }
 
@@ -525,7 +539,14 @@ public class S3WriteStore implements WriteStore {
       ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
       while (true) {
         for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
-          s3Client.deleteObject(bucket, objectSummary.getKey());
+          try {
+            s3Client.deleteObject(bucket, objectSummary.getKey());
+          } catch (AmazonS3Exception e) {
+            // Not found could mean another process has already removed it.
+            if (e.getStatusCode() != 404) {
+              throw e;
+            }
+          }
         }
         if (objectListing.isTruncated()) {
           objectListing = s3Client.listNextBatchOfObjects(objectListing);
@@ -534,9 +555,9 @@ public class S3WriteStore implements WriteStore {
         }
       }
     } catch (Exception e) {
-      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+      LOGGER.warn("Unable to completely remove tenant {}", tenant, e);
       throw e;
-    }    
+    }
   }
 
   @Override
