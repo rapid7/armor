@@ -547,9 +547,9 @@ public class S3WriteStore implements WriteStore {
         }
       }
     } catch (Exception e) {
-      LOGGER.warn("Unable completely remove tenant {}", tenant, e);
+      LOGGER.warn("Unable to completely remove tenant {}", tenant, e);
       throw e;
-    }    
+    }
   }
 
   @Override
