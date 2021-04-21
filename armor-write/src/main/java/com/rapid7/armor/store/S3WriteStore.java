@@ -297,6 +297,7 @@ public class S3WriteStore implements WriteStore {
         if (i + 1 == 10)
           throw new RuntimeException(ioe);
         else {
+          LOGGER.info("!!!!Going to sleep in save shard metadata");
           try {
             Thread.sleep((i + 1) * 1000);
           } catch (InterruptedException ie) {
@@ -389,7 +390,7 @@ public class S3WriteStore implements WriteStore {
     trackTenant(shardId.getTenant());
     boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
     
-    LOGGER.info("The commit for {} transaction on shard {} took {} seconds", transaction, shardId, (System.currentTimeMillis() - mark) / 1000);
+    LOGGER.info("The s3write commit for {} transaction on shard {} took {} seconds", transaction, shardId, (System.currentTimeMillis() - mark) / 1000);
     if (!isArchiving) {
       tpool.execute(new Runnable() {
         @Override
