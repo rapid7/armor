@@ -321,9 +321,17 @@ public class ColumnFileWriter implements AutoCloseable {
     else
       metadata.setCompressionAlgorithm(Compression.NONE.name());
     List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
+    
+    long mark = System.currentTimeMillis();
     entityIndexWriter.runThroughRecords(metadata, records);
+    LOGGER.info("It took {} ms to process and update the entity index stats on {}", System.currentTimeMillis() - mark, columnShardId.alternateString());
     // Run through the values to update metadata
-    rowGroupWriter.runThoughValues(metadata, records);
+    //if (false) {
+    //rowGroupWriter.runThoughValues(metadata, records);
+    
+    metadata.setMaxValue(null);
+    metadata.setMinValue(null);
+    
     // Store metadata
     String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
     byte[] metadataPayload = metadataStr.getBytes();
