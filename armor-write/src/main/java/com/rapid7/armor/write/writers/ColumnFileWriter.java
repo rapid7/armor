@@ -332,12 +332,15 @@ public class ColumnFileWriter implements AutoCloseable {
     metadata.setMaxValue(null);
     metadata.setMinValue(null);
     
+    long mark2 = System.currentTimeMillis();
     // Store metadata
     String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
     byte[] metadataPayload = metadataStr.getBytes();
     writeLength(headerPortion, 0, metadataPayload.length);
     headerPortion.write(metadataPayload);
+    LOGGER.info("It took {} ms to process and update the header stats on {}", System.currentTimeMillis() - mark2, columnShardId.alternateString());
 
+    long mark3 = System.currentTimeMillis();
     // Send entity dictionary
     InputStream entityDictIs;
     ByteArrayInputStream entityDictionaryLengths;
@@ -366,6 +369,10 @@ public class ColumnFileWriter implements AutoCloseable {
           entityDictIs = entityDictionary.getInputStream();
         }
       }
+      LOGGER.info("It took {} ms to process and update the entity dictionary on {}", System.currentTimeMillis() - mark3, columnShardId.alternateString());
+
+
+      long mark4 = System.currentTimeMillis();
 
       // Send value dictionary;
       InputStream valueDictIs;
@@ -392,6 +399,10 @@ public class ColumnFileWriter implements AutoCloseable {
         valueDictLengths = new ByteArrayInputStream(writeLength(0, 0));
         valueDictIs = new ByteArrayInputStream(new byte[0]);
       }
+      LOGGER.info("It took {} ms to process and update the value dictionary on {}", System.currentTimeMillis() - mark4, columnShardId.alternateString());
+
+
+      long mark5 = System.currentTimeMillis();
 
       // Send entity index
       InputStream entityIndexIs;
@@ -421,6 +432,9 @@ public class ColumnFileWriter implements AutoCloseable {
         entityIndexLengths = new ByteArrayInputStream(writeLength(0, uncompressed));
         entityIndexIs = entityIndexWriter.getInputStream();
       }
+      LOGGER.info("It took {} ms to process and update the entity index on {}", System.currentTimeMillis() - mark5, columnShardId.alternateString());
+
+      long mark6 = System.currentTimeMillis();
 
       // Send row group
       InputStream rgIs;
@@ -443,7 +457,10 @@ public class ColumnFileWriter implements AutoCloseable {
         rgLengths = new ByteArrayInputStream(writeLength(0, (int) rowGroupWriter.getCurrentSize()));
         rgIs = rowGroupWriter.getInputStream();
       }
+      LOGGER.info("It took {} ms to process and update the row group on {}", System.currentTimeMillis() - mark6, columnShardId.alternateString());
 
+
+      long mark7 = System.currentTimeMillis();
       byte[] header = headerPortion.toByteArray();
       totalBytes += header.length;
       StreamProduct product = new StreamProduct(totalBytes, new SequenceInputStream(Collections.enumeration(Arrays.asList(
@@ -457,6 +474,7 @@ public class ColumnFileWriter implements AutoCloseable {
           rgLengths,
           rgIs))));
       success = true;
+      LOGGER.info("It took {} ms to process and build stream product on {}", System.currentTimeMillis() - mark7, columnShardId.alternateString());
       return product;
     } finally {
       if (!success) {
