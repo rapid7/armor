@@ -52,7 +52,7 @@ public class IOTools {
   public static long copy(InputStream from, OutputStream to) throws IOException {
     checkNotNull(from);
     checkNotNull(to);
-    byte[] buf = new byte[8192];
+    byte[] buf = new byte[1000000];
     long total = 0;
     while (true) {
       int r = from.read(buf);
