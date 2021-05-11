@@ -390,7 +390,6 @@ public class S3WriteStore implements WriteStore {
     trackTenant(shardId.getTenant());
     boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
     
-    LOGGER.info("The s3write commit for {} transaction on shard {} took {} seconds", transaction, shardId, (System.currentTimeMillis() - mark) / 1000);
     if (!isArchiving) {
       tpool.execute(new Runnable() {
         @Override

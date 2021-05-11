@@ -324,7 +324,7 @@ public class ColumnFileWriter implements AutoCloseable {
     
     long mark = System.currentTimeMillis();
     entityIndexWriter.runThroughRecords(metadata, records);
-    LOGGER.info("It took {} ms to process and update the entity index stats on {}", System.currentTimeMillis() - mark, columnShardId.alternateString());
+    LOGGER.info("It took {} ms to process and update the entity index stats on {}", System.currentTimeMillis() - mark, columnShardId.toSimpleString());
     // Run through the values to update metadata
     //if (false) {
     //rowGroupWriter.runThoughValues(metadata, records);
@@ -332,13 +332,11 @@ public class ColumnFileWriter implements AutoCloseable {
     metadata.setMaxValue(null);
     metadata.setMinValue(null);
     
-    long mark2 = System.currentTimeMillis();
     // Store metadata
     String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
     byte[] metadataPayload = metadataStr.getBytes();
     writeLength(headerPortion, 0, metadataPayload.length);
     headerPortion.write(metadataPayload);
-    LOGGER.info("It took {} ms to process and update the header stats on {}", System.currentTimeMillis() - mark2, columnShardId.alternateString());
 
     long mark3 = System.currentTimeMillis();
     // Send entity dictionary
@@ -353,7 +351,7 @@ public class ColumnFileWriter implements AutoCloseable {
         entityDictIs = new ByteArrayInputStream(new byte[0]);
       } else {
         if (compress == Compression.ZSTD) {
-          Path entityDictTempPath = TempFileUtil.createTempFile("entity-dict-temp_" + columnShardId.alternateString(), ".armor");
+          Path entityDictTempPath = TempFileUtil.createTempFile("entity-dict-temp_" + columnShardId.toSimpleString(), ".armor");
           tempPaths.add(entityDictTempPath);
           try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(entityDictTempPath.toFile()), RecyclingBufferPool.INSTANCE);
                InputStream inputStream = entityDictionary.getInputStream()) {
@@ -369,7 +367,7 @@ public class ColumnFileWriter implements AutoCloseable {
           entityDictIs = entityDictionary.getInputStream();
         }
       }
-      LOGGER.info("It took {} ms to process and update the entity dictionary on {}", System.currentTimeMillis() - mark3, columnShardId.alternateString());
+      LOGGER.info("It took {} ms to process and update the entity dictionary on {}", System.currentTimeMillis() - mark3, columnShardId.toSimpleString());
 
 
       long mark4 = System.currentTimeMillis();
@@ -399,7 +397,7 @@ public class ColumnFileWriter implements AutoCloseable {
         valueDictLengths = new ByteArrayInputStream(writeLength(0, 0));
         valueDictIs = new ByteArrayInputStream(new byte[0]);
       }
-      LOGGER.info("It took {} ms to process and update the value dictionary on {}", System.currentTimeMillis() - mark4, columnShardId.alternateString());
+      LOGGER.info("It took {} ms to process and update the value dictionary on {}", System.currentTimeMillis() - mark4, columnShardId.toSimpleString());
 
 
       long mark5 = System.currentTimeMillis();
@@ -412,8 +410,8 @@ public class ColumnFileWriter implements AutoCloseable {
       if (uncompressed % Constants.RECORD_SIZE_BYTES != 0) {
         int bytesOff = uncompressed % Constants.RECORD_SIZE_BYTES;
         LOGGER.error("The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}: See {}",
-           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.alternateString());
-        throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.alternateString());
+           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.toSimpleString());
+        throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.toSimpleString());
       }
       if (compress == Compression.ZSTD) {
         String tempName = this.columnShardId.alternateString();
@@ -432,7 +430,7 @@ public class ColumnFileWriter implements AutoCloseable {
         entityIndexLengths = new ByteArrayInputStream(writeLength(0, uncompressed));
         entityIndexIs = entityIndexWriter.getInputStream();
       }
-      LOGGER.info("It took {} ms to process and update the entity index on {}", System.currentTimeMillis() - mark5, columnShardId.alternateString());
+      LOGGER.info("It took {} ms to process and update the entity index on {}", System.currentTimeMillis() - mark5, columnShardId.toSimpleString());
 
       long mark6 = System.currentTimeMillis();
 
@@ -440,15 +438,21 @@ public class ColumnFileWriter implements AutoCloseable {
       InputStream rgIs;
       ByteArrayInputStream rgLengths;
       totalBytes += 8;
+      long byteWritten = -1;
+      long byteStored = -1;
+      int compressed = -1;
+
+
       if (compress == Compression.ZSTD) {
         String tempName = columnShardId.alternateString();
         Path rgTempPath = TempFileUtil.createTempFile("rowgroup-temp_" + tempName + "-", ".armor");
         tempPaths.add(rgTempPath);
         try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(rgTempPath.toFile()), RecyclingBufferPool.INSTANCE);
              InputStream rgInputStream = rowGroupWriter.getInputStream()) {
-          IOTools.copy(rgInputStream, zstdOutput);
+        	byteWritten = IOTools.copy(rgInputStream, zstdOutput);
         }
         int payloadSize = (int) Files.size(rgTempPath);
+        byteStored = payloadSize;
         totalBytes += payloadSize;
         rgLengths = new ByteArrayInputStream(writeLength((int) Files.size(rgTempPath), (int) rowGroupWriter.getCurrentSize()));
         rgIs = new AutoDeleteFileInputStream(rgTempPath);
@@ -457,10 +461,13 @@ public class ColumnFileWriter implements AutoCloseable {
         rgLengths = new ByteArrayInputStream(writeLength(0, (int) rowGroupWriter.getCurrentSize()));
         rgIs = rowGroupWriter.getInputStream();
       }
-      LOGGER.info("It took {} ms to process and update the row group on {}", System.currentTimeMillis() - mark6, columnShardId.alternateString());
+      LOGGER.info("It took {} ms to process and update the row group on {} from {} to {} bytes",
+          System.currentTimeMillis() - mark6, columnShardId.toSimpleString(), byteWritten, byteStored);
+      if (System.currentTimeMillis() - mark6 > 10000) {
+          Path target = Files.createTempFile("rg-" + columnShardId.getShardNum() + "-" + columnShardId.getColumnId().getName(), "tmp");
+          LOGGER.info("NOTE!!!!!!!!!! Copying uncompressed rg to {} for shard {}", target, columnShardId.toSimpleString());
+      }
 
-
-      long mark7 = System.currentTimeMillis();
       byte[] header = headerPortion.toByteArray();
       totalBytes += header.length;
       StreamProduct product = new StreamProduct(totalBytes, new SequenceInputStream(Collections.enumeration(Arrays.asList(
@@ -474,7 +481,6 @@ public class ColumnFileWriter implements AutoCloseable {
           rgLengths,
           rgIs))));
       success = true;
-      LOGGER.info("It took {} ms to process and build stream product on {}", System.currentTimeMillis() - mark7, columnShardId.alternateString());
       return product;
     } finally {
       if (!success) {
