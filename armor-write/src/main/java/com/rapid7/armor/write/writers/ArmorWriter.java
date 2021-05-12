@@ -79,7 +79,7 @@ public class ArmorWriter implements Closeable {
     this.compress = compress;
     this.name = name;
     if (compactionTrigger == null) {
-      this.compactionTrigger = () -> 50;
+      this.compactionTrigger = () -> 20;
     } else
       this.compactionTrigger = compactionTrigger;
   }
