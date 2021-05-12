@@ -325,9 +325,7 @@ public class ColumnFileWriter implements AutoCloseable {
       metadata.setCompressionAlgorithm(Compression.NONE.name());
     List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
     
-    long mark = System.currentTimeMillis();
     entityIndexWriter.runThroughRecords(metadata, records);
-    LOGGER.info("It took {} ms to process and update the entity index stats on {}", System.currentTimeMillis() - mark, columnShardId.toSimpleString());
     // Run through the values to update metadata
     //if (false) {
     //rowGroupWriter.runThoughValues(metadata, records);
@@ -341,7 +339,6 @@ public class ColumnFileWriter implements AutoCloseable {
     writeLength(headerPortion, 0, metadataPayload.length);
     headerPortion.write(metadataPayload);
 
-    long mark3 = System.currentTimeMillis();
     // Send entity dictionary
     InputStream entityDictIs;
     ByteArrayInputStream entityDictionaryLengths;
@@ -370,10 +367,7 @@ public class ColumnFileWriter implements AutoCloseable {
           entityDictIs = entityDictionary.getInputStream();
         }
       }
-      LOGGER.info("It took {} ms to process and update the entity dictionary on {}", System.currentTimeMillis() - mark3, columnShardId.toSimpleString());
 
-
-      long mark4 = System.currentTimeMillis();
 
       // Send value dictionary;
       InputStream valueDictIs;
@@ -400,8 +394,6 @@ public class ColumnFileWriter implements AutoCloseable {
         valueDictLengths = new ByteArrayInputStream(writeLength(0, 0));
         valueDictIs = new ByteArrayInputStream(new byte[0]);
       }
-      LOGGER.info("It took {} ms to process and update the value dictionary on {}", System.currentTimeMillis() - mark4, columnShardId.toSimpleString());
-
 
       long mark5 = System.currentTimeMillis();
 
@@ -466,10 +458,11 @@ public class ColumnFileWriter implements AutoCloseable {
       }
       LOGGER.info("It took {} ms to process and update the row group on {} from {} to {} bytes",
           System.currentTimeMillis() - mark6, columnShardId.toSimpleString(), byteWritten, byteStored);
-      if (System.currentTimeMillis() - mark6 > 10000) {
-          Path target = Files.createTempFile("rg-" + columnShardId.getShardNum() + "-" + columnShardId.getColumnId().getName(), "tmp");
-          LOGGER.info("NOTE!!!!!!!!!! Copying uncompressed rg to {} for shard {}", target, columnShardId.toSimpleString());
-      }
+//      if (System.currentTimeMillis() - mark6 > 10000) {
+//          Path target = Files.createTempFile("rg-" + columnShardId.getShardNum() + "-" + columnShardId.getColumnId().getName(), "tmp");
+//          rowGroupWriter.copy(target);
+//          LOGGER.info("NOTE!!!!!!!!!! Copying uncompressed rg to {} for shard {}", target, columnShardId.toSimpleString());
+//      }
 
       byte[] header = headerPortion.toByteArray();
       totalBytes += header.length;
