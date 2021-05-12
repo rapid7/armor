@@ -26,7 +26,8 @@ public class ColumnMetadata {
   private int numEntities = 0;
   private int cardinality = 0;
   private String lastCompaction;
-  
+  private String lastCompactionDuration;
+
   public void setEntityId(boolean entityId) {
     this.entityId = entityId;
   }
@@ -37,6 +38,14 @@ public class ColumnMetadata {
 
   public String getLastCompaction() {
     return lastCompaction;
+  }
+  
+  public String getLastCompactionDuration() {
+    return this.lastCompactionDuration;
+  }
+
+  public void setLastCompactionDuration(String lastCompactionDuration) {
+	this.lastCompactionDuration = lastCompactionDuration;
   }
 
   public void setLastCompaction(String lastCompaction) {
@@ -116,6 +125,23 @@ public class ColumnMetadata {
 
   public void setLastUpdate(String lastUpdate) {
     this.lastUpdate = lastUpdate;
+  }
+
+  public void setApproxFragmentationBytes(long bytes) {
+	// Noop don't do anything
+  }
+
+  public long getApproxFragmentationBytes() {
+	int typeLength;
+	if (dataType == null || dataType == DataType.STRING) {
+		typeLength = 4;
+	} else {
+		typeLength = dataType.getByteLength();
+	}
+	long acutalByteSize = (numRows * typeLength);
+	long usedPercentage = 100 - fragmentationLevel;
+	  
+	return (acutalByteSize * fragmentationLevel) / usedPercentage; 
   }
 
   public int getFragmentationLevel() {

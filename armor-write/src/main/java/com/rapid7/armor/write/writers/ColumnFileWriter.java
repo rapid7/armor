@@ -38,6 +38,8 @@ import java.io.SequenceInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,6 +50,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -599,6 +602,7 @@ public class ColumnFileWriter implements AutoCloseable {
 
   // Compaction requires a list of entities to use, it can either be preexisting or non-existing.
   public void compact(List<EntityRecordSummary> entitiesToKeep) throws IOException {
+	java.time.Instant mark = Instant.now();
     List<EntityRecord> entityRecords = new ArrayList<>();
     for (EntityRecordSummary entityCheck : entitiesToKeep) {
       final Integer entityId;
@@ -644,6 +648,7 @@ public class ColumnFileWriter implements AutoCloseable {
       }
     }
 
+    metadata.setLastCompactionDuration(Duration.between(mark, Instant.now()).toString());
     metadata.setLastCompaction(new Date().toString());
   }
 }

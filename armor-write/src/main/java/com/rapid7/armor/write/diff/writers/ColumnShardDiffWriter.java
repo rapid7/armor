@@ -67,7 +67,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
     this.store = store;
     this.compress = compress;
     if (compactionTriggerSupplier == null)
-      this.compactionTrigger = () -> 90;
+      this.compactionTrigger = () -> 20;
     else
       this.compactionTrigger = compactionTriggerSupplier;
     this.forPluses = forPluses;
