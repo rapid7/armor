@@ -4,7 +4,7 @@
 
     <groupId>com.rapid7</groupId>
     <artifactId>armor-parent</artifactId>
-    <version>0.0.32-SNAPSHOT</version>
+    <version>0.0.32</version>
     <packaging>pom</packaging>
 
     <name>armor</name>
@@ -27,7 +27,7 @@
         <connection>scm:git:git@github.com:rapid7/armor.git</connection>
         <developerConnection>scm:git:git@github.com:rapid7/armor.git</developerConnection>
         <url>https://github.com/rapid7/armor</url>
-        <tag>HEAD</tag>
+        <tag>0.0.32</tag>
     </scm>
 
     <developers>
