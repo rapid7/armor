@@ -126,14 +126,12 @@ public class ShardWriter implements IShardWriter {
     boolean committed = false;
     try {
       ColumnMetadata entityColumnMetadata = consistencyCheck(transaction, columnEntityId.getName(), columnEntityId.dataType());
-      long mark = System.currentTimeMillis();
       for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
         try (InputStream inputStream = streamProduct.getInputStream()) {
           store.saveColumn(transaction, entry.getKey(), streamProduct.getByteSize(), inputStream);
         }
       }
-      LOGGER.info("It took {} ms to save {} columns for {} on transcation {}", System.currentTimeMillis() - mark, columnFileWriters.size(), this.shardId, transaction);
 
       // Do this after the save, to ensure metadata is updated.
       List<ColumnMetadata> columnMetadata = columnFileWriters.values().stream().map(ColumnFileWriter::getMetadata).collect(Collectors.toList());
@@ -182,7 +180,6 @@ public class ShardWriter implements IShardWriter {
    */
   private ColumnMetadata consistencyCheck(String transaction, String entityIdColumn, DataType entityIdType) throws IOException {
     // First for all columns do check and do a compaction before continuing.
-    Instant startTime = Instant.now();
     for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
       ColumnFileWriter cw = columnFileWriters.get(entry.getKey());
       ColumnMetadata md = cw.getMetadata();
@@ -268,7 +265,6 @@ public class ShardWriter implements IShardWriter {
     }
 
     ColumnMetadata meta = buildStoreEntityIdColumn(transaction, baselineSummaries, entityIdColumn, entityIdType);
-    LOGGER.warn("consistency check took {}", Duration.between(startTime, Instant.now()));
     return meta;
   }
   
