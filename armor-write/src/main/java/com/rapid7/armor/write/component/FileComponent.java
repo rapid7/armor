@@ -117,4 +117,9 @@ public class FileComponent implements ChannelComponent {
       Files.deleteIfExists(path);
     }
   }
+
+  @Override
+  public void copy(Path target) throws IOException {
+      Files.copy(path, target);
+  }
 }

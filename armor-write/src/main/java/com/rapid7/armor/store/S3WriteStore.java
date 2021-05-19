@@ -386,8 +386,8 @@ public class S3WriteStore implements WriteStore {
   
     saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
     trackTenant(shardId.getTenant());
-    
     boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
+    
     if (!isArchiving) {
       tpool.execute(new Runnable() {
         @Override

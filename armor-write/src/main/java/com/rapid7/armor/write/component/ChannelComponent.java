@@ -2,6 +2,7 @@ package com.rapid7.armor.write.component;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 
 public interface ChannelComponent extends Component, AutoCloseable {
 
@@ -18,4 +19,6 @@ public interface ChannelComponent extends Component, AutoCloseable {
   void close() throws IOException;
 
   void truncate(int size) throws IOException;
+  
+  void copy(Path target) throws IOException;
 }

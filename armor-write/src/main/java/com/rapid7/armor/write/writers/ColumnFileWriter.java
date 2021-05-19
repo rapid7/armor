@@ -38,6 +38,8 @@ import java.io.SequenceInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,6 +50,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,6 +65,11 @@ public class ColumnFileWriter implements AutoCloseable {
   private final ColumnShardId columnShardId;
   private final String ROWGROUP_STORE_SUFFIX = "_rowgroup-";
   private final String ENTITYINDEX_STORE_SUFFIX = "_entityindex-";
+  private boolean skipMetaData = false;
+  
+  public void setSkipMetaData(boolean skipMetaData) {
+	this.skipMetaData = skipMetaData;
+  }
 
   public ColumnFileWriter(ColumnShardId columnShardId) throws IOException {
     metadata = new ColumnMetadata();
@@ -321,9 +329,16 @@ public class ColumnFileWriter implements AutoCloseable {
     else
       metadata.setCompressionAlgorithm(Compression.NONE.name());
     List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
+    
     entityIndexWriter.runThroughRecords(metadata, records);
     // Run through the values to update metadata
-    rowGroupWriter.runThoughValues(metadata, records);
+    if (!skipMetaData) {
+      rowGroupWriter.runThoughValues(metadata, records);
+    } else {
+      metadata.setMaxValue(null);
+      metadata.setMinValue(null);
+    }
+
     // Store metadata
     String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
     byte[] metadataPayload = metadataStr.getBytes();
@@ -342,7 +357,7 @@ public class ColumnFileWriter implements AutoCloseable {
         entityDictIs = new ByteArrayInputStream(new byte[0]);
       } else {
         if (compress == Compression.ZSTD) {
-          Path entityDictTempPath = TempFileUtil.createTempFile("entity-dict-temp_" + columnShardId.alternateString(), ".armor");
+          Path entityDictTempPath = TempFileUtil.createTempFile("entity-dict-temp_" + columnShardId.toSimpleString(), ".armor");
           tempPaths.add(entityDictTempPath);
           try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(entityDictTempPath.toFile()), RecyclingBufferPool.INSTANCE);
                InputStream inputStream = entityDictionary.getInputStream()) {
@@ -358,6 +373,7 @@ public class ColumnFileWriter implements AutoCloseable {
           entityDictIs = entityDictionary.getInputStream();
         }
       }
+
 
       // Send value dictionary;
       InputStream valueDictIs;
@@ -393,8 +409,8 @@ public class ColumnFileWriter implements AutoCloseable {
       if (uncompressed % Constants.RECORD_SIZE_BYTES != 0) {
         int bytesOff = uncompressed % Constants.RECORD_SIZE_BYTES;
         LOGGER.error("The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}: See {}",
-           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.alternateString());
-        throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.alternateString());
+           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.toSimpleString());
+        throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.toSimpleString());
       }
       if (compress == Compression.ZSTD) {
         String tempName = this.columnShardId.alternateString();
@@ -418,15 +434,21 @@ public class ColumnFileWriter implements AutoCloseable {
       InputStream rgIs;
       ByteArrayInputStream rgLengths;
       totalBytes += 8;
+      long byteWritten = -1;
+      long byteStored = -1;
+      int compressed = -1;
+
+
       if (compress == Compression.ZSTD) {
         String tempName = columnShardId.alternateString();
         Path rgTempPath = TempFileUtil.createTempFile("rowgroup-temp_" + tempName + "-", ".armor");
         tempPaths.add(rgTempPath);
         try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(rgTempPath.toFile()), RecyclingBufferPool.INSTANCE);
              InputStream rgInputStream = rowGroupWriter.getInputStream()) {
-          IOTools.copy(rgInputStream, zstdOutput);
+        	byteWritten = IOTools.copy(rgInputStream, zstdOutput);
         }
         int payloadSize = (int) Files.size(rgTempPath);
+        byteStored = payloadSize;
         totalBytes += payloadSize;
         rgLengths = new ByteArrayInputStream(writeLength((int) Files.size(rgTempPath), (int) rowGroupWriter.getCurrentSize()));
         rgIs = new AutoDeleteFileInputStream(rgTempPath);
@@ -567,6 +589,7 @@ public class ColumnFileWriter implements AutoCloseable {
 
   // Compaction requires a list of entities to use, it can either be preexisting or non-existing.
   public void compact(List<EntityRecordSummary> entitiesToKeep) throws IOException {
+	Instant mark = Instant.now();
     List<EntityRecord> entityRecords = new ArrayList<>();
     for (EntityRecordSummary entityCheck : entitiesToKeep) {
       final Integer entityId;
@@ -612,6 +635,7 @@ public class ColumnFileWriter implements AutoCloseable {
       }
     }
 
+    metadata.setLastCompactionDuration(Duration.between(mark, Instant.now()).toString());
     metadata.setLastCompaction(new Date().toString());
   }
 }

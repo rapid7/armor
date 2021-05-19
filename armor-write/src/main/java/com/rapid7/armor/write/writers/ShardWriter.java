@@ -264,7 +264,8 @@ public class ShardWriter implements IShardWriter {
       }
     }
 
-    return buildStoreEntityIdColumn(transaction, baselineSummaries, entityIdColumn, entityIdType);
+    ColumnMetadata meta = buildStoreEntityIdColumn(transaction, baselineSummaries, entityIdColumn, entityIdType);
+    return meta;
   }
   
   /**
