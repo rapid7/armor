@@ -297,7 +297,6 @@ public class S3WriteStore implements WriteStore {
         if (i + 1 == 10)
           throw new RuntimeException(ioe);
         else {
-          LOGGER.info("!!!!Going to sleep in save shard metadata");
           try {
             Thread.sleep((i + 1) * 1000);
           } catch (InterruptedException ie) {
@@ -381,7 +380,6 @@ public class S3WriteStore implements WriteStore {
   
   @Override
   public void commit(String transaction, ShardId shardId) {
-    long mark = System.currentTimeMillis();
     DistXact status = getCurrentValues(shardId);
     if (status != null)
       status.validateXact(transaction);
@@ -751,7 +749,6 @@ public class S3WriteStore implements WriteStore {
           LOGGER.error("Unable to execute existance check on {}:{}..quitting", bucket, key, e);
           throw e;
         }
-        LOGGER.info("!!!!Got a s3 throttle error, so going to sleep for some seconds");
         try {
           Thread.sleep((i + 1) * 1000);
         } catch (InterruptedException ie) {

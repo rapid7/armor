@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 public class IOTools {
+  private static int BUFFER_SIZE = 1000000;
   public static int readFully(InputStream in, byte[] buf, int off, int len)
       throws IOException {
     if (off < 0)
@@ -52,7 +53,7 @@ public class IOTools {
   public static long copy(InputStream from, OutputStream to) throws IOException {
     checkNotNull(from);
     checkNotNull(to);
-    byte[] buf = new byte[1000000];
+    byte[] buf = new byte[BUFFER_SIZE];
     long total = 0;
     while (true) {
       int r = from.read(buf);

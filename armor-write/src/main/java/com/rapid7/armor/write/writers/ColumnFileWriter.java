@@ -65,6 +65,11 @@ public class ColumnFileWriter implements AutoCloseable {
   private final ColumnShardId columnShardId;
   private final String ROWGROUP_STORE_SUFFIX = "_rowgroup-";
   private final String ENTITYINDEX_STORE_SUFFIX = "_entityindex-";
+  private boolean skipMetaData = false;
+  
+  public void setSkipMetaData(boolean skipMetaData) {
+	this.skipMetaData = skipMetaData;
+  }
 
   public ColumnFileWriter(ColumnShardId columnShardId) throws IOException {
     metadata = new ColumnMetadata();
@@ -327,12 +332,13 @@ public class ColumnFileWriter implements AutoCloseable {
     
     entityIndexWriter.runThroughRecords(metadata, records);
     // Run through the values to update metadata
-    //if (false) {
-    //rowGroupWriter.runThoughValues(metadata, records);
-    
-    metadata.setMaxValue(null);
-    metadata.setMinValue(null);
-    
+    if (!skipMetaData) {
+      rowGroupWriter.runThoughValues(metadata, records);
+    } else {
+      metadata.setMaxValue(null);
+      metadata.setMinValue(null);
+    }
+
     // Store metadata
     String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
     byte[] metadataPayload = metadataStr.getBytes();
@@ -395,8 +401,6 @@ public class ColumnFileWriter implements AutoCloseable {
         valueDictIs = new ByteArrayInputStream(new byte[0]);
       }
 
-      long mark5 = System.currentTimeMillis();
-
       // Send entity index
       InputStream entityIndexIs;
       ByteArrayInputStream entityIndexLengths;
@@ -425,9 +429,6 @@ public class ColumnFileWriter implements AutoCloseable {
         entityIndexLengths = new ByteArrayInputStream(writeLength(0, uncompressed));
         entityIndexIs = entityIndexWriter.getInputStream();
       }
-      LOGGER.info("It took {} ms to process and update the entity index on {}", System.currentTimeMillis() - mark5, columnShardId.toSimpleString());
-
-      long mark6 = System.currentTimeMillis();
 
       // Send row group
       InputStream rgIs;
@@ -456,13 +457,6 @@ public class ColumnFileWriter implements AutoCloseable {
         rgLengths = new ByteArrayInputStream(writeLength(0, (int) rowGroupWriter.getCurrentSize()));
         rgIs = rowGroupWriter.getInputStream();
       }
-      LOGGER.info("It took {} ms to process and update the row group on {} from {} to {} bytes",
-          System.currentTimeMillis() - mark6, columnShardId.toSimpleString(), byteWritten, byteStored);
-//      if (System.currentTimeMillis() - mark6 > 10000) {
-//          Path target = Files.createTempFile("rg-" + columnShardId.getShardNum() + "-" + columnShardId.getColumnId().getName(), "tmp");
-//          rowGroupWriter.copy(target);
-//          LOGGER.info("NOTE!!!!!!!!!! Copying uncompressed rg to {} for shard {}", target, columnShardId.toSimpleString());
-//      }
 
       byte[] header = headerPortion.toByteArray();
       totalBytes += header.length;
@@ -595,7 +589,7 @@ public class ColumnFileWriter implements AutoCloseable {
 
   // Compaction requires a list of entities to use, it can either be preexisting or non-existing.
   public void compact(List<EntityRecordSummary> entitiesToKeep) throws IOException {
-	java.time.Instant mark = Instant.now();
+	Instant mark = Instant.now();
     List<EntityRecord> entityRecords = new ArrayList<>();
     for (EntityRecordSummary entityCheck : entitiesToKeep) {
       final Integer entityId;

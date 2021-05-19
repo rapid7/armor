@@ -127,11 +127,11 @@ public class ColumnMetadata {
     this.lastUpdate = lastUpdate;
   }
 
-  public void setApproxFragmentationBytes(long bytes) {
+  public void setApproxUncompressedFragmentedBytes(long bytes) {
 	// Noop don't do anything
   }
 
-  public long getApproxFragmentationBytes() {
+  public long getApproxUncompressedFragmentedBytes() {
 	int typeLength;
 	if (dataType == null || dataType == DataType.STRING) {
 		typeLength = 4;

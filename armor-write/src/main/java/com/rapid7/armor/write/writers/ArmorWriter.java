@@ -736,9 +736,7 @@ public class ArmorWriter implements Closeable {
             try {
               Thread.currentThread().setName("shardwriter-" + shardWriter.getShardId());
               MDC.put("tenant_id", tableWriter.getTenant());
-              long startTime = System.currentTimeMillis();
               ShardMetadata meta = shardWriter.commit(transaction, finalEntityColumnId);
-              LOGGER.warn("shard {} took {} to commit", shardWriter.getShardId(), (System.currentTimeMillis() - startTime) );
               return meta;
             } catch (NoSuchFileException nse) {
               LOGGER.warn("The underlying channels file are missing, most likely closed by another fried due to an issue: {}", nse.getMessage());
