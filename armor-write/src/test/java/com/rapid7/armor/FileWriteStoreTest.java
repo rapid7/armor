@@ -266,8 +266,8 @@ public class FileWriteStoreTest {
           ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(2, records5.size());
           assertEquals(Integer.valueOf(0), Integer.valueOf(md5.getFragmentationLevel()));
-          //assertEquals(Double.valueOf(6.0), md5.getMaxValue());
-          //assertEquals(Double.valueOf(-1.0), md5.getMinValue());
+          assertEquals(Double.valueOf(6.0), md5.getMaxValue());
+          assertEquals(Double.valueOf(-1.0), md5.getMinValue());
           assertEquals(8, md5.getNumRows());
           assertEquals(2, md5.getNumEntities());
           checkEntityIndexRecord(records5.get(2), 0, 20, 15, (byte) 0);
