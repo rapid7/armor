@@ -475,24 +475,6 @@ public class ColumnFileWriter implements AutoCloseable {
           sequenceInputStreams.add(blob.getInputStream());
         }
       }
-      //byte[] header = headerPortion.toByteArray();
-
-//      totalBytes += headerPortion.getLength();
-//      totalBytes += metadataSection.getLength();
-
-/*
-      Collections.enumeration(Arrays.asList(
-         headerPortion.getInputStreams().get(0), // TODO dirty
-         metadataSection.getInputStreams().get(0), // TODO dirty
-         // entityDictionaryLengths,
-         //entityDictIs,
-         valueDictLengths,
-         valueDictIs,
-         entityIndexLengths,
-         entityIndexIs,
-         rgLengths,
-         rgIs)));
-*/
 
       StreamProduct product = new StreamProduct(totalBytes, new SequenceInputStream(Collections.enumeration(sequenceInputStreams)));
       success = true;
@@ -516,28 +498,6 @@ public class ColumnFileWriter implements AutoCloseable {
   {
     return computeSectionCompressible(compress, tempPaths, "rowgroup-temp_",
        ColumnFileSection.ENTITY_INDEX, rowGroupWriter, null);
-    /*
-    Section s;
-    SectionBlobPair pair = new SectionBlobPair();
-    //SectionBlob rgIs = null;
-    //SectionBlob rgLengths = null;
-    //totalBytes += 8;
-    if (compress == Compression.ZSTD)
-    {
-      compressToTempFile2(tempPaths, pair, "rowgroup-temp_", rowGroupWriter);
-    }
-    else
-    {
-      //totalBytes +=
-      pair.lengths = new SingleSectionBlob(writeLength(0, (int)rowGroupWriter.getCurrentSize()));
-      pair.payload = new InputStreamLengthSectionBlob(rowGroupWriter.getInputStream(), (int)rowGroupWriter.getCurrentSize());
-    }
-    //pair.lengths = rgLengths;
-    //pair.payload = rgIs;
-    s = new SingleSection(ColumnFileSection.ROWGROUP, pair.lengths, pair.payload);
-    return s;
-
-     */
   }
 
   private void compressToTempFile2(List<Path> tempPaths, SectionBlobPair pair, String tempFileName, Component component)
@@ -580,26 +540,6 @@ public class ColumnFileWriter implements AutoCloseable {
     }
     return computeSectionCompressible(compress, tempPaths, "entity-temp_",
        ColumnFileSection.ENTITY_INDEX, entityIndexWriter, null);
-
-    /*
-    if (compress == Compression.ZSTD)
-    {
-      Path eiTempPath = compressToTempFile(tempPaths, "entity-temp_", entityIndexWriter.getInputStream());
-      int payloadSize = (int)Files.size(eiTempPath);
-      //totalBytes += payloadSize;
-      entityIndexLengths = new SingleSectionBlob(writeLength(payloadSize, uncompressed));
-      entityIndexIs = new InputStreamLengthSectionBlob(new AutoDeleteFileInputStream(eiTempPath), payloadSize);
-    }
-    else
-    {
-      //totalBytes +=
-      entityIndexLengths = new SingleSectionBlob(writeLength(0, uncompressed));
-      entityIndexIs = new InputStreamLengthSectionBlob(entityIndexWriter.getInputStream(), (int)entityIndexWriter.getCurrentSize());
-    }
-    s = new SingleSection(ColumnFileSection.ENTITY_INDEX, entityIndexLengths, entityIndexIs);
-
-     */
-   // return s;
   }
 
   private <T extends Component> Section computeSectionCompressible(Compression compress, List<Path> tempPaths, String tempPrefix, ColumnFileSection sectionType, T component, Predicate<T> isEmptyPredicate)
@@ -636,40 +576,6 @@ public class ColumnFileWriter implements AutoCloseable {
   {
     return computeSectionCompressible(compress, tempPaths, "value-dict-temp_",
        ColumnFileSection.VALUE_DICTIONARY, valueDictionary, x -> x == null);
-/*
-    Section s2;
-
-    // Send value dictionary;
-    SectionBlob valueDictIs;
-    SectionBlob valueDictLengths;
-    // totalBytes += 8;
-    if (valueDictionary != null)
-    {
-      if (compress == Compression.ZSTD)
-      {
-        Path valueDictTempPath = compressToTempFile(tempPaths, "value-dict-temp_", valueDictionary.getInputStream());
-        int dictionaryLength = (int)Files.size(valueDictTempPath);
-       // totalBytes += dictionaryLength;
-        valueDictLengths = new SingleSectionBlob(writeLength((int)Files.size(valueDictTempPath), (int)valueDictionary.getCurrentSize()));
-        valueDictIs = new InputStreamLengthSectionBlob(new AutoDeleteFileInputStream(valueDictTempPath), dictionaryLength);
-      }
-      else
-      {
-        //(int)valueDictionary.getCurrentSize();
-        valueDictLengths = new SingleSectionBlob(writeLength(0, (int)valueDictionary.getCurrentSize()));
-        valueDictIs = new InputStreamLengthSectionBlob(valueDictionary.getInputStream(), (int)valueDictionary.getCurrentSize());
-      }
-
-    }
-    else
-    {
-      valueDictLengths = new SingleSectionBlob(writeLength(0, 0));
-      valueDictIs = new SingleSectionBlob(new byte[0]);
-    }
-    s2 = new SingleSection(ColumnFileSection.VALUE_DICTIONARY, valueDictLengths, valueDictIs);
-    return s2;
-
- */
   }
 
   private Section computeEntityDictionarySection(Compression compress, List<Path> tempPaths)
@@ -677,30 +583,6 @@ public class ColumnFileWriter implements AutoCloseable {
   {
     return computeSectionCompressible(compress, tempPaths, "entity-dict-temp_",
        ColumnFileSection.ENTITY_DICTIONARY, entityDictionary, x -> x.isEmpty());
-/*
-    Section s;
-    SectionBlob entityDictIs;
-    SectionBlob entityDictionaryLengths;
-    if (entityDictionary.isEmpty()) {
-      entityDictionaryLengths = new SingleSectionBlob(writeLength(0, 0));
-      entityDictIs = new SingleSectionBlob(new byte[0]);
-    } else {
-      if (compress == Compression.ZSTD) {
-        Path entityDictTempPath = compressToTempFile(tempPaths, "entity-dict-temp_", entityDictionary.getInputStream());
-
-        int dictionaryLength = (int) Files.size(entityDictTempPath);
-        entityDictionaryLengths = new SingleSectionBlob(writeLength(dictionaryLength, (int) entityDictionary.getCurrentSize()));
-
-        entityDictIs = new InputStreamLengthSectionBlob(new AutoDeleteFileInputStream(entityDictTempPath), dictionaryLength);
-      } else {
-        int dictionaryLength = (int) entityDictionary.getCurrentSize();
-        entityDictionaryLengths = new SingleSectionBlob(writeLength(0, (int) entityDictionary.getCurrentSize()));
-        entityDictIs = new InputStreamLengthSectionBlob(entityDictionary.getInputStream(), dictionaryLength);
-      }
-    }
-    s = new SingleSection(ColumnFileSection.ENTITY_DICTIONARY, entityDictionaryLengths, entityDictIs);
-    return s;
- */
   }
 
   private Section getHeaderSection()
