@@ -69,7 +69,9 @@ public class ColumnFileReader {
      throws IOException
   {
     List<TableOfContentsEntry> result = new ArrayList<>();
-    int recordCount = dataInputStream.readInt();
+    int compressedSize = dataInputStream.readInt();
+    int uncompressedSize = dataInputStream.readInt();
+    int recordCount = uncompressedSize / 8; // 8 bytes per record
     for (int i = 0; i < recordCount; ++i) {
       int sectionType = dataInputStream.readInt();
       int sectionOffset = dataInputStream.readInt();

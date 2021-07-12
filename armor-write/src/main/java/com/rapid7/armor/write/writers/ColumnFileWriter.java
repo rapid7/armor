@@ -25,8 +25,8 @@ import com.github.luben.zstd.RecyclingBufferPool;
 import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdOutputStream;
 
-import static com.rapid7.armor.Constants.MAGIC_HEADER;
 import static com.rapid7.armor.Constants.DEFAULT_VERSION;
+import static com.rapid7.armor.Constants.MAGIC_HEADER;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -339,20 +339,30 @@ public class ColumnFileWriter implements AutoCloseable {
       this.outputStream = new ByteArrayOutputStream();
     }
 
+    public Section buildWithLength()
+       throws IOException
+    {
+      byte[] body = this.outputStream.toByteArray();
+      byte[] len = writeLength(0, body.length);
+      return new Section(this.sectionType, new ByteArraySubSection(len), new ByteArraySubSection(body));
+    }
+
     public Section build() {
-      return new SingleSection(this.sectionType, this.outputStream.toByteArray());
+      return new Section(this.sectionType, this.outputStream.toByteArray());
     }
   }
 
-  static interface SectionBlob {
+  static interface SubSection
+  {
     int getLength();
     InputStream getInputStream();
   }
 
-  static class SingleSectionBlob implements SectionBlob {
+  static class ByteArraySubSection implements SubSection
+  {
     private byte[] byteArray;
 
-    public SingleSectionBlob(byte[] ba)
+    public ByteArraySubSection(byte[] ba)
     {
       this.byteArray = ba;
     }
@@ -368,12 +378,13 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
 
-  static class InputStreamLengthSectionBlob implements SectionBlob {
+  static class InputStreamLengthSubSection implements SubSection
+  {
 
     private final int length;
     private final InputStream inputStream;
 
-    public InputStreamLengthSectionBlob(InputStream s, int totalLength)
+    public InputStreamLengthSubSection(InputStream s, int totalLength)
     {
       this.length = totalLength;
       this.inputStream = s;
@@ -390,43 +401,46 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
 
-  static interface Section {
-    public ColumnFileSection getSectionType();
-    public List<SectionBlob> getSectionBlobs();
-    int totalSize();
-  }
+  static class Section
+  {
+    private final ColumnFileSection type;
+    SubSection lengthSubSection; // optional
+    SubSection bodySubSection;
 
-  static class SingleSection implements Section {
-    private final ColumnFileSection sectionType;
-    private List<SectionBlob> sectionBlobs;
-
-    public SingleSection(ColumnFileSection sectionType, byte[] ba)
+    public Section(ColumnFileSection type, byte[] ba)
     {
-      this.sectionType = sectionType;
-      this.sectionBlobs = new ArrayList<>();
-      this.sectionBlobs.add(new SingleSectionBlob(ba));
+      this.type = type;
+      this.bodySubSection = new ByteArraySubSection(ba);
     }
 
-    public SingleSection(ColumnFileSection sectionType, SectionBlob ba, SectionBlob ba2)
+    public Section(ColumnFileSection type, SubSection ba, SubSection ba2)
     {
-      this.sectionType = sectionType;
-      this.sectionBlobs = new ArrayList<>();
-      this.sectionBlobs.add(ba);
-      this.sectionBlobs.add(ba2);
+      this.type = type;
+      this.lengthSubSection = ba;
+      this.bodySubSection = ba2;
     }
 
-    public List<SectionBlob> getSectionBlobs()
+    public List<SubSection> subSections()
     {
-      return sectionBlobs;
+      if (lengthSubSection != null) {
+        return Arrays.asList(this.lengthSubSection, this.bodySubSection);
+      } else {
+        return Arrays.asList(this.bodySubSection);
+      }
     }
 
-    @Override public int totalSize()
+    public int totalSize()
     {
-      return sectionBlobs.stream().map(e -> e.getLength()).collect(Collectors.summingInt(Integer::intValue));
+      int result = 0;
+      if (this.lengthSubSection != null) {
+        result += this.lengthSubSection.getLength();
+      }
+      result += this.bodySubSection.getLength();
+      return result;
     }
 
-    public ColumnFileSection getSectionType() {
-      return this.sectionType;
+    public ColumnFileSection getType() {
+      return this.type;
     }
   }
 
@@ -459,23 +473,23 @@ public class ColumnFileWriter implements AutoCloseable {
       ByteArrayOutputStream os = headerPortion.getOutputStream();
       // number of records in the table of contents. each record is 8 bytes in size
       // considered alternative was to record in # of bytes, or *8, but was not taken
-      os.write(IOTools.toByteArray(sl.size()));
+      //os.write(IOTools.toByteArray(sl.size()));
       int offset = 0;
       for( Section s : sl) {
-        os.write(IOTools.toByteArray(s.getSectionType().getSectionID()));
+        os.write(IOTools.toByteArray(s.getType().getSectionID()));
         os.write(IOTools.toByteArray(offset));
         offset += s.totalSize();
       }
-      return headerPortion.build();
+      return headerPortion.buildWithLength();
     }
 
     public void add(Section section)
     {
-      if (section.getSectionType() == ColumnFileSection.HEADER) {
+      if (section.getType() == ColumnFileSection.HEADER) {
         headerSection = section;
       } else
       {
-        sections.put(section.getSectionType(), section);
+        sections.put(section.getType(), section);
         sectionsList.add(section);
       }
     }
@@ -505,7 +519,7 @@ public class ColumnFileWriter implements AutoCloseable {
       ArrayList<InputStream> sequenceInputStreams = new ArrayList<>();
 
       for (Section sect : sections.getAll()) {
-        for (SectionBlob blob : sect.getSectionBlobs()) {
+        for (SubSection blob : sect.subSections()) {
           totalBytes += blob.getLength();
           sequenceInputStreams.add(blob.getInputStream());
         }
@@ -524,8 +538,8 @@ public class ColumnFileWriter implements AutoCloseable {
   }
 
   private static class SectionBlobPair {
-    SectionBlob lengths;
-    SectionBlob payload;
+    SubSection lengths;
+    SubSection payload;
   }
 
   private Section computeRowGroupSection(Compression compress, List<Path> tempPaths)
@@ -540,8 +554,8 @@ public class ColumnFileWriter implements AutoCloseable {
   {
     Path rgTempPath = compressToTempFile(tempPaths, tempFileName, component.getInputStream());
     int payloadSize = (int)Files.size(rgTempPath);
-    pair.lengths = new SingleSectionBlob(writeLength((int)Files.size(rgTempPath), (int)component.getCurrentSize()));
-    pair.payload = new InputStreamLengthSectionBlob(new AutoDeleteFileInputStream(rgTempPath), (int)Files.size(rgTempPath));
+    pair.lengths = new ByteArraySubSection(writeLength((int)Files.size(rgTempPath), (int)component.getCurrentSize()));
+    pair.payload = new InputStreamLengthSubSection(new AutoDeleteFileInputStream(rgTempPath), (int)Files.size(rgTempPath));
   }
 
   private Path compressToTempFile(List<Path> tempPaths, String s2, InputStream inputStream)
@@ -586,8 +600,8 @@ public class ColumnFileWriter implements AutoCloseable {
 
     if (isEmptyPredicate != null && isEmptyPredicate.test(component))
     {
-      pair.lengths = new SingleSectionBlob(writeLength(0, 0));
-      pair.payload = new SingleSectionBlob(new byte[0]);
+      pair.lengths = new ByteArraySubSection(writeLength(0, 0));
+      pair.payload = new ByteArraySubSection(new byte[0]);
     }
     else if (compress == Compression.ZSTD)
     {
@@ -595,11 +609,11 @@ public class ColumnFileWriter implements AutoCloseable {
     }
     else
     {
-      pair.lengths = new SingleSectionBlob(writeLength(0, (int)component.getCurrentSize()));
-      pair.payload = new InputStreamLengthSectionBlob(component.getInputStream(), (int)component.getCurrentSize());
+      pair.lengths = new ByteArraySubSection(writeLength(0, (int)component.getCurrentSize()));
+      pair.payload = new InputStreamLengthSubSection(component.getInputStream(), (int)component.getCurrentSize());
     }
 
-    s2 = new SingleSection(sectionType, pair.lengths, pair.payload);
+    s2 = new Section(sectionType, pair.lengths, pair.payload);
     return s2;
   }
 
@@ -647,9 +661,9 @@ public class ColumnFileWriter implements AutoCloseable {
     // Store metadata
     String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
     byte[] metadataPayload = metadataStr.getBytes();
-    writeLength(metadataPortion.getOutputStream(), 0, metadataPayload.length);
+    //writeLength(metadataPortion.getOutputStream(), 0, metadataPayload.length);
     metadataPortion.getOutputStream().write(metadataPayload);
-    return metadataPortion.build();
+    return metadataPortion.buildWithLength();
   }
 
   public StreamProduct buildInputStreamV1(Compression compress) throws IOException {

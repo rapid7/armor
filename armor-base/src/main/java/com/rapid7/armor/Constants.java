@@ -49,7 +49,7 @@ public final class Constants {
   };
 
   // Default version that is written, for backward compatible APIs.
-  public final static ColumnFileFormatVersion DEFAULT_VERSION = ColumnFileFormatVersion.VERSION_1;
+  public final static ColumnFileFormatVersion DEFAULT_VERSION = ColumnFileFormatVersion.VERSION_2;
   
   // Version that is supported. If there is a change to the format, then update this value.
   public final static int VERSION = 0x0001;
