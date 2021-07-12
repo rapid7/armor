@@ -532,7 +532,7 @@ public class ColumnFileWriter implements AutoCloseable {
      throws IOException
   {
     return computeSectionCompressible(compress, tempPaths, "rowgroup-temp_",
-       ColumnFileSection.ENTITY_INDEX, rowGroupWriter, null);
+       ColumnFileSection.ROWGROUP, rowGroupWriter, null);
   }
 
   private void compressToTempFile2(List<Path> tempPaths, SectionBlobPair pair, String tempFileName, Component component)
