@@ -378,13 +378,13 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
 
-  static class InputStreamLengthSubSection implements SubSection
+  static class InputStreamSubSection implements SubSection
   {
 
     private final int length;
     private final InputStream inputStream;
 
-    public InputStreamLengthSubSection(InputStream s, int totalLength)
+    public InputStreamSubSection(InputStream s, int totalLength)
     {
       this.length = totalLength;
       this.inputStream = s;
@@ -537,11 +537,6 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
 
-  private static class SectionBlobPair {
-    SubSection lengths;
-    SubSection payload;
-  }
-
   private Section computeRowGroupSection(Compression compress, List<Path> tempPaths)
      throws IOException
   {
@@ -549,26 +544,21 @@ public class ColumnFileWriter implements AutoCloseable {
        ColumnFileSection.ROWGROUP, rowGroupWriter, null);
   }
 
-  private void compressToTempFile2(List<Path> tempPaths, SectionBlobPair pair, String tempFileName, Component component)
-     throws IOException
-  {
-    Path rgTempPath = compressToTempFile(tempPaths, tempFileName, component.getInputStream());
-    int payloadSize = (int)Files.size(rgTempPath);
-    pair.lengths = new ByteArraySubSection(writeLength((int)Files.size(rgTempPath), (int)component.getCurrentSize()));
-    pair.payload = new InputStreamLengthSubSection(new AutoDeleteFileInputStream(rgTempPath), (int)Files.size(rgTempPath));
-  }
-
-  private Path compressToTempFile(List<Path> tempPaths, String s2, InputStream inputStream)
+  private Section compressToTempFile(ColumnFileSection sectionType, List<Path> tempPaths, String tempFileName, Component component)
      throws IOException
   {
     String tempName = columnShardId.alternateString();
-    Path rgTempPath = TempFileUtil.createTempFile(s2 + tempName + "-", ".armor");
-    tempPaths.add(rgTempPath);
-    try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(rgTempPath.toFile()), RecyclingBufferPool.INSTANCE); InputStream rgInputStream = inputStream)
+    Path tempPath = TempFileUtil.createTempFile(tempFileName + tempName + "-", ".armor");
+    tempPaths.add(tempPath);
+    try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(tempPath
+       .toFile()), RecyclingBufferPool.INSTANCE); InputStream rgInputStream = component.getInputStream())
     {
       IOTools.copy(rgInputStream, zstdOutput);
     }
-    return rgTempPath;
+    int payloadSize = (int)Files.size(tempPath);
+    return new Section(sectionType,
+       new ByteArraySubSection(writeLength((int)Files.size(tempPath), (int)component.getCurrentSize())),
+       new InputStreamSubSection(new AutoDeleteFileInputStream(tempPath), (int)Files.size(tempPath)));
   }
 
   private Section computeEntityIndexSection(Compression compress, List<Path> tempPaths)
@@ -594,27 +584,25 @@ public class ColumnFileWriter implements AutoCloseable {
   private <T extends Component> Section computeSectionCompressible(Compression compress, List<Path> tempPaths, String tempPrefix, ColumnFileSection sectionType, T component, Predicate<T> isEmptyPredicate)
      throws IOException
   {
-    Section s2;
-
-    SectionBlobPair pair = new SectionBlobPair();
+    Section section;
 
     if (isEmptyPredicate != null && isEmptyPredicate.test(component))
     {
-      pair.lengths = new ByteArraySubSection(writeLength(0, 0));
-      pair.payload = new ByteArraySubSection(new byte[0]);
+      section = new Section(sectionType,
+         new ByteArraySubSection(writeLength(0, 0)),
+         new ByteArraySubSection(new byte[0]));
     }
     else if (compress == Compression.ZSTD)
     {
-      compressToTempFile2(tempPaths, pair, tempPrefix, component);
+      section = compressToTempFile(sectionType, tempPaths, tempPrefix, component);
     }
     else
     {
-      pair.lengths = new ByteArraySubSection(writeLength(0, (int)component.getCurrentSize()));
-      pair.payload = new InputStreamLengthSubSection(component.getInputStream(), (int)component.getCurrentSize());
+      section = new Section(sectionType,
+         new ByteArraySubSection(writeLength(0, (int)component.getCurrentSize())),
+         new InputStreamSubSection(component.getInputStream(), (int)component.getCurrentSize()));
     }
-
-    s2 = new Section(sectionType, pair.lengths, pair.payload);
-    return s2;
+    return section;
   }
 
 
