@@ -393,6 +393,7 @@ public class ColumnFileWriter implements AutoCloseable {
   static interface Section {
     public ColumnFileSection getSectionType();
     public List<SectionBlob> getSectionBlobs();
+    int totalSize();
   }
 
   static class SingleSection implements Section {
@@ -419,12 +420,20 @@ public class ColumnFileWriter implements AutoCloseable {
       return sectionBlobs;
     }
 
+    @Override public int totalSize()
+    {
+      return sectionBlobs.stream().map(e -> e.getLength()).collect(Collectors.summingInt(Integer::intValue));
+    }
+
     public ColumnFileSection getSectionType() {
       return this.sectionType;
     }
   }
 
   static class SectionMapper {
+
+    private Section headerSection;
+
     private Map<ColumnFileSection, Section> sections;
     private List<Section> sectionsList;
 
@@ -434,15 +443,41 @@ public class ColumnFileWriter implements AutoCloseable {
     }
 
     public List<Section> getAll()
+       throws IOException
     {
-      // TODO fixme
-      return sectionsList;
+      List<Section> result = new ArrayList<>();
+      result.add(headerSection);
+      result.add(computeTableOfContents(sectionsList));
+      result.addAll(sectionsList);
+      return result;
     }
 
-    public void add(Section headerPortion)
+    private Section computeTableOfContents(List<Section> sl)
+       throws IOException
     {
-      sections.put(headerPortion.getSectionType(), headerPortion);
-      sectionsList.add(headerPortion);
+      SectionBuilder headerPortion = new SectionBuilder(ColumnFileSection.HEADER);
+      ByteArrayOutputStream os = headerPortion.getOutputStream();
+      // number of records in the table of contents. each record is 8 bytes in size
+      // considered alternative was to record in # of bytes, or *8, but was not taken
+      os.write(IOTools.toByteArray(sl.size()));
+      int offset = 0;
+      for( Section s : sl) {
+        os.write(IOTools.toByteArray(s.getSectionType().getSectionID()));
+        os.write(IOTools.toByteArray(offset));
+        offset += s.totalSize();
+      }
+      return headerPortion.build();
+    }
+
+    public void add(Section section)
+    {
+      if (section.getSectionType() == ColumnFileSection.HEADER) {
+        headerSection = section;
+      } else
+      {
+        sections.put(section.getSectionType(), section);
+        sectionsList.add(section);
+      }
     }
   }
 
@@ -451,7 +486,7 @@ public class ColumnFileWriter implements AutoCloseable {
 
     SectionMapper sections = new SectionMapper();
 
-    Section headerPortion = getHeaderSection();
+    Section headerPortion = getHeaderSection(Constants.ColumnFileFormatVersion.VERSION_2);
     sections.add(headerPortion);
 
     Section metadataSection = writeMetadata(compress);
@@ -548,24 +583,22 @@ public class ColumnFileWriter implements AutoCloseable {
     Section s2;
 
     SectionBlobPair pair = new SectionBlobPair();
+
     if (isEmptyPredicate != null && isEmptyPredicate.test(component))
     {
       pair.lengths = new SingleSectionBlob(writeLength(0, 0));
       pair.payload = new SingleSectionBlob(new byte[0]);
     }
+    else if (compress == Compression.ZSTD)
+    {
+      compressToTempFile2(tempPaths, pair, tempPrefix, component);
+    }
     else
     {
-      if (compress == Compression.ZSTD)
-      {
-        compressToTempFile2(tempPaths, pair, tempPrefix, component);
-      }
-      else
-      {
-        pair.lengths = new SingleSectionBlob(writeLength(0, (int)component.getCurrentSize()));
-        pair.payload = new InputStreamLengthSectionBlob(component.getInputStream(), (int)component.getCurrentSize());
-      }
-
+      pair.lengths = new SingleSectionBlob(writeLength(0, (int)component.getCurrentSize()));
+      pair.payload = new InputStreamLengthSectionBlob(component.getInputStream(), (int)component.getCurrentSize());
     }
+
     s2 = new SingleSection(sectionType, pair.lengths, pair.payload);
     return s2;
   }
@@ -585,12 +618,12 @@ public class ColumnFileWriter implements AutoCloseable {
        ColumnFileSection.ENTITY_DICTIONARY, entityDictionary, x -> x.isEmpty());
   }
 
-  private Section getHeaderSection()
+  private Section getHeaderSection(Constants.ColumnFileFormatVersion version)
      throws IOException
   {
     SectionBuilder headerPortion = new SectionBuilder(ColumnFileSection.HEADER);
     writeForMagicHeader(headerPortion.getOutputStream());
-    writeForVersion(headerPortion.getOutputStream(), Constants.ColumnFileFormatVersion.VERSION_1);
+    writeForVersion(headerPortion.getOutputStream(), version);
     return headerPortion.build();
   }
 
@@ -604,6 +637,9 @@ public class ColumnFileWriter implements AutoCloseable {
       metadata.setCompressionAlgorithm(Compression.ZSTD.name()); // Currently we only support this.
     else
       metadata.setCompressionAlgorithm(Compression.NONE.name());
+
+    // TODO - should we have compacted the entities first?
+
     List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
     entityIndexWriter.runThroughRecords(metadata, records);
     // Run through the values to update metadata
