@@ -37,9 +37,23 @@ public class DictionaryReader {
     intToBytes.put(0, "".getBytes());
   }
 
-  public boolean evaulatePredicate(StringPredicate predicate) {
+  /**
+   * Evaluates the predicate, will return true, false or null. If null
+   * then the predicate couldn't be evaluated.
+   *
+   * @param predicate The predicate to evaluate.
+   *
+   * @return true/false and null. Null denotes predicate doesn't apply.
+   */
+  public Boolean evaulatePredicate(StringPredicate predicate) {
     if (strToInt == null) {
         throw new RuntimeException("The strToInt cannot be null if you want to evalue predicate. Set bidirectional to true");
+    }
+    if (predicate.getOperator() == Operator.IS_NULL) {
+        return null;
+    }
+    if (predicate.getOperator() == Operator.NOT_NULL) {
+        return !strToInt.isEmpty();
     }
     if (predicate.getOperator() == Operator.EQUALS) {
         return strToInt.containsKey(predicate.getValue());
