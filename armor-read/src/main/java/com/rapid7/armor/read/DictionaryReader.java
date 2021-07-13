@@ -38,6 +38,9 @@ public class DictionaryReader {
   }
 
   public boolean evaulatePredicate(StringPredicate predicate) {
+    if (strToInt == null) {
+        throw new RuntimeException("The strToInt cannot be null if you want to evalue predicate. Set bidirectional to true");
+    }
     if (predicate.getOperator() == Operator.EQUALS) {
         return strToInt.containsKey(predicate.getValue());
     } else if (predicate.getOperator() == Operator.NOT_EQUALS) {
