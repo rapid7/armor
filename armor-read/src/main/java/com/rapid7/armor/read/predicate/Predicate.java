@@ -81,7 +81,7 @@ public abstract class Predicate<T> {
    }
    
    protected boolean executeIsNull() {
-     List<T> values = getValues();
+      List<T> values = getValues();
       if (values == null || values.isEmpty())
           return true;
       for (T value : values) {
