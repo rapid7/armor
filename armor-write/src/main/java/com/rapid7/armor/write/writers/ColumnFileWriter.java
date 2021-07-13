@@ -314,10 +314,10 @@ public class ColumnFileWriter implements AutoCloseable {
     return buildInputStream(compress, DEFAULT_VERSION);
   }
 
-  private StreamProduct buildInputStream(Compression compress, Constants.ColumnFileFormatVersion version) throws IOException {
+  public StreamProduct buildInputStream(Compression compress, Constants.ColumnFileFormatVersion version) throws IOException {
     switch (version) {
       case VERSION_1:
-        throw new IllegalArgumentException("Unable to write column file format version " + version);
+        return buildInputStreamV1(compress);
       case VERSION_2:
         return buildInputStreamV2(compress);
       default:
@@ -652,6 +652,157 @@ public class ColumnFileWriter implements AutoCloseable {
     //writeLength(metadataPortion.getOutputStream(), 0, metadataPayload.length);
     metadataPortion.getOutputStream().write(metadataPayload);
     return metadataPortion.buildWithLength();
+  }
+
+  public StreamProduct buildInputStreamV1(Compression compress) throws IOException {
+    int totalBytes = 0;
+    ByteArrayOutputStream headerPortion = new ByteArrayOutputStream();
+    writeForMagicHeader(headerPortion);
+    writeForVersion(headerPortion, Constants.ColumnFileFormatVersion.VERSION_1);
+
+    // Prepare metadata for writing
+    metadata.setLastUpdate(new Date().toString());
+    if (compress == Compression.ZSTD)
+      metadata.setCompressionAlgorithm(Compression.ZSTD.name()); // Currently we only support this.
+    else
+      metadata.setCompressionAlgorithm(Compression.NONE.name());
+    List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
+    entityIndexWriter.runThroughRecords(metadata, records);
+    // Run through the values to update metadata
+    rowGroupWriter.runThoughValues(metadata, records);
+    // Store metadata
+    String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
+    byte[] metadataPayload = metadataStr.getBytes();
+    writeLength(headerPortion, 0, metadataPayload.length);
+    headerPortion.write(metadataPayload);
+
+    // Send entity dictionary
+    InputStream entityDictIs;
+    ByteArrayInputStream entityDictionaryLengths;
+    List<Path> tempPaths = new ArrayList<>();
+    totalBytes += 8;
+    boolean success = false;
+    try {
+      if (entityDictionary.isEmpty()) {
+        entityDictionaryLengths = new ByteArrayInputStream(writeLength(0, 0));
+        entityDictIs = new ByteArrayInputStream(new byte[0]);
+      } else {
+        if (compress == Compression.ZSTD) {
+          Path entityDictTempPath = TempFileUtil.createTempFile("entity-dict-temp_" + columnShardId.alternateString(), ".armor");
+          tempPaths.add(entityDictTempPath);
+          try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(entityDictTempPath.toFile()), RecyclingBufferPool.INSTANCE);
+               InputStream inputStream = entityDictionary.getInputStream()) {
+            IOTools.copy(inputStream, zstdOutput);
+          }
+          int dictionaryLength = (int) Files.size(entityDictTempPath);
+          entityDictionaryLengths = new ByteArrayInputStream(writeLength(dictionaryLength, (int) entityDictionary.getCurrentSize()));
+          entityDictIs = new AutoDeleteFileInputStream(entityDictTempPath);
+          totalBytes += dictionaryLength;
+        } else {
+          totalBytes += (int) entityDictionary.getCurrentSize();
+          entityDictionaryLengths = new ByteArrayInputStream(writeLength(0, (int) entityDictionary.getCurrentSize()));
+          entityDictIs = entityDictionary.getInputStream();
+        }
+      }
+
+      // Send value dictionary;
+      InputStream valueDictIs;
+      ByteArrayInputStream valueDictLengths;
+      totalBytes += 8;
+      if (valueDictionary != null) {
+        if (compress == Compression.ZSTD) {
+          Path valueDictTempPath = TempFileUtil.createTempFile("value-dict-temp_" + columnShardId.alternateString() + "-", ".armor");
+          tempPaths.add(valueDictTempPath);
+          try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(valueDictTempPath.toFile()), RecyclingBufferPool.INSTANCE);
+               InputStream inputStream = valueDictionary.getInputStream()) {
+            IOTools.copy(inputStream, zstdOutput);
+          }
+          int dictionaryLength = (int) Files.size(valueDictTempPath);
+          totalBytes += dictionaryLength;
+          valueDictLengths = new ByteArrayInputStream(writeLength((int) Files.size(valueDictTempPath), (int) valueDictionary.getCurrentSize()));
+          valueDictIs = new AutoDeleteFileInputStream(valueDictTempPath);
+        } else {
+          totalBytes += (int) valueDictionary.getCurrentSize();
+          valueDictLengths = new ByteArrayInputStream(writeLength(0, (int) valueDictionary.getCurrentSize()));
+          valueDictIs = valueDictionary.getInputStream();
+        }
+      } else {
+        valueDictLengths = new ByteArrayInputStream(writeLength(0, 0));
+        valueDictIs = new ByteArrayInputStream(new byte[0]);
+      }
+
+      // Send entity index
+      InputStream entityIndexIs;
+      ByteArrayInputStream entityIndexLengths;
+      totalBytes += 8;
+      int uncompressed = (int) entityIndexWriter.getCurrentSize();
+      if (uncompressed % Constants.RECORD_SIZE_BYTES != 0) {
+        int bytesOff = uncompressed % Constants.RECORD_SIZE_BYTES;
+        LOGGER.error("The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}: See {}",
+           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.alternateString());
+        throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.alternateString());
+      }
+      if (compress == Compression.ZSTD) {
+        String tempName = this.columnShardId.alternateString();
+        Path eiTempPath = TempFileUtil.createTempFile("entity-temp_" + tempName + "-", ".armor");
+        tempPaths.add(eiTempPath);
+        try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(eiTempPath.toFile()), RecyclingBufferPool.INSTANCE);
+             InputStream inputStream = entityIndexWriter.getInputStream()) {
+          IOTools.copy(inputStream, zstdOutput);
+        }
+        int payloadSize = (int) Files.size(eiTempPath);
+        totalBytes += payloadSize;
+        entityIndexLengths = new ByteArrayInputStream(writeLength(payloadSize, uncompressed));
+        entityIndexIs = new AutoDeleteFileInputStream(eiTempPath);
+      } else {
+        totalBytes += (int) entityIndexWriter.getCurrentSize();
+        entityIndexLengths = new ByteArrayInputStream(writeLength(0, uncompressed));
+        entityIndexIs = entityIndexWriter.getInputStream();
+      }
+
+      // Send row group
+      InputStream rgIs;
+      ByteArrayInputStream rgLengths;
+      totalBytes += 8;
+      if (compress == Compression.ZSTD) {
+        String tempName = columnShardId.alternateString();
+        Path rgTempPath = TempFileUtil.createTempFile("rowgroup-temp_" + tempName + "-", ".armor");
+        tempPaths.add(rgTempPath);
+        try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(rgTempPath.toFile()), RecyclingBufferPool.INSTANCE);
+             InputStream rgInputStream = rowGroupWriter.getInputStream()) {
+          IOTools.copy(rgInputStream, zstdOutput);
+        }
+        int payloadSize = (int) Files.size(rgTempPath);
+        totalBytes += payloadSize;
+        rgLengths = new ByteArrayInputStream(writeLength((int) Files.size(rgTempPath), (int) rowGroupWriter.getCurrentSize()));
+        rgIs = new AutoDeleteFileInputStream(rgTempPath);
+      } else {
+        totalBytes += (int) rowGroupWriter.getCurrentSize();
+        rgLengths = new ByteArrayInputStream(writeLength(0, (int) rowGroupWriter.getCurrentSize()));
+        rgIs = rowGroupWriter.getInputStream();
+      }
+
+      byte[] header = headerPortion.toByteArray();
+      totalBytes += header.length;
+      StreamProduct product = new StreamProduct(totalBytes, new SequenceInputStream(Collections.enumeration(Arrays.asList(
+          new ByteArrayInputStream(header),
+          entityDictionaryLengths,
+          entityDictIs,
+          valueDictLengths,
+          valueDictIs,
+          entityIndexLengths,
+          entityIndexIs,
+          rgLengths,
+          rgIs))));
+      success = true;
+      return product;
+    } finally {
+      if (!success) {
+        for (Path path : tempPaths) {
+          Files.deleteIfExists(path);
+        }
+      }
+    }
   }
 
   private static byte[] writeLength(int compressed, int uncompressed) throws IOException {
