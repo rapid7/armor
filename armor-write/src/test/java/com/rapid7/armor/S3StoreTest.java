@@ -40,6 +40,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import static com.rapid7.armor.interval.Interval.SINGLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -48,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.findify.s3mock.S3Mock;
 
 public class S3StoreTest {
+  private static final Logger LOGGER = LoggerFactory.getLogger(S3WriteStore.class);
   private static final String TEST_BUCKET = "testbucket";
   private static final S3Mock S3_MOCK = new S3Mock.Builder().withPort(8001).withInMemoryBackend().build();
   private static AmazonS3 client;
@@ -82,8 +86,10 @@ public class S3StoreTest {
 
   @AfterAll
   public static void shutdown() {
+    LOGGER.info("Tests are all done, shutting down s3 mocker");
     client.shutdown();
     S3_MOCK.shutdown();
+    LOGGER.info("S3 mock is shutdown");
   }
 
   private void checkEntityIndexRecord(EntityRecord eir, int rowGroupOffset, int valueLength, int nullLength, byte deleted) {
@@ -471,7 +477,12 @@ public class S3StoreTest {
 
           amrorWriter2.close(); // Close this FS and open a new one to test the load.
         } finally {
-          writeStore.deleteTenant(myorg);
+          try {
+            writeStore.deleteTenant(myorg);
+          } catch (Throwable t) {
+            LOGGER.error("Detected an error during cleanup, will throw an error", t);
+            throw t;
+          }
         }
       }
     }

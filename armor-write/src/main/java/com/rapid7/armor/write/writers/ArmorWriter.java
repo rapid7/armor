@@ -79,7 +79,7 @@ public class ArmorWriter implements Closeable {
     this.compress = compress;
     this.name = name;
     if (compactionTrigger == null) {
-      this.compactionTrigger = () -> 50;
+      this.compactionTrigger = () -> 20;
     } else
       this.compactionTrigger = compactionTrigger;
   }
@@ -736,7 +736,8 @@ public class ArmorWriter implements Closeable {
             try {
               Thread.currentThread().setName("shardwriter-" + shardWriter.getShardId());
               MDC.put("tenant_id", tableWriter.getTenant());
-              return shardWriter.commit(transaction, finalEntityColumnId);
+              ShardMetadata meta = shardWriter.commit(transaction, finalEntityColumnId);
+              return meta;
             } catch (NoSuchFileException nse) {
               LOGGER.warn("The underlying channels file are missing, most likely closed by another fried due to an issue: {}", nse.getMessage());
               return null;
