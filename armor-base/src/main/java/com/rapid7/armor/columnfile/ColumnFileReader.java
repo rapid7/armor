@@ -103,7 +103,7 @@ public class ColumnFileReader {
     }
   }
 
-  private int readSection(DataInputStream dataInputStream, ColumnFileListener listener, ColumnFileSection valueDictionary)
+  private int readSection(DataInputStream dataInputStream, ColumnFileListener listener, ColumnFileSection sectionType)
      throws IOException
   {
     int readBytes = 0;
@@ -111,7 +111,7 @@ public class ColumnFileReader {
     int uncompressedSize = dataInputStream.readInt();
     if (listener != null)
     {
-      readBytes = listener.columnFileSection(valueDictionary, metadata, dataInputStream, compressedSize, uncompressedSize);
+      readBytes = listener.columnFileSection(sectionType, metadata, dataInputStream, compressedSize, uncompressedSize);
     }
     int shouldHaveRead = shouldHaveRead(compressedSize, uncompressedSize);
     if (readBytes < shouldHaveRead)
