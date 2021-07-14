@@ -549,13 +549,12 @@ public class ColumnFileWriter implements AutoCloseable {
      throws IOException
   {
     return computeSectionCompressible(compress, tempPaths, "rowgroup-temp_",
-       ColumnFileSection.ROWGROUP, rowGroupWriter, null);
+       ColumnFileSection.ROWGROUP, rowGroupWriter, null, columnShardId.alternateString());
   }
 
-  private Section compressToTempFile(ColumnFileSection sectionType, List<Path> tempPaths, String tempFileName, Component component)
+  private Section compressToTempFile(ColumnFileSection sectionType, List<Path> tempPaths, String tempFileName, Component component, String tempName)
      throws IOException
   {
-    String tempName = columnShardId.alternateString();
     Path tempPath = TempFileUtil.createTempFile(tempFileName + tempName + "-", ".armor");
     tempPaths.add(tempPath);
     try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(tempPath
@@ -582,14 +581,15 @@ public class ColumnFileWriter implements AutoCloseable {
          Constants.RECORD_SIZE_BYTES,
          bytesOff,
          entityIndexWriter.getPreLoadOffset(),
-         columnShardId.alternateString());
-      throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.alternateString());
+         columnShardId.toSimpleString());
+      throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.toSimpleString());
     }
     return computeSectionCompressible(compress, tempPaths, "entity-temp_",
-       ColumnFileSection.ENTITY_INDEX, entityIndexWriter, null);
+       ColumnFileSection.ENTITY_INDEX, entityIndexWriter, null, columnShardId.alternateString());
   }
 
-  private <T extends Component> Section computeSectionCompressible(Compression compress, List<Path> tempPaths, String tempPrefix, ColumnFileSection sectionType, T component, Predicate<T> isEmptyPredicate)
+  private <T extends Component> Section computeSectionCompressible(
+     Compression compress, List<Path> tempPaths, String tempPrefix, ColumnFileSection sectionType, T component, Predicate<T> isEmptyPredicate, String shardTempName)
      throws IOException
   {
     Section section;
@@ -602,7 +602,7 @@ public class ColumnFileWriter implements AutoCloseable {
     }
     else if (compress == Compression.ZSTD)
     {
-      section = compressToTempFile(sectionType, tempPaths, tempPrefix, component);
+      section = compressToTempFile(sectionType, tempPaths, tempPrefix, component, shardTempName);
     }
     else
     {
@@ -618,14 +618,14 @@ public class ColumnFileWriter implements AutoCloseable {
      throws IOException
   {
     return computeSectionCompressible(compress, tempPaths, "value-dict-temp_",
-       ColumnFileSection.VALUE_DICTIONARY, valueDictionary, x -> x == null);
+       ColumnFileSection.VALUE_DICTIONARY, valueDictionary, x -> x == null, columnShardId.alternateString());
   }
 
   private Section computeEntityDictionarySection(Compression compress, List<Path> tempPaths)
      throws IOException
   {
     return computeSectionCompressible(compress, tempPaths, "entity-dict-temp_",
-       ColumnFileSection.ENTITY_DICTIONARY, entityDictionary, x -> x.isEmpty());
+       ColumnFileSection.ENTITY_DICTIONARY, entityDictionary, x -> x.isEmpty(), columnShardId.toSimpleString());
   }
 
   private Section getHeaderSection(Constants.ColumnFileFormatVersion version)
