@@ -653,7 +653,12 @@ public class ColumnFileWriter implements AutoCloseable {
     List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
     entityIndexWriter.runThroughRecords(metadata, records);
     // Run through the values to update metadata
-    rowGroupWriter.runThoughValues(metadata, records);
+    if (!skipMetaData) {
+      rowGroupWriter.runThoughValues(metadata, records);
+    } else {
+      metadata.setMaxValue(null);
+      metadata.setMinValue(null);
+    }
     // Store metadata
     String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
     byte[] metadataPayload = metadataStr.getBytes();
