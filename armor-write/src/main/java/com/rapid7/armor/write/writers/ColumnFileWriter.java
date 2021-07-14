@@ -14,6 +14,7 @@ import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.write.StreamProduct;
 import com.rapid7.armor.write.WriteRequest;
+import com.rapid7.armor.write.component.Component;
 import com.rapid7.armor.write.component.DictionaryWriter;
 import com.rapid7.armor.write.component.EntityIndexVariableWidthException;
 import com.rapid7.armor.write.component.EntityIndexWriter;
@@ -24,8 +25,8 @@ import com.github.luben.zstd.RecyclingBufferPool;
 import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdOutputStream;
 
+import static com.rapid7.armor.Constants.DEFAULT_VERSION;
 import static com.rapid7.armor.Constants.MAGIC_HEADER;
-import static com.rapid7.armor.Constants.VERSION;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -49,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -315,161 +317,223 @@ public class ColumnFileWriter implements AutoCloseable {
           .filter(e -> e.getNumRows() > 0).collect(Collectors.toList());
     }
   }
-  
-  public StreamProduct buildInputStream(Compression compress) throws IOException {
-    int totalBytes = 0;
-    ByteArrayOutputStream headerPortion = new ByteArrayOutputStream();
-    writeForMagicHeader(headerPortion);
-    writeForVersion(headerPortion);
 
-    // Prepare metadata for writing
-    metadata.setLastUpdate(new Date().toString());
-    if (compress == Compression.ZSTD)
-      metadata.setCompressionAlgorithm(Compression.ZSTD.name()); // Currently we only support this.
-    else
-      metadata.setCompressionAlgorithm(Compression.NONE.name());
-    List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
-    
-    entityIndexWriter.runThroughRecords(metadata, records);
-    // Run through the values to update metadata
-    if (!skipMetaData) {
-      rowGroupWriter.runThoughValues(metadata, records);
-    } else {
-      metadata.setMaxValue(null);
-      metadata.setMinValue(null);
+  public StreamProduct buildInputStream(Compression compress) throws IOException {
+    return buildInputStream(compress, DEFAULT_VERSION);
+  }
+
+  public StreamProduct buildInputStream(Compression compress, Constants.ColumnFileFormatVersion version) throws IOException {
+    switch (version) {
+      case VERSION_1:
+        throw new IllegalArgumentException("Column file format version " + version + " is no longer supported for writing");
+      case VERSION_2:
+        return buildInputStreamV2(compress);
+      default:
+        throw new IllegalArgumentException("Unknown column file format version " + version);
+    }
+  }
+
+  static class SectionBuilder {
+    private final ColumnFileSection sectionType;
+    private ByteArrayOutputStream outputStream;
+
+    public ByteArrayOutputStream getOutputStream() {
+      return this.outputStream;
     }
 
-    // Store metadata
-    String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
-    byte[] metadataPayload = metadataStr.getBytes();
-    writeLength(headerPortion, 0, metadataPayload.length);
-    headerPortion.write(metadataPayload);
+    public SectionBuilder(ColumnFileSection header)
+    {
+      this.sectionType = header;
+      this.outputStream = new ByteArrayOutputStream();
+    }
+
+    public Section buildWithLength()
+       throws IOException
+    {
+      byte[] body = this.outputStream.toByteArray();
+      byte[] len = writeLength(0, body.length);
+      return new Section(this.sectionType, new ByteArraySubSection(len), new ByteArraySubSection(body));
+    }
+
+    public Section build() {
+      return new Section(this.sectionType, this.outputStream.toByteArray());
+    }
+  }
+
+  static interface SubSection
+  {
+    int getLength();
+    InputStream getInputStream();
+  }
+
+  static class ByteArraySubSection implements SubSection
+  {
+    private byte[] byteArray;
+
+    public ByteArraySubSection(byte[] ba)
+    {
+      this.byteArray = ba;
+    }
+
+    @Override public int getLength()
+    {
+      return byteArray.length;
+    }
+
+    @Override public InputStream getInputStream()
+    {
+      return new ByteArrayInputStream(this.byteArray);
+    }
+  }
+
+  static class InputStreamSubSection implements SubSection
+  {
+
+    private final int length;
+    private final InputStream inputStream;
+
+    public InputStreamSubSection(InputStream s, int totalLength)
+    {
+      this.length = totalLength;
+      this.inputStream = s;
+    }
+
+    @Override public int getLength()
+    {
+      return length;
+    }
+
+    @Override public InputStream getInputStream()
+    {
+      return this.inputStream;
+    }
+  }
+
+  static class Section
+  {
+    private final ColumnFileSection type;
+    SubSection lengthSubSection; // optional
+    SubSection bodySubSection;
+
+    public Section(ColumnFileSection type, byte[] ba)
+    {
+      this.type = type;
+      this.bodySubSection = new ByteArraySubSection(ba);
+    }
+
+    public Section(ColumnFileSection type, SubSection ba, SubSection ba2)
+    {
+      this.type = type;
+      this.lengthSubSection = ba;
+      this.bodySubSection = ba2;
+    }
+
+    public List<SubSection> subSections()
+    {
+      if (lengthSubSection != null) {
+        return Arrays.asList(this.lengthSubSection, this.bodySubSection);
+      } else {
+        return Arrays.asList(this.bodySubSection);
+      }
+    }
+
+    public int totalSize()
+    {
+      int result = 0;
+      if (this.lengthSubSection != null) {
+        result += this.lengthSubSection.getLength();
+      }
+      result += this.bodySubSection.getLength();
+      return result;
+    }
+
+    public ColumnFileSection getType() {
+      return this.type;
+    }
+  }
+
+  static class SectionMapper {
+
+    private Section headerSection;
+
+    private Map<ColumnFileSection, Section> sections;
+    private List<Section> sectionsList;
+
+    public SectionMapper() {
+      sections = new HashMap<>();
+      sectionsList = new ArrayList<>();
+    }
+
+    public List<Section> getAll()
+       throws IOException
+    {
+      List<Section> result = new ArrayList<>();
+      result.add(headerSection);
+      result.add(computeTableOfContents(sectionsList));
+      result.addAll(sectionsList);
+      return result;
+    }
+
+    private Section computeTableOfContents(List<Section> sl)
+       throws IOException
+    {
+      SectionBuilder headerPortion = new SectionBuilder(ColumnFileSection.HEADER);
+      ByteArrayOutputStream os = headerPortion.getOutputStream();
+      // number of records in the table of contents. each record is 8 bytes in size
+      // considered alternative was to record in # of bytes, or *8, but was not taken
+      //os.write(IOTools.toByteArray(sl.size()));
+      int offset = 0;
+      for( Section s : sl) {
+        os.write(IOTools.toByteArray(s.getType().getSectionID()));
+        os.write(IOTools.toByteArray(offset));
+        offset += s.totalSize();
+      }
+      return headerPortion.buildWithLength();
+    }
+
+    public void add(Section section)
+    {
+      if (section.getType() == ColumnFileSection.HEADER) {
+        headerSection = section;
+      } else
+      {
+        sections.put(section.getType(), section);
+        sectionsList.add(section);
+      }
+    }
+  }
+
+  public StreamProduct buildInputStreamV2(Compression compress) throws IOException {
+    int totalBytes = 0;
+
+    SectionMapper sections = new SectionMapper();
+
+    Section headerPortion = getHeaderSection(Constants.ColumnFileFormatVersion.VERSION_2);
+    sections.add(headerPortion);
+
+    Section metadataSection = writeMetadata(compress);
+    sections.add(metadataSection);
 
     // Send entity dictionary
-    InputStream entityDictIs;
-    ByteArrayInputStream entityDictionaryLengths;
     List<Path> tempPaths = new ArrayList<>();
-    totalBytes += 8;
+    //totalBytes += 8;
     boolean success = false;
     try {
-      if (entityDictionary.isEmpty()) {
-        entityDictionaryLengths = new ByteArrayInputStream(writeLength(0, 0));
-        entityDictIs = new ByteArrayInputStream(new byte[0]);
-      } else {
-        if (compress == Compression.ZSTD) {
-          Path entityDictTempPath = TempFileUtil.createTempFile("entity-dict-temp_" + columnShardId.toSimpleString(), ".armor");
-          tempPaths.add(entityDictTempPath);
-          try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(entityDictTempPath.toFile()), RecyclingBufferPool.INSTANCE);
-               InputStream inputStream = entityDictionary.getInputStream()) {
-            IOTools.copy(inputStream, zstdOutput);
-          }
-          int dictionaryLength = (int) Files.size(entityDictTempPath);
-          entityDictionaryLengths = new ByteArrayInputStream(writeLength(dictionaryLength, (int) entityDictionary.getCurrentSize()));
-          entityDictIs = new AutoDeleteFileInputStream(entityDictTempPath);
-          totalBytes += dictionaryLength;
-        } else {
-          totalBytes += (int) entityDictionary.getCurrentSize();
-          entityDictionaryLengths = new ByteArrayInputStream(writeLength(0, (int) entityDictionary.getCurrentSize()));
-          entityDictIs = entityDictionary.getInputStream();
+      sections.add(computeEntityDictionarySection(compress, tempPaths));
+      sections.add(computeValueDictionarySection(compress, tempPaths));
+      sections.add(computeEntityIndexSection(compress, tempPaths));
+      sections.add(computeRowGroupSection(compress, tempPaths));
+
+      ArrayList<InputStream> sequenceInputStreams = new ArrayList<>();
+
+      for (Section sect : sections.getAll()) {
+        for (SubSection blob : sect.subSections()) {
+          totalBytes += blob.getLength();
+          sequenceInputStreams.add(blob.getInputStream());
         }
       }
 
-
-      // Send value dictionary;
-      InputStream valueDictIs;
-      ByteArrayInputStream valueDictLengths;
-      totalBytes += 8;
-      if (valueDictionary != null) {
-        if (compress == Compression.ZSTD) {
-          Path valueDictTempPath = TempFileUtil.createTempFile("value-dict-temp_" + columnShardId.alternateString() + "-", ".armor");
-          tempPaths.add(valueDictTempPath);
-          try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(valueDictTempPath.toFile()), RecyclingBufferPool.INSTANCE);
-               InputStream inputStream = valueDictionary.getInputStream()) {
-            IOTools.copy(inputStream, zstdOutput);
-          }
-          int dictionaryLength = (int) Files.size(valueDictTempPath);
-          totalBytes += dictionaryLength;
-          valueDictLengths = new ByteArrayInputStream(writeLength((int) Files.size(valueDictTempPath), (int) valueDictionary.getCurrentSize()));
-          valueDictIs = new AutoDeleteFileInputStream(valueDictTempPath);
-        } else {
-          totalBytes += (int) valueDictionary.getCurrentSize();
-          valueDictLengths = new ByteArrayInputStream(writeLength(0, (int) valueDictionary.getCurrentSize()));
-          valueDictIs = valueDictionary.getInputStream();
-        }
-      } else {
-        valueDictLengths = new ByteArrayInputStream(writeLength(0, 0));
-        valueDictIs = new ByteArrayInputStream(new byte[0]);
-      }
-
-      // Send entity index
-      InputStream entityIndexIs;
-      ByteArrayInputStream entityIndexLengths;
-      totalBytes += 8;
-      int uncompressed = (int) entityIndexWriter.getCurrentSize();
-      if (uncompressed % Constants.RECORD_SIZE_BYTES != 0) {
-        int bytesOff = uncompressed % Constants.RECORD_SIZE_BYTES;
-        LOGGER.error("The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}: See {}",
-           uncompressed, Constants.RECORD_SIZE_BYTES, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.toSimpleString());
-        throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.toSimpleString());
-      }
-      if (compress == Compression.ZSTD) {
-        String tempName = this.columnShardId.alternateString();
-        Path eiTempPath = TempFileUtil.createTempFile("entity-temp_" + tempName + "-", ".armor");
-        tempPaths.add(eiTempPath);
-        try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(eiTempPath.toFile()), RecyclingBufferPool.INSTANCE);
-             InputStream inputStream = entityIndexWriter.getInputStream()) {
-          IOTools.copy(inputStream, zstdOutput);
-        }
-        int payloadSize = (int) Files.size(eiTempPath);
-        totalBytes += payloadSize;
-        entityIndexLengths = new ByteArrayInputStream(writeLength(payloadSize, uncompressed));
-        entityIndexIs = new AutoDeleteFileInputStream(eiTempPath);
-      } else {
-        totalBytes += (int) entityIndexWriter.getCurrentSize();
-        entityIndexLengths = new ByteArrayInputStream(writeLength(0, uncompressed));
-        entityIndexIs = entityIndexWriter.getInputStream();
-      }
-
-      // Send row group
-      InputStream rgIs;
-      ByteArrayInputStream rgLengths;
-      totalBytes += 8;
-      long byteWritten = -1;
-      long byteStored = -1;
-      int compressed = -1;
-
-
-      if (compress == Compression.ZSTD) {
-        String tempName = columnShardId.alternateString();
-        Path rgTempPath = TempFileUtil.createTempFile("rowgroup-temp_" + tempName + "-", ".armor");
-        tempPaths.add(rgTempPath);
-        try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(rgTempPath.toFile()), RecyclingBufferPool.INSTANCE);
-             InputStream rgInputStream = rowGroupWriter.getInputStream()) {
-        	byteWritten = IOTools.copy(rgInputStream, zstdOutput);
-        }
-        int payloadSize = (int) Files.size(rgTempPath);
-        byteStored = payloadSize;
-        totalBytes += payloadSize;
-        rgLengths = new ByteArrayInputStream(writeLength((int) Files.size(rgTempPath), (int) rowGroupWriter.getCurrentSize()));
-        rgIs = new AutoDeleteFileInputStream(rgTempPath);
-      } else {
-        totalBytes += (int) rowGroupWriter.getCurrentSize();
-        rgLengths = new ByteArrayInputStream(writeLength(0, (int) rowGroupWriter.getCurrentSize()));
-        rgIs = rowGroupWriter.getInputStream();
-      }
-
-      byte[] header = headerPortion.toByteArray();
-      totalBytes += header.length;
-      StreamProduct product = new StreamProduct(totalBytes, new SequenceInputStream(Collections.enumeration(Arrays.asList(
-          new ByteArrayInputStream(header),
-          entityDictionaryLengths,
-          entityDictIs,
-          valueDictLengths,
-          valueDictIs,
-          entityIndexLengths,
-          entityIndexIs,
-          rgLengths,
-          rgIs))));
+      StreamProduct product = new StreamProduct(totalBytes, new SequenceInputStream(Collections.enumeration(sequenceInputStreams)));
       success = true;
       return product;
     } finally {
@@ -481,7 +545,129 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
 
-  private byte[] writeLength(int compressed, int uncompressed) throws IOException {
+  private Section computeRowGroupSection(Compression compress, List<Path> tempPaths)
+     throws IOException
+  {
+    return computeSectionCompressible(compress, tempPaths, "rowgroup-temp_",
+       ColumnFileSection.ROWGROUP, rowGroupWriter, null, columnShardId.alternateString());
+  }
+
+  private Section compressToTempFile(ColumnFileSection sectionType, List<Path> tempPaths, String tempFileName, Component component, String tempName)
+     throws IOException
+  {
+    Path tempPath = TempFileUtil.createTempFile(tempFileName + tempName + "-", ".armor");
+    tempPaths.add(tempPath);
+    try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(tempPath
+       .toFile()), RecyclingBufferPool.INSTANCE); InputStream rgInputStream = component.getInputStream())
+    {
+      IOTools.copy(rgInputStream, zstdOutput);
+    }
+    int payloadSize = (int)Files.size(tempPath);
+    return new Section(sectionType,
+       new ByteArraySubSection(writeLength((int)Files.size(tempPath), (int)component.getCurrentSize())),
+       new InputStreamSubSection(new AutoDeleteFileInputStream(tempPath), (int)Files.size(tempPath)));
+  }
+
+  private Section computeEntityIndexSection(Compression compress, List<Path> tempPaths)
+     throws IOException
+  {
+    int uncompressed = (int)entityIndexWriter.getCurrentSize();
+    if (uncompressed % Constants.RECORD_SIZE_BYTES != 0)
+    {
+      int bytesOff = uncompressed % Constants.RECORD_SIZE_BYTES;
+      LOGGER.error(
+         "The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}: See {}",
+         uncompressed,
+         Constants.RECORD_SIZE_BYTES,
+         bytesOff,
+         entityIndexWriter.getPreLoadOffset(),
+         columnShardId.toSimpleString());
+      throw new EntityIndexVariableWidthException(Constants.RECORD_SIZE_BYTES, uncompressed, bytesOff, entityIndexWriter.getPreLoadOffset(), columnShardId.toSimpleString());
+    }
+    return computeSectionCompressible(compress, tempPaths, "entity-temp_",
+       ColumnFileSection.ENTITY_INDEX, entityIndexWriter, null, columnShardId.alternateString());
+  }
+
+  private <T extends Component> Section computeSectionCompressible(
+     Compression compress, List<Path> tempPaths, String tempPrefix, ColumnFileSection sectionType, T component, Predicate<T> isEmptyPredicate, String shardTempName)
+     throws IOException
+  {
+    Section section;
+
+    if (isEmptyPredicate != null && isEmptyPredicate.test(component))
+    {
+      section = new Section(sectionType,
+         new ByteArraySubSection(writeLength(0, 0)),
+         new ByteArraySubSection(new byte[0]));
+    }
+    else if (compress == Compression.ZSTD)
+    {
+      section = compressToTempFile(sectionType, tempPaths, tempPrefix, component, shardTempName);
+    }
+    else
+    {
+      section = new Section(sectionType,
+         new ByteArraySubSection(writeLength(0, (int)component.getCurrentSize())),
+         new InputStreamSubSection(component.getInputStream(), (int)component.getCurrentSize()));
+    }
+    return section;
+  }
+
+
+  private Section computeValueDictionarySection(Compression compress, List<Path> tempPaths)
+     throws IOException
+  {
+    return computeSectionCompressible(compress, tempPaths, "value-dict-temp_",
+       ColumnFileSection.VALUE_DICTIONARY, valueDictionary, x -> x == null, columnShardId.alternateString());
+  }
+
+  private Section computeEntityDictionarySection(Compression compress, List<Path> tempPaths)
+     throws IOException
+  {
+    return computeSectionCompressible(compress, tempPaths, "entity-dict-temp_",
+       ColumnFileSection.ENTITY_DICTIONARY, entityDictionary, x -> x.isEmpty(), columnShardId.toSimpleString());
+  }
+
+  private Section getHeaderSection(Constants.ColumnFileFormatVersion version)
+     throws IOException
+  {
+    SectionBuilder headerPortion = new SectionBuilder(ColumnFileSection.HEADER);
+    writeForMagicHeader(headerPortion.getOutputStream());
+    writeForVersion(headerPortion.getOutputStream(), version);
+    return headerPortion.build();
+  }
+
+  private Section writeMetadata(Compression compress)
+     throws IOException
+  {
+    SectionBuilder metadataPortion = new SectionBuilder(ColumnFileSection.METADATA);
+    // Prepare metadata for writing
+    metadata.setLastUpdate(new Date().toString());
+    if (compress == Compression.ZSTD)
+      metadata.setCompressionAlgorithm(Compression.ZSTD.name()); // Currently we only support this.
+    else
+      metadata.setCompressionAlgorithm(Compression.NONE.name());
+
+    // TODO - should we have compacted the entities first?
+
+    List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
+    entityIndexWriter.runThroughRecords(metadata, records);
+    // Run through the values to update metadata
+    if (!skipMetaData) {
+      rowGroupWriter.runThoughValues(metadata, records);
+    } else {
+      metadata.setMaxValue(null);
+      metadata.setMinValue(null);
+    }
+    // Store metadata
+    String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
+    byte[] metadataPayload = metadataStr.getBytes();
+    //writeLength(metadataPortion.getOutputStream(), 0, metadataPayload.length);
+    metadataPortion.getOutputStream().write(metadataPayload);
+    return metadataPortion.buildWithLength();
+  }
+
+  private static byte[] writeLength(int compressed, int uncompressed) throws IOException {
     byte[] lengths = new byte[8];
     System.arraycopy(IOTools.toByteArray(compressed), 0, lengths, 0, 4);
     System.arraycopy(IOTools.toByteArray(uncompressed), 0, lengths, 4, 4);
@@ -579,8 +765,8 @@ public class ColumnFileWriter implements AutoCloseable {
     outputStream.write(IOTools.toByteArray(MAGIC_HEADER));
   }
   
-  private void writeForVersion(OutputStream outputStream) throws IOException {
-    outputStream.write(IOTools.toByteArray(VERSION));
+  private void writeForVersion(OutputStream outputStream, Constants.ColumnFileFormatVersion version) throws IOException {
+    outputStream.write(IOTools.toByteArray(version.getVal()));
   }
 
   public void compact() throws IOException {

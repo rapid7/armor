@@ -33,6 +33,24 @@ public final class Constants {
   public final static int BEGIN_INSTANCE_ID_LENGTH_OFFSET = BEGIN_DELETE_OFFSET + DELETED_BYTE_LENGTH + NULL_BYTE_LENGTH + DECODED_BYTE_LENGTH;
 
 
+  public static enum ColumnFileFormatVersion {
+    VERSION_1(0x0001),
+    VERSION_2(0x0002);
+
+    private final int val;
+
+    ColumnFileFormatVersion(int i)
+    {
+      this.val = i;
+    }
+    public int getVal() {
+      return val;
+    }
+  };
+
+  // Default version that is written, for backward compatible APIs.
+  public final static ColumnFileFormatVersion DEFAULT_VERSION = ColumnFileFormatVersion.VERSION_2;
+  
   // Version that is supported. If there is a change to the format, then update this value.
   public final static int VERSION = 0x0001;
 
