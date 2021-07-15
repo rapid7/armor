@@ -341,15 +341,12 @@ public class ColumnFileWriter implements AutoCloseable {
       return this.outputStream;
     }
 
-    public SectionBuilder(ColumnFileSection header)
-    {
+    public SectionBuilder(ColumnFileSection header) {
       this.sectionType = header;
       this.outputStream = new ByteArrayOutputStream();
     }
 
-    public Section buildWithLength()
-       throws IOException
-    {
+    public Section buildWithLength() throws IOException {
       byte[] body = this.outputStream.toByteArray();
       byte[] len = writeLength(0, body.length);
       return new Section(this.sectionType, new ByteArraySubSection(len), new ByteArraySubSection(body));
@@ -360,14 +357,12 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
 
-  static interface SubSection
-  {
+  static interface SubSection {
     int getLength();
     InputStream getInputStream();
   }
 
-  static class ByteArraySubSection implements SubSection
-  {
+  static class ByteArraySubSection implements SubSection {
     private byte[] byteArray;
 
     public ByteArraySubSection(byte[] ba)
@@ -386,14 +381,11 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
 
-  static class InputStreamSubSection implements SubSection
-  {
-
+  static class InputStreamSubSection implements SubSection {
     private final int length;
     private final InputStream inputStream;
 
-    public InputStreamSubSection(InputStream s, int totalLength)
-    {
+    public InputStreamSubSection(InputStream s, int totalLength) {
       this.length = totalLength;
       this.inputStream = s;
     }
@@ -409,27 +401,23 @@ public class ColumnFileWriter implements AutoCloseable {
     }
   }
 
-  static class Section
-  {
+  static class Section {
     private final ColumnFileSection type;
     SubSection lengthSubSection; // optional
     SubSection bodySubSection;
 
-    public Section(ColumnFileSection type, byte[] ba)
-    {
+    public Section(ColumnFileSection type, byte[] ba) {
       this.type = type;
       this.bodySubSection = new ByteArraySubSection(ba);
     }
 
-    public Section(ColumnFileSection type, SubSection ba, SubSection ba2)
-    {
+    public Section(ColumnFileSection type, SubSection ba, SubSection ba2) {
       this.type = type;
       this.lengthSubSection = ba;
       this.bodySubSection = ba2;
     }
 
-    public List<SubSection> subSections()
-    {
+    public List<SubSection> subSections() {
       if (lengthSubSection != null) {
         return Arrays.asList(this.lengthSubSection, this.bodySubSection);
       } else {
@@ -437,8 +425,7 @@ public class ColumnFileWriter implements AutoCloseable {
       }
     }
 
-    public int totalSize()
-    {
+    public int totalSize() {
       int result = 0;
       if (this.lengthSubSection != null) {
         result += this.lengthSubSection.getLength();
@@ -465,8 +452,7 @@ public class ColumnFileWriter implements AutoCloseable {
     }
 
     public List<Section> getAll()
-       throws IOException
-    {
+       throws IOException {
       List<Section> result = new ArrayList<>();
       result.add(headerSection);
       result.add(computeTableOfContents(sectionsList));
@@ -475,8 +461,7 @@ public class ColumnFileWriter implements AutoCloseable {
     }
 
     private Section computeTableOfContents(List<Section> sl)
-       throws IOException
-    {
+       throws IOException {
       SectionBuilder headerPortion = new SectionBuilder(ColumnFileSection.HEADER);
       ByteArrayOutputStream os = headerPortion.getOutputStream();
       // number of records in the table of contents. each record is 8 bytes in size
@@ -491,12 +476,10 @@ public class ColumnFileWriter implements AutoCloseable {
       return headerPortion.buildWithLength();
     }
 
-    public void add(Section section)
-    {
+    public void add(Section section) {
       if (section.getType() == ColumnFileSection.HEADER) {
         headerSection = section;
-      } else
-      {
+      } else {
         sections.put(section.getType(), section);
         sectionsList.add(section);
       }
@@ -546,20 +529,17 @@ public class ColumnFileWriter implements AutoCloseable {
   }
 
   private Section computeRowGroupSection(Compression compress, List<Path> tempPaths)
-     throws IOException
-  {
+     throws IOException {
     return computeSectionCompressible(compress, tempPaths, "rowgroup-temp_",
        ColumnFileSection.ROWGROUP, rowGroupWriter, null, columnShardId.alternateString());
   }
 
   private Section compressToTempFile(ColumnFileSection sectionType, List<Path> tempPaths, String tempFileName, Component component, String tempName)
-     throws IOException
-  {
+     throws IOException {
     Path tempPath = TempFileUtil.createTempFile(tempFileName + tempName + "-", ".armor");
     tempPaths.add(tempPath);
     try (ZstdOutputStream zstdOutput = new ZstdOutputStream(new FileOutputStream(tempPath
-       .toFile()), RecyclingBufferPool.INSTANCE); InputStream rgInputStream = component.getInputStream())
-    {
+       .toFile()), RecyclingBufferPool.INSTANCE); InputStream rgInputStream = component.getInputStream()) {
       IOTools.copy(rgInputStream, zstdOutput);
     }
     int payloadSize = (int)Files.size(tempPath);
@@ -568,12 +548,9 @@ public class ColumnFileWriter implements AutoCloseable {
        new InputStreamSubSection(new AutoDeleteFileInputStream(tempPath), (int)Files.size(tempPath)));
   }
 
-  private Section computeEntityIndexSection(Compression compress, List<Path> tempPaths)
-     throws IOException
-  {
+  private Section computeEntityIndexSection(Compression compress, List<Path> tempPaths) throws IOException {
     int uncompressed = (int)entityIndexWriter.getCurrentSize();
-    if (uncompressed % Constants.RECORD_SIZE_BYTES != 0)
-    {
+    if (uncompressed % Constants.RECORD_SIZE_BYTES != 0) {
       int bytesOff = uncompressed % Constants.RECORD_SIZE_BYTES;
       LOGGER.error(
          "The entity index size {} is not in expected fixed width of {}. It is {} bytes off. Preload offset {}: See {}",
@@ -590,22 +567,16 @@ public class ColumnFileWriter implements AutoCloseable {
 
   private <T extends Component> Section computeSectionCompressible(
      Compression compress, List<Path> tempPaths, String tempPrefix, ColumnFileSection sectionType, T component, Predicate<T> isEmptyPredicate, String shardTempName)
-     throws IOException
-  {
+     throws IOException {
     Section section;
 
-    if (isEmptyPredicate != null && isEmptyPredicate.test(component))
-    {
+    if (isEmptyPredicate != null && isEmptyPredicate.test(component)) {
       section = new Section(sectionType,
          new ByteArraySubSection(writeLength(0, 0)),
          new ByteArraySubSection(new byte[0]));
-    }
-    else if (compress == Compression.ZSTD)
-    {
+    } else if (compress == Compression.ZSTD) {
       section = compressToTempFile(sectionType, tempPaths, tempPrefix, component, shardTempName);
-    }
-    else
-    {
+    } else {
       section = new Section(sectionType,
          new ByteArraySubSection(writeLength(0, (int)component.getCurrentSize())),
          new InputStreamSubSection(component.getInputStream(), (int)component.getCurrentSize()));
@@ -615,22 +586,19 @@ public class ColumnFileWriter implements AutoCloseable {
 
 
   private Section computeValueDictionarySection(Compression compress, List<Path> tempPaths)
-     throws IOException
-  {
+     throws IOException {
     return computeSectionCompressible(compress, tempPaths, "value-dict-temp_",
        ColumnFileSection.VALUE_DICTIONARY, valueDictionary, x -> x == null, columnShardId.alternateString());
   }
 
   private Section computeEntityDictionarySection(Compression compress, List<Path> tempPaths)
-     throws IOException
-  {
+     throws IOException {
     return computeSectionCompressible(compress, tempPaths, "entity-dict-temp_",
        ColumnFileSection.ENTITY_DICTIONARY, entityDictionary, x -> x.isEmpty(), columnShardId.toSimpleString());
   }
 
   private Section getHeaderSection(Constants.ColumnFileFormatVersion version)
-     throws IOException
-  {
+     throws IOException {
     SectionBuilder headerPortion = new SectionBuilder(ColumnFileSection.HEADER);
     writeForMagicHeader(headerPortion.getOutputStream());
     writeForVersion(headerPortion.getOutputStream(), version);
@@ -638,8 +606,7 @@ public class ColumnFileWriter implements AutoCloseable {
   }
 
   private Section writeMetadata(Compression compress)
-     throws IOException
-  {
+     throws IOException {
     SectionBuilder metadataPortion = new SectionBuilder(ColumnFileSection.METADATA);
     // Prepare metadata for writing
     metadata.setLastUpdate(new Date().toString());

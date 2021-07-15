@@ -44,8 +44,7 @@ public class ColumnFileReaderWriterTest {
 
    @Test
    public void testWriteThenRead()
-      throws IOException
-   {
+      throws IOException {
       ModShardStrategy shardStrategy = new ModShardStrategy(10);
       int entity1Shard = shardStrategy.shardNum(1);
       ColumnId testColumn = new ColumnId("vuln", DataType.STRING.getCode());
@@ -65,8 +64,7 @@ public class ColumnFileReaderWriterTest {
       ColumnFileReader cfr = new ColumnFileReader();
       ColumnFileListener listener = new ColumnFileListener() {
          @Override public int columnFileSection(
-            ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength)
-         {
+            ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength) {
             System.out.println("Got section " + armorSection + " compressed: " + compressedLength + " uncompressed: " + uncompressedLength);
             return 0;
          }
@@ -78,8 +76,7 @@ public class ColumnFileReaderWriterTest {
 
    @Test
    public void testWriteThenReadV2()
-      throws IOException
-   {
+      throws IOException {
       ModShardStrategy shardStrategy = new ModShardStrategy(10);
       int entity1Shard = shardStrategy.shardNum(1);
       ColumnId testColumn = new ColumnId("vuln", DataType.STRING.getCode());
@@ -98,13 +95,11 @@ public class ColumnFileReaderWriterTest {
       ColumnFileReader cfr = new ColumnFileReader();
       ColumnFileListener listener = new ColumnFileListener() {
          @Override public int columnFileSection(
-            ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength)
-         {
+            ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength) {
             System.out.println("Got section " + armorSection + " compressed: " + compressedLength + " uncompressed: " + uncompressedLength);
             return 0;
          }
       };
       cfr.read(str, listener);
-
    }
 }
