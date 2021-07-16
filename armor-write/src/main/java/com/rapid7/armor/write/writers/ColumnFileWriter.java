@@ -740,9 +740,13 @@ public class ColumnFileWriter implements AutoCloseable {
         EntityRecord er = entityIndexWriter.getEntityRecord(getEntityId(wr.getEntityId()));
         if (er == null || er.getVersion() <= wr.getVersion())
           groupByMax.put(wr.getEntityId(), wr);
+        else
+          LOGGER.info("WARNING: Test we are skipping {} since its version {} is less than {}", er.getEntityId(), wr.getVersion(), er.getVersion());
       } else {
         if (maxVersionWriteRequest.getVersion() <= wr.getVersion())
           groupByMax.put(wr.getEntityId(), wr);
+        else
+          LOGGER.info("WARNING: Test we are skipping {} since its version {} is less than {}", wr.getEntityId(), wr.getVersion(), maxVersionWriteRequest.getVersion());
       }
     }
 
