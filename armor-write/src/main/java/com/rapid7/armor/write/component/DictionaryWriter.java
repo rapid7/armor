@@ -16,12 +16,26 @@ public class DictionaryWriter implements Component, Dictionary {
   private final AtomicInteger nextInteger;
   private Map<String, Integer> strToInt = new HashMap<>();
   private final Map<Integer, String> intToStr = new HashMap<>();
+  private Set<Integer> tobedeleted = new HashSet<>();
   private final static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private boolean bidirectional = false;
-
+  private boolean used = false;
+  
   public DictionaryWriter(boolean bidirectional) {
     nextInteger = new AtomicInteger(1);
     this.bidirectional = bidirectional;
+  }
+  
+  public void setUsed(boolean used) {
+      this.used = used;
+  }
+  
+  public boolean getUsed() {
+      return used;
+  }
+
+  public int realSize() {
+      return intToStr.size() - tobedeleted.size();
   }
 
   public DictionaryWriter(byte[] json, boolean bidirectional) throws IOException {
@@ -80,6 +94,9 @@ public class DictionaryWriter implements Component, Dictionary {
       strToInt.remove(removedValue);
   }
 
+  public synchronized void markForDeleted(Integer surrogate) {
+    tobedeleted.add(surrogate);
+  }
 
   public synchronized void removeSurrogate(String value) {
     Integer removedSurrogate = strToInt.remove(value);
@@ -127,6 +144,7 @@ public class DictionaryWriter implements Component, Dictionary {
   }
 
   public synchronized Integer getSurrogate(String value) {
+    used = true;
     Integer toReturn = null;
     if (!strToInt.containsKey(value)) {
       int nextVal = nextInteger.incrementAndGet();
