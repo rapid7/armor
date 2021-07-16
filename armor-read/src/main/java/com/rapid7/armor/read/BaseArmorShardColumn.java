@@ -33,11 +33,11 @@ public abstract class BaseArmorShardColumn {
       byte[] compressedIndex = new byte[compressed];
       read = IOTools.readFully(inputStream, compressedIndex, 0, compressed);
       byte[] decomporessedIndex = Zstd.decompress(compressedIndex, uncompressed);
-      strValueDictionary = new DictionaryReader(decomporessedIndex, metadata.getCardinality(), false);
+      strValueDictionary = new DictionaryReader(decomporessedIndex, metadata.getCardinality(), true);
     } else if (uncompressed > 0) {
       byte[] decompressed = new byte[uncompressed];
       read = IOTools.readFully(inputStream, decompressed, 0, uncompressed);
-      strValueDictionary = new DictionaryReader(decompressed, metadata.getCardinality(), false);
+      strValueDictionary = new DictionaryReader(decompressed, metadata.getCardinality(), true);
     }
     return read;
   }
