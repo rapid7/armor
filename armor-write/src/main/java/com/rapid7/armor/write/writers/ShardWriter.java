@@ -182,7 +182,6 @@ public class ShardWriter implements IShardWriter {
     // First for all columns check for compaction before continuing.
     for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
       ColumnFileWriter cw = columnFileWriters.get(entry.getKey());
-      cw.checkForConsistency();
       ColumnMetadata md = cw.getMetadata();
       if (md.getFragmentationLevel() > compactionTrigger.get()) {
         Instant mark = Instant.now();

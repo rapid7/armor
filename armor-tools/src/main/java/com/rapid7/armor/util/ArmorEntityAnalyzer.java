@@ -86,14 +86,8 @@ public class ArmorEntityAnalyzer {
       ShardId shardId = null;
       try {
         columnId = new ColumnId(c);
-        shardId = new ShardId();
-        shardId.setInterval("test");
-        shardId.setShardNum(8);
-        shardId.setTable("best_solution");
-        shardId.setTenant("rapid7");
-//        shardId = new ShardId(c);
+        shardId = new ShardId(c);
       } catch (Exception e) {
-          e.printStackTrace();
         // No valid so just skip.
         continue;
       }
@@ -106,7 +100,7 @@ public class ArmorEntityAnalyzer {
             for (Map.Entry<String, Object> entry : inferedEntityIds.entrySet()) {
               Object key = entry.getValue();
               String entityName = entry.getKey();
-              EntityRecord er = writer.getEntites().get((Integer) key);
+              EntityRecord er = writer.getEntities().get((Integer) key);
               if (er != null) {
                 // Write info
                 List<Object> results = new ArrayList<>();
@@ -141,15 +135,7 @@ public class ArmorEntityAnalyzer {
           for (Map.Entry<String, Object> entry : inferedEntityIds.entrySet()) {
             String entityName = entry.getKey();
             Integer entityId = dw.getSurrogate(entityName);
-            System.out.println("dd " + dw.getValue(entityId));
-            EntityRecord er = writer.getEntites().get(entityId);
-            System.out.println(dw.cardinality());
-            System.out.println(writer.getEntites().size());
-
-            for (EntityRecord er1 : writer.getEntites().values()) {
-                System.out.println(er1.getEntityId() + ":" + dw.getValue(er1.getEntityId()));
-            }
-            
+            EntityRecord er = writer.getEntities().get(entityId);
             
             if (er != null) {
               // Write info

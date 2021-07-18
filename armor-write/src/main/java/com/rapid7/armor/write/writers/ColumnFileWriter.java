@@ -88,12 +88,6 @@ public class ColumnFileWriter implements AutoCloseable {
     rowGroupWriter = new RowGroupWriter(TempFileUtil.createTempFile(columnShardId.alternateString() + ROWGROUP_STORE_SUFFIX, ".armor"), columnShardId, valueDictionary);
     entityIndexWriter = new EntityIndexWriter(TempFileUtil.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor"), columnShardId);
   }
-  
-  public void checkForConsistency() {
-    if (entityDictionary.getUsed() && metadata.getColumnType() == DataType.STRING && entityDictionary.realSize() != entityIndexWriter.getActiveEntities().size()) {
-        throw new RuntimeException("TEST TEST Detected an error");
-    }
-  }
 
   public ColumnFileWriter(DataInputStream dataInputStream, ColumnShardId columnShardId) {
     try {
