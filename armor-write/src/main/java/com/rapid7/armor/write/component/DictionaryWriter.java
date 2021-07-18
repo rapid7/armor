@@ -16,7 +16,6 @@ public class DictionaryWriter implements Component, Dictionary {
   private final AtomicInteger nextInteger;
   private Map<String, Integer> strToInt = new HashMap<>();
   private final Map<Integer, String> intToStr = new HashMap<>();
-  private Set<Integer> tobedeleted = new HashSet<>();
   private final static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private boolean bidirectional = false;
   
@@ -79,10 +78,6 @@ public class DictionaryWriter implements Component, Dictionary {
     String removedValue = intToStr.remove(surrogate);
     if (removedValue != null)
       strToInt.remove(removedValue);
-  }
-
-  public synchronized void markForDeleted(Integer surrogate) {
-    tobedeleted.add(surrogate);
   }
 
   public synchronized void removeSurrogate(String value) {

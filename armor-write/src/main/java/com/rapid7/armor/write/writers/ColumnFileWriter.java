@@ -685,7 +685,6 @@ public class ColumnFileWriter implements AutoCloseable {
     boolean hasStringIds = !entityDictionary.isEmpty();
     if (entity instanceof String) {
       entityId = entityDictionary.getSurrogate((String) entity);
-      entityDictionary.markForDeleted(entityId);
     } else if (entity instanceof Long) {
       if (hasStringIds)
         throw new EntityIdTypeException("Exepected a string type for the entity id but got a numeric type");
@@ -728,20 +727,17 @@ public class ColumnFileWriter implements AutoCloseable {
 
   public synchronized void write(String transaction, List<WriteRequest> writeRequests) throws IOException {
     // First filter out already old stuff that doesn't need to be written.
-    LinkedHashMap<Object, WriteRequest> groupByMax = new LinkedHashMap<>(); // NOTE: Maintain write order via a linkedhashmap or can't guarantee baseline/entity column is same as other.
+    // NOTE: Maintain write order via a linkedhashmap or can't guarantee baseline/entity column is same as other.
+    LinkedHashMap<Object, WriteRequest> groupByMax = new LinkedHashMap<>(); 
     for (WriteRequest wr : writeRequests) {
       WriteRequest maxVersionWriteRequest = groupByMax.get(wr.getEntityId());
       if (maxVersionWriteRequest == null) {
         EntityRecord er = entityIndexWriter.getEntityRecord(getEntityId(wr.getEntityId()));
         if (er == null || er.getVersion() <= wr.getVersion())
           groupByMax.put(wr.getEntityId(), wr);
-        else
-          LOGGER.info("WARNING: Test we are skipping {} since its version {} is less than {}", er.getEntityId(), wr.getVersion(), er.getVersion());
       } else {
         if (maxVersionWriteRequest.getVersion() <= wr.getVersion())
           groupByMax.put(wr.getEntityId(), wr);
-        else
-          LOGGER.info("WARNING: Test we are skipping {} since its version {} is less than {}", wr.getEntityId(), wr.getVersion(), maxVersionWriteRequest.getVersion());
       }
     }
 
