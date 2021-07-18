@@ -101,7 +101,7 @@ public class ShardWriter implements IShardWriter {
   public Map<Integer, EntityRecord> getEntities(String columnId) {
     ColumnFileWriter csw = getWriterByColumnId(columnId);
     if (csw != null)
-      return csw.getEntites();
+      return csw.getEntities();
     return null;
   }
 

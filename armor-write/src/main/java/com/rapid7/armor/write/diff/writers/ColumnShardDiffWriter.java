@@ -137,7 +137,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
         try {
           RowGroupWriter baselineRgw = baselineColumnFile.getRowGroupWriter();
           Integer entityId = baselineColumnFile.getEntityId(entity);
-          EntityRecord baselineEr = entityId != null ? baselineColumnFile.getEntites().get(entityId) : null;
+          EntityRecord baselineEr = entityId != null ? baselineColumnFile.getEntities().get(entityId) : null;
           if (baselineEr != null) {
             List<Object> removedBaselineValues = baselineRgw.getEntityValues(baselineEr);
             WriteRequest wr = new WriteRequest(entityId, version, instanceId, new Column(diffColumnId));
@@ -147,7 +147,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
             } else {
               // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
               // If so then we should DELETE so that there is no entry.
-              EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
+              EntityRecord targetEr = targetColumnFile.getEntities().get(entityId);
               if (targetEr != null && targetEr.getDeleted() == 0) {
                 targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
               }
@@ -174,7 +174,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
       List<WriteRequest> toWrite = new ArrayList<>();
       for (WriteRequest wr : writeRequests) {
         Integer entityId = baselineColumnFile.getEntityId(wr.getEntityId());
-        EntityRecord baselineEr = entityId != null ? baselineColumnFile.getEntites().get(entityId) : null;
+        EntityRecord baselineEr = entityId != null ? baselineColumnFile.getEntities().get(entityId) : null;
         try {
           if (baselineEr != null) {
             if (forPluses) {
@@ -187,7 +187,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
               } else {
                 // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
                 // If so then we should DELETE so that there is no entry.
-                EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
+                EntityRecord targetEr = targetColumnFile.getEntities().get(entityId);
                 if (targetEr != null && targetEr.getDeleted() == 0) {
                   targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
                 }
@@ -203,7 +203,7 @@ public class ColumnShardDiffWriter implements IShardWriter {
               } else {
                 // Its empty meaning no changes, so we should check to see if it already exists in the targeted baseline.
                 // If so then we should DELETE so that there is no entry.
-                EntityRecord targetEr = targetColumnFile.getEntites().get(entityId);
+                EntityRecord targetEr = targetColumnFile.getEntities().get(entityId);
                 if (targetEr != null && targetEr.getDeleted() == 0) {
                   targetColumnFile.delete(transaction, wr.getEntityId(), wr.getVersion(), wr.getInstanceId());
                 }
@@ -298,6 +298,6 @@ public class ColumnShardDiffWriter implements IShardWriter {
 
   @Override
   public Map<Integer, EntityRecord> getEntities(String columnId) {
-    return targetColumnFile.getEntites();
+    return targetColumnFile.getEntities();
   }
 }

@@ -46,6 +46,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -140,7 +141,7 @@ public class ColumnFileWriter implements AutoCloseable {
     return entityIndexWriter;
   }
 
-  public Map<Integer, EntityRecord> getEntites() {
+  public Map<Integer, EntityRecord> getEntities() {
     return entityIndexWriter.getEntities();
   }
 
@@ -733,7 +734,7 @@ public class ColumnFileWriter implements AutoCloseable {
 
   public synchronized void write(String transaction, List<WriteRequest> writeRequests) throws IOException {
     // First filter out already old stuff that doesn't need to be written.
-    HashMap<Object, WriteRequest> groupByMax = new HashMap<>();
+    LinkedHashMap<Object, WriteRequest> groupByMax = new LinkedHashMap<>(); // NOTE: Maintain write order via a linkedhashmap or can't guarantee baseline/entity column is same as other.
     for (WriteRequest wr : writeRequests) {
       WriteRequest maxVersionWriteRequest = groupByMax.get(wr.getEntityId());
       if (maxVersionWriteRequest == null) {
