@@ -101,7 +101,7 @@ public class ShardWriter implements IShardWriter {
   public Map<Integer, EntityRecord> getEntities(String columnId) {
     ColumnFileWriter csw = getWriterByColumnId(columnId);
     if (csw != null)
-      return csw.getEntites();
+      return csw.getEntities();
     return null;
   }
 
@@ -175,11 +175,11 @@ public class ShardWriter implements IShardWriter {
   }
 
   /**
-   * Verifies the save request is "consistent" across columns with the shard. Part of the the consistency check
+   * Verifies the save request is "consistent" across columns within the shard. Part of the the consistency check
    * is to build a "entity id" column derived from the consistency check.
    */
   private ColumnMetadata consistencyCheck(String transaction, String entityIdColumn, DataType entityIdType) throws IOException {
-    // First for all columns do check and do a compaction before continuing.
+    // First for all columns check for compaction before continuing.
     for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
       ColumnFileWriter cw = columnFileWriters.get(entry.getKey());
       ColumnMetadata md = cw.getMetadata();
@@ -198,7 +198,7 @@ public class ShardWriter implements IShardWriter {
     List<EntityRecordSummary> baselineSummaries = null;
     ColumnShardId baselineColumn = null;
     int maxEntities = 0;
-    Map<ColumnShardId, List<EntityRecordSummary>> otherEntitiesMap = new HashMap<>();
+    Map<ColumnShardId, List<EntityRecordSummary>> otherColumns = new HashMap<>();
     for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
       ColumnFileWriter cw = entry.getValue();
       List<EntityRecordSummary> currentSummaries = cw.getEntityRecordSummaries();
@@ -207,13 +207,13 @@ public class ShardWriter implements IShardWriter {
         maxEntities = currentSummaries.size();
         baselineColumn = cw.getColumnShardId();
       }
-      otherEntitiesMap.put(cw.getColumnShardId(), currentSummaries);
+      otherColumns.put(cw.getColumnShardId(), currentSummaries);
     }
     
     // If baseline column is null, that means the table is empty. In this case we should ensure all summaries should be set to zero.
     if (baselineColumn == null) {
       // Ensure its all zeros
-      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherEntitiesMap.entrySet().iterator();
+      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherColumns.entrySet().iterator();
       while (iterator.hasNext()) {
         Map.Entry<ColumnShardId, List<EntityRecordSummary>> entry = iterator.next();
         List<EntityRecordSummary> testSummaries = entry.getValue();
@@ -225,14 +225,16 @@ public class ShardWriter implements IShardWriter {
       }
     } else {
       // Once baseline is established, find the ones that need to be compacted.
-      otherEntitiesMap.remove(baselineColumn);
+      otherColumns.remove(baselineColumn);
       // For the ones that have the same number of entities, do a check to make sure
       // a) In the right order
       // b) Same number of rows
-      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherEntitiesMap.entrySet().iterator();
+      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherColumns.entrySet().iterator();
       while (iterator.hasNext()) {
         Map.Entry<ColumnShardId, List<EntityRecordSummary>> entry = iterator.next();
         List<EntityRecordSummary> testSummaries = entry.getValue();
+        
+        // If they are the same, then that should mean they should be exactly the same.
         if (testSummaries.size() == baselineSummaries.size()) {
           ColumnShardId testColumn = entry.getKey();
           if (!testSummaries.equals(baselineSummaries)) {
@@ -243,15 +245,14 @@ public class ShardWriter implements IShardWriter {
       }
     }
 
-    // Remaining entries need to be resynced, meaning additional rows need to be added.
-    for (ColumnShardId column : otherEntitiesMap.keySet()) {
+    for (ColumnShardId column : otherColumns.keySet()) {
       LOGGER.info("The column {} needs to be resync according to the baseline, this may be expected if its a new column", column);
       ColumnFileWriter cw = columnFileWriters.get(column);
       cw.compact(baselineSummaries == null ? new ArrayList<>() : baselineSummaries);
     }
 
     // To be extra careful, do another check with these left over columns
-    for (ColumnShardId column : otherEntitiesMap.keySet()) {
+    for (ColumnShardId column : otherColumns.keySet()) {
       ColumnFileWriter cw = columnFileWriters.get(column);
       List<EntityRecordSummary> testSummaries = cw.getEntityRecordSummaries();
       if (baselineSummaries == null) {

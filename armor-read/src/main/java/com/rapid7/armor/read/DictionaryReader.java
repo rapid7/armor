@@ -16,6 +16,8 @@ public class DictionaryReader {
 
   public DictionaryReader(byte[] json, int capacity, boolean bidirectional) throws IOException {
     this.bidirectional = bidirectional;
+    if (bidirectional)
+        strToInt = new HashMap<>(capacity);
     @SuppressWarnings("unchecked")
     Map<String, String> map = OBJECT_MAPPER.readValue(json, Map.class);
     // Since integers are stored as string, convert them to real ints.
@@ -27,8 +29,6 @@ public class DictionaryReader {
       }
       intToBytes.put(surrogate, e.getValue().getBytes());
       if (bidirectional) {
-        if (strToInt == null)
-          strToInt = new HashMap<>(capacity);
         if (strToInt.containsKey(e.getValue()))
           throw new RuntimeException("The value " + e.getValue() + " already contains a surrogate " + strToInt.get(e.getValue()) + " cannot add " + e.getValue());
         strToInt.put(e.getValue(), surrogate);

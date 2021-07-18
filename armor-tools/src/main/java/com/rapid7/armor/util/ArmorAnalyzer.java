@@ -99,7 +99,7 @@ public class ArmorAnalyzer {
               targetPath.resolve(columnId.getName() + "-ordered-entity-summaries.json"),
               StandardCopyOption.REPLACE_EXISTING);
           Files.copy(
-              new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getEntites())),
+              new ByteArrayInputStream(objectMapper.writeValueAsBytes(writer.getEntities())),
               targetPath.resolve(columnId.getName() + "-raw-entity-map.json"),
               StandardCopyOption.REPLACE_EXISTING);
           

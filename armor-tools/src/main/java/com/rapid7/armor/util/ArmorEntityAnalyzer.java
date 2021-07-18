@@ -100,7 +100,7 @@ public class ArmorEntityAnalyzer {
             for (Map.Entry<String, Object> entry : inferedEntityIds.entrySet()) {
               Object key = entry.getValue();
               String entityName = entry.getKey();
-              EntityRecord er = writer.getEntites().get((Integer) key);
+              EntityRecord er = writer.getEntities().get((Integer) key);
               if (er != null) {
                 // Write info
                 List<Object> results = new ArrayList<>();
@@ -135,7 +135,8 @@ public class ArmorEntityAnalyzer {
           for (Map.Entry<String, Object> entry : inferedEntityIds.entrySet()) {
             String entityName = entry.getKey();
             Integer entityId = dw.getSurrogate(entityName);
-            EntityRecord er = writer.getEntites().get(entityId);
+            EntityRecord er = writer.getEntities().get(entityId);
+            
             if (er != null) {
               // Write info
               List<Object> results = new ArrayList<>();
