@@ -185,39 +185,8 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void saveTableMetadata(List<ColumnId> columnId, ColumnId entityColumnId) {
-    DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
-    if (status != null)
-      status.validateXact(transaction);
-
-    String targetTableMetaaPath = PathBuilder.buildPath(
-      tableMetadata.getTenant(),
-      tableMetadata.getTable(),
-      transaction,
-      Constants.TABLE_METADATA + ".armor");
-
-    Path target = basePath.resolve(targetTableMetaaPath);
-    try {
-      byte[] payload = OBJECT_MAPPER.writeValueAsBytes(tableMetadata);
-      if (!Files.exists(target)) {
-        Files.createDirectories(target.getParent());
-        Files.write(target, payload, StandardOpenOption.CREATE_NEW);
-      } else
-        Files.write(target, payload, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-      saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, status == null ? null : status.getCurrent());
-    } catch (IOException ioe) {
-      throw new RuntimeException(ioe);
-    }
-    if (status == null || status.getPrevious() == null)
-      return;
-    try {
-      String deleteTableMetaPath =
-        PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), status.getPrevious(), Constants.TABLE_METADATA + ".armor");
-      Files.deleteIfExists(basePath.resolve(deleteTableMetaPath));
-    } catch (Exception e) {
-      LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
-    }
-
+  public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnId, ColumnId entityColumnId) {
+      throw new UnsupportedOperationException("TODO");
   }
 
   @Override
@@ -575,5 +544,10 @@ public class FileWriteStore implements WriteStore {
     String currentPath = resolveCurrentPath(columnShardId.getShardId());
     Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnShardId.getColumnId().fullName()));
     return Files.exists(shardIdPath);
+  }
+
+  @Override
+  public ColumnId getEntityIdColumn(String tenant, String table) {
+      throw new UnsupportedOperationException("TODO");
   }
 }

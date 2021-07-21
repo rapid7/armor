@@ -7,7 +7,6 @@ import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
@@ -211,60 +210,8 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public TableMetadata getTableMetadata(String tenant, String table) {
-   String tableMetapath = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
-    try {
-      if (doesObjectExist(bucket, tableMetapath)) {
-        try (S3Object s3Object = s3Client.getObject(bucket, tableMetapath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
-          try {
-            return OBJECT_MAPPER.readValue(s3InputStream, TableMetadata.class);
-          } finally {
-            com.amazonaws.util.IOUtils.drainInputStream(s3InputStream);
-          }
-        } catch (IOException jpe) {
-          throw new RuntimeException(jpe);
-        }
-      } else
-        return null;
-    } catch (AmazonS3Exception as3) {
-      LOGGER.error("Unable to load metadata at on {} at {}", bucket, tableMetapath);
-      throw as3;
-    }
-  }
-
-  @Override
-  public void saveTableMetadata(List<ColumnId> columnId, ColumnId entityColumnId) {
-    DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
-    if (status != null)
-      status.validateXact(transaction);
-    String targetTableMetaaPath = PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, Constants.TABLE_METADATA + ".armor");
-    for (int i = 0; i < 10; i++) {
-      try {
-        String payload = OBJECT_MAPPER.writeValueAsString(tableMetadata);
-        s3Client.putObject(bucket, targetTableMetaaPath, payload);
-        saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), new DistXact(transaction, status == null ? null : status.getCurrent()));
-        break;
-      } catch (IOException ioe) {
-          if (i + 1 == 10)
-              throw new RuntimeException(ioe);
-          else {
-              try {
-                  Thread.sleep((i + 1) * 1000);
-              } catch (InterruptedException ie) {
-                  // do nothing
-              }
-          }
-      }
-    }
-    if (status == null || status.getPrevious() == null)
-      return;
-    try {
-        String deleteTableMetaPath =
-          PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), status.getPrevious(), Constants.TABLE_METADATA + ".armor");
-        s3Client.deleteObject(bucket, deleteTableMetaPath);
-      } catch (Exception e) {
-        LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
-      }
+  public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnId, ColumnId entityColumnId) {
+      throw new UnsupportedOperationException("TODO");
   }
 
   @Override
@@ -902,5 +849,10 @@ public class S3WriteStore implements WriteStore {
   public boolean columnShardIdExists(ColumnShardId columnShardId) {
     String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(columnShardId.getShardId()), columnShardId.getColumnId().fullName());
     return s3Client.doesObjectExist(bucket, shardIdPath);
+  }
+
+  @Override
+  public ColumnId getEntityIdColumn(String tenant, String table) {
+      throw new UnsupportedOperationException("TODO");
   }
 }

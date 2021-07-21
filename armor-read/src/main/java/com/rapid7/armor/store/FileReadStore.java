@@ -291,11 +291,7 @@ public class FileReadStore implements ReadStore {
 
   @Override
   public List<ColumnId> getColumnIds(String tenant, String table) {
-    TableMetadata tm = getTableMetadata(tenant, table);
-    if (tm == null) {
-      return new ArrayList<>();
-    }
-    return new ArrayList<>(tm.getColumnIds());
+    throw new UnsupportedOperationException("TODO");
   }
   
   @Override

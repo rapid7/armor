@@ -22,8 +22,6 @@ import java.util.concurrent.Executors;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 
-import javax.swing.event.ListSelectionEvent;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -208,7 +206,7 @@ public class ArmorWriter implements Closeable {
     if (tableWriter == null) {
       tableWriter = getTableWriter(tableId);
     }
-    tableEntityColumnIds.put(tableId, store.getEntityIdColumn(tenant, table, interval));
+    tableEntityColumnIds.put(tableId, store.getEntityIdColumn(tenant, table));
 
     IShardWriter sw = tableWriter.getShard(shardId);
     if (sw == null) {
@@ -254,7 +252,7 @@ public class ArmorWriter implements Closeable {
         // Make sure the entityid column hasn't changed.
         minusTableWriter = getTableWriter(minusTableId);
         diffTables.add(minusTableId);
-        tableEntityColumnIds.put(minusTableId, store.getEntityIdColumn(tenant, minusTable, targetInterval)); 
+        tableEntityColumnIds.put(minusTableId, store.getEntityIdColumn(tenant, minusTable)); 
       } else {
         // There is no minus table
         return;
@@ -422,7 +420,7 @@ public class ArmorWriter implements Closeable {
         plusTableWriter = getTableWriter(plusTableId);
         diffTablesIds.add(plusTableId);
         // Make sure the entityid column hasn't changed.
-        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, minusTable, targetInterval);
+        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, minusTable);
         if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())))
           throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
         tableEntityColumnIds.put(plusTableId, entityIdColumn); 
@@ -445,7 +443,7 @@ public class ArmorWriter implements Closeable {
         minusTableWriter = getTableWriter(minusTableId);
         diffTablesIds.add(minusTableId);
 
-        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, minusTable, targetInterval);
+        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, minusTable);
         if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())))
           throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
         tableEntityColumnIds.put(minusTableId, entityIdColumn); 
@@ -609,7 +607,7 @@ public class ArmorWriter implements Closeable {
         tableWriter = getTableWriter(tableId);
         
         // Make sure the entityid column hasn't changed.
-        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table, interval);
+        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
         if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
           throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
         tableEntityColumnIds.put(tableId, entityIdColumn); 
@@ -708,13 +706,19 @@ public class ArmorWriter implements Closeable {
     String table = tableId.getTableName();
     CompletionService<ShardMetadata> std = new ExecutorCompletionService<>(threadPool);
     ColumnId entityColumnId = tableEntityColumnIds.get(tableId);
-    
+    ColumnId storedEntityColumnId = store.getEntityIdColumn(tenant, table);
+
     if (entityColumnId == null) {
       if (!store.tableExists(tenant, table)) {
         throw new RuntimeException("Unable to determine the entityid column name from store or memory, cannot commit");
       }
-      entityColumnId = store.getEntityIdColumn(tenant, table, interval);
+      entityColumnId = storedEntityColumnId;
+    } else {
+      if (!entityColumnId.equals(storedEntityColumnId)) {
+        throw new RuntimeException("The entity id columns for stored and to be persisted are not the same.");
+      }
     }
+
     int submitted = 0;
     final ColumnId finalEntityColumnId = entityColumnId;
     List<EntityOffsetException> offsetExceptions = new ArrayList<>();
@@ -749,14 +753,6 @@ public class ArmorWriter implements Closeable {
       submitted++;
     }
 
-    if (tableMetadata == null)
-      tableMetadata = new TableMetadata(tenant, table, entityColumnId.getName(), entityColumnId.getType());
-    else {
-      // Verify the entityId column and type are the same.
-      if (!tableMetadata.getEntityColumnId().equals(entityColumnId.getName()) || !tableMetadata.getEntityColumnIdType().equals(entityColumnId.getType())) {
-        throw new RuntimeException("The entity id column name or type has changed, check the shards..table is corrupted may require a rebuid");
-      }
-    }
     Set<ColumnId> columnIds = new HashSet<>();
     for (int i = 0; i < submitted; ++i) {
       try {
@@ -778,6 +774,6 @@ public class ArmorWriter implements Closeable {
       }
       // At this point in time put each column file into the underlying store.
     }
-    store.saveTableMetadata(columnIds, entityColumnId);
+    store.saveTableMetadata(tenant, table, columnIds, entityColumnId);
   }
 }

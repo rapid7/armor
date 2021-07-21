@@ -107,8 +107,8 @@ public interface WriteStore {
   ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShard);
   
   void saveShardMetadata(String transaction, ShardMetadata shardMetadata);
-  ColumnId getEntityIdColumn(String tenant, String table, Interval interval);
-  void saveTableMetadata(Set<ColumnId> columnId, ColumnId entityColumnId);
+  ColumnId getEntityIdColumn(String tenant, String table);
+  void saveTableMetadata(String tenant, String table, Set<ColumnId> columnId, ColumnId entityColumnId);
 
   // Loading from store
   List<ColumnFileWriter> loadColumnWriters(ShardId shardId);
