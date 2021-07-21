@@ -3,7 +3,6 @@ package com.rapid7.armor;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.read.predicate.InstantPredicate;
 import com.rapid7.armor.read.predicate.StringPredicate;
 import com.rapid7.armor.schema.ColumnId;
@@ -42,15 +41,6 @@ public class S3ReadStoreTest {
   private static AmazonS3 client;
   private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-  private TableMetadata generateTestTableMedataDate() {
-    TableMetadata tmd = new TableMetadata("org", "tenant", "columnId", "columnIdType");
-    ColumnId c1 = new ColumnId("column1", DataType.STRING);
-    ColumnId c2 = new ColumnId("column2", DataType.STRING);
-    ColumnId c3 = new ColumnId("column3", DataType.STRING);
-    tmd.addColumnIds(Arrays.asList(c1, c2, c3));
-    return tmd;
-  }
-
   @BeforeAll
   public static void setupBucket() throws ParseException {
     S3_MOCK.start();
@@ -82,10 +72,7 @@ public class S3ReadStoreTest {
     HashMap<String, String> currentValue2 = new HashMap<>();
     currentValue2.put("current", current2);
 
-    TableMetadata tmdTest = generateTestTableMedataDate();
-    String tmdJson = OBJECT_MAPPER.writeValueAsString(tmdTest);
     client.putObject(TEST_BUCKET, "org1/table1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
-    client.putObject(TEST_BUCKET, "org1/table1/" + current1 + "/table-metadata.armor", tmdJson);
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");
@@ -101,7 +88,6 @@ public class S3ReadStoreTest {
     ShardId shard1Org1 = new ShardId("org1", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 1);
 
     client.putObject(TEST_BUCKET, "org2/table1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
-    client.putObject(TEST_BUCKET, "org2/table1/" + current1 + "/table-metadata.armor", tmdJson);
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");
@@ -164,10 +150,9 @@ public class S3ReadStoreTest {
     assertEquals(1, intervalStarts.size());
     assertTrue(intervalStarts.contains("2021-01-11T00:00:00Z"));
     
-    TableMetadata tmd1 = readStore.getTableMetadata("org1", "table1");
-    assertEquals(Sets.newHashSet(tmd1.getColumnIds()), Sets.newHashSet(readStore.getColumnIds("org1", "table1")));
-    TableMetadata tmd2 = readStore.getTableMetadata("org1", "table1");
-    assertEquals(Sets.newHashSet(tmd2.getColumnIds()), Sets.newHashSet(readStore.getColumnIds("org2", "table1")));
+    // TODO: Add test here.
+    Sets.newHashSet(readStore.getColumnIds("org1", "table1"));
+    Sets.newHashSet(readStore.getColumnIds("org2", "table1"));
 
     List<Interval> intervals = readStore.getIntervals("org1", "table1"); 
     assertEquals(Sets.newHashSet(Interval.SINGLE), Sets.newHashSet(intervals));

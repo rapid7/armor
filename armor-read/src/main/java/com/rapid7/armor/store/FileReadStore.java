@@ -2,7 +2,6 @@ package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.predicate.InstantPredicate;
 import com.rapid7.armor.read.predicate.StringPredicate;
@@ -46,20 +45,6 @@ public class FileReadStore implements ReadStore {
 
   private ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, String shardNum) {
     return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), Integer.parseInt(shardNum));
-  }
-  
-  @Override
-  public TableMetadata getTableMetadata(String tenant, String table) {
-    String relativeTarget = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
-    Path target = basePath.resolve(relativeTarget);
-    if (!Files.exists(target))
-      return null;
-    try {
-      byte[] payload = Files.readAllBytes(target);
-      return OBJECT_MAPPER.readValue(payload, TableMetadata.class);
-    } catch (IOException ioe) {
-      throw new RuntimeException(ioe);
-    }
   }
 
   @Override

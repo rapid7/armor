@@ -1,7 +1,6 @@
 package com.rapid7.armor.store;
 
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.predicate.InstantPredicate;
 import com.rapid7.armor.read.predicate.StringPredicate;
@@ -67,16 +66,6 @@ public interface ReadStore {
   List<String> getIntervalStarts(String tenant, String table, Interval interval);
 
   // Metadata apis
-  /**
-   * Gets the table metadata.
-   *
-   * @param tenant The tenant to find.
-   * @param table The table to find.
-   *
-   * @return The {@link TableMetadata} or {@code null}.
-   */
-  TableMetadata getTableMetadata(String tenant, String table);
-
   /**
    * Gets the shard metadata.
    *

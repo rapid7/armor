@@ -2,7 +2,6 @@ package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.predicate.InstantPredicate;
 import com.rapid7.armor.read.predicate.StringPredicate;
@@ -141,28 +140,6 @@ public class S3ReadStore implements ReadStore {
         LOGGER.error("Unable load the shard at {}", shardIdPath, ioe);
         throw new RuntimeException(ioe);
       }
-    }
-  }
-  
-  @Override
-  public TableMetadata getTableMetadata(String tenant, String table) {
-    String tableMetapath = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
-    try {
-      if (doesObjectExist(bucket, tableMetapath)) {
-        try (S3Object s3Object = s3Client.getObject(bucket, tableMetapath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
-          try {
-            return OBJECT_MAPPER.readValue(s3InputStream, TableMetadata.class);
-          } finally {
-            com.amazonaws.util.IOUtils.drainInputStream(s3InputStream);
-          }
-        } catch (IOException jpe) {
-          throw new RuntimeException(jpe);
-        }
-      } else
-        return null;
-    } catch (AmazonS3Exception as3) {
-      LOGGER.error("Unable to load metadata at on {} at {}", bucket, tableMetapath);
-      throw as3;
     }
   }
   

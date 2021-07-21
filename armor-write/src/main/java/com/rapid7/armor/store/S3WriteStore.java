@@ -233,7 +233,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
+  public void saveTableMetadata(List<ColumnId> columnId, ColumnId entityColumnId) {
     DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
     if (status != null)
       status.validateXact(transaction);

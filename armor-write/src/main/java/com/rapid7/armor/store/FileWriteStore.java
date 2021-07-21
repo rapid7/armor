@@ -7,7 +7,6 @@ import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
@@ -186,21 +185,7 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public TableMetadata getTableMetadata(String tenant, String table) {
-    String relativeTarget = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
-    Path target = basePath.resolve(relativeTarget);
-    if (!Files.exists(target))
-      return null;
-    try {
-      byte[] payload = Files.readAllBytes(target);
-      return OBJECT_MAPPER.readValue(payload, TableMetadata.class);
-    } catch (IOException ioe) {
-      throw new RuntimeException(ioe);
-    }
-  }
-
-  @Override
-  public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
+  public void saveTableMetadata(List<ColumnId> columnId, ColumnId entityColumnId) {
     DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
     if (status != null)
       status.validateXact(transaction);

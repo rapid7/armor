@@ -22,6 +22,8 @@ import java.util.concurrent.Executors;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 
+import javax.swing.event.ListSelectionEvent;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -33,7 +35,6 @@ import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.schema.DiffTableName;
@@ -200,15 +201,14 @@ public class ArmorWriter implements Closeable {
     }
 
     // If it is null then table doesn't exist yet which means we can just return.
-    TableMetadata tableMeta = store.getTableMetadata(tenant, table);
-    if (tableMeta == null)
+    if (store.tableExists(tenant, table))
       return;
 
     // TableMeta is not null then table does exist, in that case load it up and attempt a delete.
     if (tableWriter == null) {
       tableWriter = getTableWriter(tableId);
     }
-    tableEntityColumnIds.put(tableId, toColumnId(tableMeta));
+    tableEntityColumnIds.put(tableId, store.getEntityIdColumn(tenant, table, interval));
 
     IShardWriter sw = tableWriter.getShard(shardId);
     if (sw == null) {
@@ -250,12 +250,11 @@ public class ArmorWriter implements Closeable {
     // mark the entity as deleted, otherwise it won't account for minuses.
     final TableWriter minusTableWriter;
     if (!tableWriters.containsKey(minusTableId)) {
-      TableMetadata tableMeta = store.getTableMetadata(tenant, minusTable);
-      if (tableMeta != null) {
+      if (store.tableExists(tenant, minusTable)) {
         // Make sure the entityid column hasn't changed.
         minusTableWriter = getTableWriter(minusTableId);
         diffTables.add(minusTableId);
-        tableEntityColumnIds.put(minusTableId, toColumnId(tableMeta)); 
+        tableEntityColumnIds.put(minusTableId, store.getEntityIdColumn(tenant, minusTable, targetInterval)); 
       } else {
         // There is no minus table
         return;
@@ -321,12 +320,6 @@ public class ArmorWriter implements Closeable {
       entityIdType = DataType.STRING;
     String entityIdColumn = entity.getEntityIdColumn();
     return new ColumnId(entityIdColumn, entityIdType.getCode());
-  }
-  
-  private ColumnId toColumnId(TableMetadata tableMetadata) {
-    if (tableMetadata == null)
-      return null;
-    return new ColumnId(tableMetadata.getEntityColumnId(), tableMetadata.getEntityColumnIdType());
   }
   
   public void snapshotCurrentToInterval(String tenant, String table, Interval interval, Instant timestamp) {
@@ -424,16 +417,15 @@ public class ArmorWriter implements Closeable {
     }
     final TableWriter plusTableWriter;
     if (!tableWriters.containsKey(plusTableId)) {
-      TableMetadata tableMeta = store.getTableMetadata(tenant, plusTable);
-      if (tableMeta != null) {
+      if (store.tableExists(tenant, minusTable)) {
         // The table exists, load it up then
         plusTableWriter = getTableWriter(plusTableId);
         diffTablesIds.add(plusTableId);
         // Make sure the entityid column hasn't changed.
-        String entityIdColumn = tableMeta.getEntityColumnId();
-        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
+        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, minusTable, targetInterval);
+        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())))
           throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
-        tableEntityColumnIds.put(plusTableId, toColumnId(tableMeta)); 
+        tableEntityColumnIds.put(plusTableId, entityIdColumn); 
       } else {
         Entity entity = entities.get(0);
         plusTableWriter = getTableWriter(plusTableId);
@@ -448,16 +440,15 @@ public class ArmorWriter implements Closeable {
 
     final TableWriter minusTableWriter;
     if (!tableWriters.containsKey(minusTableId)) {
-      TableMetadata tableMeta = store.getTableMetadata(tenant, minusTable);
-      if (tableMeta != null) {
+      if (store.tableExists(tenant, minusTable)) {
         // Make sure the entityid column hasn't changed.
         minusTableWriter = getTableWriter(minusTableId);
         diffTablesIds.add(minusTableId);
 
-        String entityIdColumn = tableMeta.getEntityColumnId();
-        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
+        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, minusTable, targetInterval);
+        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())))
           throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
-        tableEntityColumnIds.put(minusTableId, toColumnId(tableMeta)); 
+        tableEntityColumnIds.put(minusTableId, entityIdColumn); 
       } else {
         Entity entity = entities.get(0);
         minusTableWriter = getTableWriter(minusTableId);
@@ -613,16 +604,15 @@ public class ArmorWriter implements Closeable {
     TableId tableId = new TableId(tenant, table);
     final TableWriter tableWriter;
     if (!tableWriters.containsKey(tableId)) {
-      TableMetadata tableMeta = store.getTableMetadata(tenant, table);
-      if (tableMeta != null) {
+      if (store.tableExists(tenant, table)) {
         // The table exists, load it up then
         tableWriter = getTableWriter(tableId);
         
         // Make sure the entityid column hasn't changed.
-        String entityIdColumn = tableMeta.getEntityColumnId();
+        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table, interval);
         if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
           throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
-        tableEntityColumnIds.put(tableId, toColumnId(tableMeta)); 
+        tableEntityColumnIds.put(tableId, entityIdColumn); 
       } else {
         Entity entity = entities.get(0);
         // No shard metadata exists, create the first shard metadata for this.
@@ -718,13 +708,12 @@ public class ArmorWriter implements Closeable {
     String table = tableId.getTableName();
     CompletionService<ShardMetadata> std = new ExecutorCompletionService<>(threadPool);
     ColumnId entityColumnId = tableEntityColumnIds.get(tableId);
-    TableMetadata tableMetadata = null;
+    
     if (entityColumnId == null) {
-      tableMetadata = store.getTableMetadata(tableWriter.getTenant(), tableWriter.getTableName());
-      if (tableMetadata == null) {
+      if (!store.tableExists(tenant, table)) {
         throw new RuntimeException("Unable to determine the entityid column name from store or memory, cannot commit");
       }
-      entityColumnId = toColumnId(tableMetadata);
+      entityColumnId = store.getEntityIdColumn(tenant, table, interval);
     }
     int submitted = 0;
     final ColumnId finalEntityColumnId = entityColumnId;
@@ -768,11 +757,12 @@ public class ArmorWriter implements Closeable {
         throw new RuntimeException("The entity id column name or type has changed, check the shards..table is corrupted may require a rebuid");
       }
     }
+    Set<ColumnId> columnIds = new HashSet<>();
     for (int i = 0; i < submitted; ++i) {
       try {
         ShardMetadata smd = std.take().get();
         if (smd != null)
-          tableMetadata.addColumnIds(smd.columnIds());
+            columnIds.addAll(smd.columnIds());
       } catch (InterruptedException | ExecutionException e) {
         // Throw specialized handlers up verses wrapped runtime exceptions
         if (!offsetExceptions.isEmpty()) {
@@ -788,6 +778,6 @@ public class ArmorWriter implements Closeable {
       }
       // At this point in time put each column file into the underlying store.
     }
-    store.saveTableMetadata(transaction, tableMetadata);
+    store.saveTableMetadata(columnIds, entityColumnId);
   }
 }
