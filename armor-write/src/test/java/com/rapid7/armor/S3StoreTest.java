@@ -106,13 +106,15 @@ public class S3StoreTest {
     HashMap<String, String> currentValue1 = new HashMap<>();
     currentValue1.put("current", current1);
     
-    client.putObject(TEST_BUCKET, "org10/table1/table-metadata.armor", " Empty content");
+    // TODO: Setup test for metadata
+    //client.putObject(TEST_BUCKET, "org10/table1/table-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     
-    client.putObject(TEST_BUCKET, "org10/table2/table-metadata.armor", " Empty content");
+    // TODO: Setup test for metadata
+    //client.putObject(TEST_BUCKET, "org10/table2/table-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
