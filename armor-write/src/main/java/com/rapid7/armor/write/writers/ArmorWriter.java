@@ -608,7 +608,7 @@ public class ArmorWriter implements Closeable {
         
         // Make sure the entityid column hasn't changed.
         ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
-        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn)))
+        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())))
           throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
         tableEntityColumnIds.put(tableId, entityIdColumn); 
       } else {
@@ -714,6 +714,11 @@ public class ArmorWriter implements Closeable {
       }
       entityColumnId = storedEntityColumnId;
     } else {
+      if (storedEntityColumnId == null){
+        //Table is initiating, save entity column
+        store.saveColumnMetadata(tenant, table, entityColumnId, true);
+        storedEntityColumnId = store.getEntityIdColumn(tenant, table);
+      }
       if (!entityColumnId.equals(storedEntityColumnId)) {
         throw new RuntimeException("The entity id columns for stored and to be persisted are not the same.");
       }

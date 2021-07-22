@@ -190,6 +190,11 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
+  public void saveColumnMetadata(String tenant, String table, ColumnId column, boolean isEntityColumn) {
+    throw new UnsupportedOperationException("TODO");
+  }
+  
+  @Override
   public ShardMetadata getShardMetadata(ShardId shardId) {
     String currentPath = resolveCurrentPath(shardId);
     if (currentPath == null)

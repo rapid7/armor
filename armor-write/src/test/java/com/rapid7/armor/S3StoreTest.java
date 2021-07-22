@@ -1,11 +1,13 @@
 package com.rapid7.armor;
 
+import com.amazonaws.services.s3.model.ListObjectsRequest;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
+import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
@@ -477,6 +479,10 @@ public class S3StoreTest {
           checkEntityIndexRecord(records5.get(2), 0, 20, 15, (byte) 0);
           checkEntityIndexRecord(records5.get(3), 35, 12, 18, (byte) 0);
 
+          String entityColumnPath = PathBuilder.buildPath(myorg, table, "metadata", ColumnId.ENTITY_COLUMN_IDENTIFIER);
+          List<S3ObjectSummary> entityColumnObjects = client.listObjects(new ListObjectsRequest().withBucketName(TEST_BUCKET).withPrefix(entityColumnPath)).getObjectSummaries();
+          assertEquals(entityColumnObjects.size(), 1);
+  
           amrorWriter2.close(); // Close this FS and open a new one to test the load.
         } finally {
           try {

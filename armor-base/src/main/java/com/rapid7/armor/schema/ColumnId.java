@@ -62,7 +62,7 @@ public class ColumnId {
   }
   
   public static String keyName(ColumnId columnId, boolean isEntity) {
-    return (isEntity ? ENTITY_COLUMN_IDENTIFIER : SEPERATOR) + SEPERATOR + columnId.fullName();
+    return (isEntity ? ENTITY_COLUMN_IDENTIFIER : SEPERATOR) + columnId.fullName();
   }
 
   @Override

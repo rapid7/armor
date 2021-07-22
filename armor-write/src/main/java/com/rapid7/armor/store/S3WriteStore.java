@@ -226,6 +226,7 @@ public class S3WriteStore implements WriteStore {
       }
   }
   
+  @Override
   public void saveColumnMetadata(String tenant, String table, ColumnId column, boolean isEntityColumn) {
     String metadataPath = PathBuilder.buildPath(tenant, table, METADATA_KEY);
     String columnKey = keyName(column, isEntityColumn);
@@ -532,6 +533,7 @@ public class S3WriteStore implements WriteStore {
           break;
         }
       }
+      columnCache.invalidate(tenant);
     } catch (Exception e) {
       LOGGER.warn("Unable to completely remove tenant {}", tenant, e);
       throw e;
@@ -892,6 +894,20 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public ColumnId getEntityIdColumn(String tenant, String table) {
+    //Check cache first
+    Set<String> cachedColumns = columnCache.getIfPresent(tenant);
+    if (cachedColumns != null) {
+      String cachedEntityColumn = cachedColumns
+          .stream()
+          .filter(column -> column.startsWith(ColumnId.ENTITY_COLUMN_IDENTIFIER))
+          .findFirst()
+          .orElse(null);
+      if (cachedEntityColumn != null) {
+        return new ColumnId(cachedEntityColumn.substring(1));
+      }
+    }
+    
+    //Get from s3 if not in cache
     String entityColumnPath = PathBuilder.buildPath(tenant, table, METADATA_KEY) + Constants.STORE_DELIMETER + ColumnId.ENTITY_COLUMN_IDENTIFIER;
     ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
         .withBucketName(bucket)
