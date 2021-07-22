@@ -5,6 +5,7 @@ import java.util.Objects;
 
 public class ColumnId {
   public final static String SEPERATOR = "_";
+  public final static String ENTITY_COLUMN_IDENTIFIER = "-";
   private String name;
   private String type;
 
@@ -58,6 +59,10 @@ public class ColumnId {
 
   public String fullName() {
     return name + SEPERATOR + type;
+  }
+  
+  public static String keyName(ColumnId columnId, boolean isEntity) {
+    return (isEntity ? ENTITY_COLUMN_IDENTIFIER : SEPERATOR) + SEPERATOR + columnId.fullName();
   }
 
   @Override

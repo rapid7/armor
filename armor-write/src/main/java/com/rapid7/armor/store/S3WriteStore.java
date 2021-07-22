@@ -1,5 +1,7 @@
 package com.rapid7.armor.store;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.Entity;
@@ -15,7 +17,6 @@ import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
 import com.rapid7.armor.xact.DistXact;
 import com.rapid7.armor.xact.DistXactUtil;
-import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.ResetException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
@@ -50,10 +51,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static com.rapid7.armor.schema.ColumnId.keyName;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 
@@ -65,7 +68,13 @@ public class S3WriteStore implements WriteStore {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final String INTERVAL_TAG = "interval";
   private static final String ARCHIVING_MARKER = "ARCHIVING";
+  private static final String METADATA_KEY = "metadata";
   private static final Set<String> tenantCache = new HashSet<>();
+  private static final Cache<String, Set<String>> columnCache = CacheBuilder.newBuilder()
+      .maximumSize(1_000_000)
+      .concurrencyLevel(10)
+      .initialCapacity(200_000)
+      .expireAfterAccess(7, TimeUnit.DAYS).build();
   private Executor tpool;
 
   public void setThreadPool(int threads) {
@@ -210,8 +219,30 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnId, ColumnId entityColumnId) {
-      throw new UnsupportedOperationException("TODO");
+  public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnIds, ColumnId entityColumnId) {
+      saveColumnMetadata(tenant, table, entityColumnId, true);
+      for (ColumnId column : columnIds) {
+        saveColumnMetadata(tenant, table, column, false);
+      }
+  }
+  
+  public void saveColumnMetadata(String tenant, String table, ColumnId column, boolean isEntityColumn) {
+    String metadataPath = PathBuilder.buildPath(tenant, table, METADATA_KEY);
+    String columnKey = keyName(column, isEntityColumn);
+    
+    if (!columnExistsInCache(tenant, columnKey)){
+      //save column file to s3
+      String columnPath = PathBuilder.buildPath(metadataPath, columnKey);
+      putObject(columnPath, "", null);
+  
+      //save column file to cache
+      Set<String> cachedColumns = columnCache.getIfPresent(tenant);
+      if (cachedColumns == null) {
+        cachedColumns = new HashSet<>();
+        cachedColumns.add(columnKey);
+        columnCache.put(tenant, cachedColumns);
+      }
+    }
   }
 
   @Override
@@ -706,6 +737,14 @@ public class S3WriteStore implements WriteStore {
     throw new IllegalStateException("Should not have dropped into this section");
   }
   
+  private boolean columnExistsInCache(String tenant, String column) {
+    Set<String> columns = columnCache.getIfPresent(tenant);
+    if (columns != null) {
+      return columns.contains(column);
+    }
+    return false;
+  }
+  
   private void trackTenant(String tenant) {
     if (!tenantCache.contains(tenant)) {
       String key = PathBuilder.buildPath(StoreConstants.TENANT_CACHE_DIR, tenant);
@@ -853,6 +892,16 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public ColumnId getEntityIdColumn(String tenant, String table) {
-      throw new UnsupportedOperationException("TODO");
+    String entityColumnPath = PathBuilder.buildPath(tenant, table, METADATA_KEY) + Constants.STORE_DELIMETER + ColumnId.ENTITY_COLUMN_IDENTIFIER;
+    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+        .withBucketName(bucket)
+        .withPrefix(entityColumnPath);
+    
+    ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+    if (!objectListing.getObjectSummaries().isEmpty()) {
+      String columnFullName = Paths.get(objectListing.getObjectSummaries().get(0).getKey()).getFileName().toString().substring(1);
+      return new ColumnId(columnFullName);
+    }
+    return null;
   }
 }
