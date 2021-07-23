@@ -308,8 +308,8 @@ public class S3StoreTest {
 
   @Test
   public void basicTests() throws Exception {
-    String myorg = "myorg";
-    String table = "vulntable";
+    String myorg = "myorg1";
+    String table = "vulntable2";
     ColumnId name = new ColumnId("name", DataType.STRING.getCode());
     ColumnId time = new ColumnId("time", DataType.LONG.getCode());
     ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
@@ -481,7 +481,7 @@ public class S3StoreTest {
 
           String entityColumnPath = PathBuilder.buildPath(myorg, table, "metadata", ColumnId.ENTITY_COLUMN_IDENTIFIER);
           List<S3ObjectSummary> entityColumnObjects = client.listObjects(new ListObjectsRequest().withBucketName(TEST_BUCKET).withPrefix(entityColumnPath)).getObjectSummaries();
-          assertEquals(entityColumnObjects.size(), 1);
+          assertEquals(1, entityColumnObjects.size());
   
           amrorWriter2.close(); // Close this FS and open a new one to test the load.
         } finally {
@@ -499,7 +499,7 @@ public class S3StoreTest {
   public void getCachedTenantsTest() {
     String org1 = "org1";
     String org2 = "org2";
-    String table = "vulntable";
+    String table = "vulntable1";
     ColumnId name = new ColumnId("name", DataType.STRING.getCode());
     ColumnId time = new ColumnId("time", DataType.LONG.getCode());
     ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
