@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import static com.rapid7.armor.Constants.COLUMN_METADATA_DIR;
 
 public class FileReadStore implements ReadStore {
   private final Path basePath;
@@ -291,7 +292,17 @@ public class FileReadStore implements ReadStore {
 
   @Override
   public List<ColumnId> getColumnIds(String tenant, String table) {
-    throw new UnsupportedOperationException("TODO");
+    File columnMetadataDirectory = basePath.resolve(PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR)).toFile();
+    File[] columnMetadataFiles = columnMetadataDirectory.listFiles();
+  
+    Set<ColumnId> columnIds = new HashSet<>();
+    if (columnMetadataFiles != null && columnMetadataFiles.length > 0) {
+      for (File columnFile : columnMetadataFiles){
+        String columnFullName = columnFile.getName().substring(1);
+        columnIds.add(new ColumnId(columnFullName));
+      }
+    }
+    return new ArrayList<>(columnIds);
   }
   
   @Override
