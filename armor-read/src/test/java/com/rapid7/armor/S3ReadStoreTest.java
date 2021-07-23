@@ -75,6 +75,7 @@ public class S3ReadStoreTest {
 
     client.putObject(TEST_BUCKET, "org1/table1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     client.putObject(TEST_BUCKET, "org1/table1/metadata/_name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/-level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", "Empty content");

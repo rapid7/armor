@@ -153,7 +153,7 @@ public class S3ReadStore implements ReadStore {
         .withDelimiter(Constants.STORE_DELIMETER)
         .withPrefix(columnMetadataPath + Constants.STORE_DELIMETER);
     
-    List<ColumnId> columnIds = new ArrayList<>();
+    Set<ColumnId> columnIds = new HashSet<>();
     ListObjectsV2Result ol;
     do {
       ol = s3Client.listObjectsV2(lor);
@@ -165,7 +165,7 @@ public class S3ReadStore implements ReadStore {
       );
       lor.setContinuationToken(ol.getNextContinuationToken());
     } while (ol.isTruncated());
-    return columnIds;
+    return new ArrayList<>(columnIds);
   }
 
   @Override
