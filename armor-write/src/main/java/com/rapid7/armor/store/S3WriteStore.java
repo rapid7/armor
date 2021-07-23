@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static com.rapid7.armor.Constants.COLUMN_METADATA_DIR;
 import static com.rapid7.armor.schema.ColumnId.keyName;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
@@ -68,7 +69,6 @@ public class S3WriteStore implements WriteStore {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final String INTERVAL_TAG = "interval";
   private static final String ARCHIVING_MARKER = "ARCHIVING";
-  private static final String METADATA_KEY = "metadata";
   private static final Set<String> tenantCache = new HashSet<>();
   private static final Cache<String, Set<String>> columnCache = CacheBuilder.newBuilder()
       .maximumSize(1_000_000)
@@ -228,7 +228,7 @@ public class S3WriteStore implements WriteStore {
   
   @Override
   public void saveColumnMetadata(String tenant, String table, ColumnId column, boolean isEntityColumn) {
-    String metadataPath = PathBuilder.buildPath(tenant, table, METADATA_KEY);
+    String metadataPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR);
     String columnKey = keyName(column, isEntityColumn);
     
     if (!columnExistsInCache(tenant, columnKey)){
@@ -908,7 +908,7 @@ public class S3WriteStore implements WriteStore {
     }
     
     //Get from s3 if not in cache
-    String entityColumnPath = PathBuilder.buildPath(tenant, table, METADATA_KEY) + Constants.STORE_DELIMETER + ColumnId.ENTITY_COLUMN_IDENTIFIER;
+    String entityColumnPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR, ColumnId.ENTITY_COLUMN_IDENTIFIER);
     ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
         .withBucketName(bucket)
         .withPrefix(entityColumnPath);
