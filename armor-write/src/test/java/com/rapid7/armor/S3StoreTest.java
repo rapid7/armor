@@ -1,11 +1,13 @@
 package com.rapid7.armor;
 
+import com.amazonaws.services.s3.model.ListObjectsRequest;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
+import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
@@ -106,13 +108,15 @@ public class S3StoreTest {
     HashMap<String, String> currentValue1 = new HashMap<>();
     currentValue1.put("current", current1);
     
-    client.putObject(TEST_BUCKET, "org10/table1/table-metadata.armor", " Empty content");
+    // TODO: Setup test for metadata
+    //client.putObject(TEST_BUCKET, "org10/table1/table-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     
-    client.putObject(TEST_BUCKET, "org10/table2/table-metadata.armor", " Empty content");
+    // TODO: Setup test for metadata
+    //client.putObject(TEST_BUCKET, "org10/table2/table-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
@@ -304,8 +308,8 @@ public class S3StoreTest {
 
   @Test
   public void basicTests() throws Exception {
-    String myorg = "myorg";
-    String table = "vulntable";
+    String myorg = "myorg1";
+    String table = "vulntable2";
     ColumnId name = new ColumnId("name", DataType.STRING.getCode());
     ColumnId time = new ColumnId("time", DataType.LONG.getCode());
     ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
@@ -475,6 +479,10 @@ public class S3StoreTest {
           checkEntityIndexRecord(records5.get(2), 0, 20, 15, (byte) 0);
           checkEntityIndexRecord(records5.get(3), 35, 12, 18, (byte) 0);
 
+          String entityColumnPath = PathBuilder.buildPath(myorg, table, "metadata", ColumnId.ENTITY_COLUMN_IDENTIFIER);
+          List<S3ObjectSummary> entityColumnObjects = client.listObjects(new ListObjectsRequest().withBucketName(TEST_BUCKET).withPrefix(entityColumnPath)).getObjectSummaries();
+          assertEquals(1, entityColumnObjects.size());
+  
           amrorWriter2.close(); // Close this FS and open a new one to test the load.
         } finally {
           try {
@@ -491,7 +499,7 @@ public class S3StoreTest {
   public void getCachedTenantsTest() {
     String org1 = "org1";
     String org2 = "org2";
-    String table = "vulntable";
+    String table = "vulntable1";
     ColumnId name = new ColumnId("name", DataType.STRING.getCode());
     ColumnId time = new ColumnId("time", DataType.LONG.getCode());
     ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());

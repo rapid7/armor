@@ -7,7 +7,6 @@ import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
@@ -40,6 +39,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static com.rapid7.armor.Constants.COLUMN_METADATA_DIR;
+import static com.rapid7.armor.schema.ColumnId.keyName;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 public class FileWriteStore implements WriteStore {
@@ -186,55 +187,33 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public TableMetadata getTableMetadata(String tenant, String table) {
-    String relativeTarget = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
-    Path target = basePath.resolve(relativeTarget);
-    if (!Files.exists(target))
-      return null;
-    try {
-      byte[] payload = Files.readAllBytes(target);
-      return OBJECT_MAPPER.readValue(payload, TableMetadata.class);
-    } catch (IOException ioe) {
-      throw new RuntimeException(ioe);
+  public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnIds, ColumnId entityColumnId) {
+    saveColumnMetadata(tenant, table, entityColumnId, true);
+    for (ColumnId column : columnIds) {
+      saveColumnMetadata(tenant, table, column, false);
     }
   }
 
   @Override
-  public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
-    DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
-    if (status != null)
-      status.validateXact(transaction);
-
-    String targetTableMetaaPath = PathBuilder.buildPath(
-      tableMetadata.getTenant(),
-      tableMetadata.getTable(),
-      transaction,
-      Constants.TABLE_METADATA + ".armor");
-
-    Path target = basePath.resolve(targetTableMetaaPath);
+  public void saveColumnMetadata(String tenant, String table, ColumnId column, boolean isEntityColumn) {
+    String columnFile = PathBuilder.buildPath(
+        tenant,
+        table,
+        COLUMN_METADATA_DIR,
+        keyName(column, isEntityColumn)
+    );
+  
+    File file = basePath.resolve(columnFile).toFile();
     try {
-      byte[] payload = OBJECT_MAPPER.writeValueAsBytes(tableMetadata);
-      if (!Files.exists(target)) {
-        Files.createDirectories(target.getParent());
-        Files.write(target, payload, StandardOpenOption.CREATE_NEW);
-      } else
-        Files.write(target, payload, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-      saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, status == null ? null : status.getCurrent());
+      if (!file.exists()) {
+        Files.createDirectories(file.getParentFile().toPath());
+        file.createNewFile();
+      }
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
-    if (status == null || status.getPrevious() == null)
-      return;
-    try {
-      String deleteTableMetaPath =
-        PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), status.getPrevious(), Constants.TABLE_METADATA + ".armor");
-      Files.deleteIfExists(basePath.resolve(deleteTableMetaPath));
-    } catch (Exception e) {
-      LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
-    }
-
   }
-
+  
   @Override
   public ShardMetadata getShardMetadata(ShardId shardId) {
     String currentPath = resolveCurrentPath(shardId);
@@ -590,5 +569,17 @@ public class FileWriteStore implements WriteStore {
     String currentPath = resolveCurrentPath(columnShardId.getShardId());
     Path shardIdPath = basePath.resolve(Paths.get(currentPath, columnShardId.getColumnId().fullName()));
     return Files.exists(shardIdPath);
+  }
+
+  @Override
+  public ColumnId getEntityIdColumn(String tenant, String table) {
+    File metadataDirectory = basePath.resolve(PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR)).toFile();
+    File[] metadataFiles = metadataDirectory.listFiles((dir, name) -> name.startsWith(ColumnId.ENTITY_COLUMN_IDENTIFIER));
+  
+    if (metadataFiles != null && metadataFiles.length > 0) {
+      String columnFullName = metadataFiles[0].getName().substring(1);
+      return new ColumnId(columnFullName);
+    }
+    return null;
   }
 }

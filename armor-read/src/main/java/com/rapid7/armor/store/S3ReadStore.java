@@ -2,7 +2,6 @@ package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.predicate.InstantPredicate;
 import com.rapid7.armor.read.predicate.StringPredicate;
@@ -40,6 +39,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static com.rapid7.armor.Constants.COLUMN_METADATA_DIR;
 
 public class S3ReadStore implements ReadStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3ReadStore.class);
@@ -145,34 +145,27 @@ public class S3ReadStore implements ReadStore {
   }
   
   @Override
-  public TableMetadata getTableMetadata(String tenant, String table) {
-    String tableMetapath = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
-    try {
-      if (doesObjectExist(bucket, tableMetapath)) {
-        try (S3Object s3Object = s3Client.getObject(bucket, tableMetapath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
-          try {
-            return OBJECT_MAPPER.readValue(s3InputStream, TableMetadata.class);
-          } finally {
-            com.amazonaws.util.IOUtils.drainInputStream(s3InputStream);
-          }
-        } catch (IOException jpe) {
-          throw new RuntimeException(jpe);
-        }
-      } else
-        return null;
-    } catch (AmazonS3Exception as3) {
-      LOGGER.error("Unable to load metadata at on {} at {}", bucket, tableMetapath);
-      throw as3;
-    }
-  }
-  
-  @Override
   public List<ColumnId> getColumnIds(String tenant, String table) {
-    TableMetadata tm = getTableMetadata(tenant, table);
-    if (tm == null) {
-       return new ArrayList<>();
-    }
-    return new ArrayList<>(tm.getColumnIds());
+    String columnMetadataPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR);
+  
+    ListObjectsV2Request lor = new ListObjectsV2Request()
+        .withBucketName(bucket)
+        .withDelimiter(Constants.STORE_DELIMETER)
+        .withPrefix(columnMetadataPath + Constants.STORE_DELIMETER);
+    
+    Set<ColumnId> columnIds = new HashSet<>();
+    ListObjectsV2Result ol;
+    do {
+      ol = s3Client.listObjectsV2(lor);
+      List<S3ObjectSummary> summaries = ol.getObjectSummaries();
+      columnIds.addAll(summaries.stream()
+          .map(objectSummary -> Paths.get(objectSummary.getKey()).getFileName().toString().substring(1))
+          .map(ColumnId::new)
+          .collect(Collectors.toList())
+      );
+      lor.setContinuationToken(ol.getNextContinuationToken());
+    } while (ol.isTruncated());
+    return new ArrayList<>(columnIds);
   }
 
   @Override

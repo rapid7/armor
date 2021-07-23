@@ -8,9 +8,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
+import com.rapid7.armor.schema.ColumnId;
+import com.rapid7.armor.schema.DataType;
 import org.junit.jupiter.api.Test;
 
 import com.rapid7.armor.interval.Interval;
@@ -23,6 +26,12 @@ import com.rapid7.armor.store.FileReadStore;
  */
 public class FileStoreTest {
   private void setup(Path path) throws IOException {
+      Path column1 = path.resolve(Paths.get("tenant", "table", "metadata", "_name_S"));
+      Path column2 = path.resolve(Paths.get("tenant", "table", "metadata", "_level_I"));
+      Files.createDirectories(column1.getParent());
+      Files.createFile(column1);
+      Files.createFile(column2);
+      
       Path week1Shard1 = path.resolve(Paths.get("tenant", "table", "weekly", "2021-02-14T00:00:00Z", "1"));
       Files.createDirectories(week1Shard1.getParent());
       Files.createFile(week1Shard1);
@@ -50,6 +59,16 @@ public class FileStoreTest {
     } finally {
         removeDirectory(testDirectory);
     }    
+  }
+  
+  @Test
+  public void columnMetaDataTest() throws IOException {
+      Path testDirectory = Files.createTempDirectory("filestore");
+      FileReadStore store = new FileReadStore(testDirectory);
+      setup(testDirectory);
+    
+      List<ColumnId> columnIds = store.getColumnIds("tenant", "table");
+      assertEquals(columnIds, Arrays.asList(new ColumnId("name", DataType.STRING), new ColumnId("level", DataType.INTEGER)));
   }
   
   private void removeDirectory(Path removeDirectory) throws IOException {

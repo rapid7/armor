@@ -3,7 +3,6 @@ package com.rapid7.armor.store;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.shard.ColumnShardId;
@@ -14,6 +13,7 @@ import com.rapid7.armor.write.writers.ColumnFileWriter;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 public interface WriteStore {
   /**
@@ -82,6 +82,7 @@ public interface WriteStore {
    * @return {@code true} if it exists.
    */
   boolean columnShardIdExists(ColumnShardId columnShardId);
+  
   /**
    * Returns whether the table exists.
    *
@@ -103,11 +104,12 @@ public interface WriteStore {
   void deleteIntervalStart(String tenant, String table, Interval interval, String intervalStart);
   
   ShardMetadata getShardMetadata(ShardId shardId);
-  TableMetadata getTableMetadata(String tenant, String table);
   ColumnMetadata getColumnMetadata(String tenant, String table, ColumnShardId columnShard);
   
   void saveShardMetadata(String transaction, ShardMetadata shardMetadata);
-  void saveTableMetadata(String transaction, TableMetadata tableMetadata);
+  ColumnId getEntityIdColumn(String tenant, String table);
+  void saveTableMetadata(String tenant, String table, Set<ColumnId> columnIds, ColumnId entityColumnId);
+  void saveColumnMetadata(String tenant, String table, ColumnId column, boolean isEntityColumn);
 
   // Loading from store
   List<ColumnFileWriter> loadColumnWriters(ShardId shardId);

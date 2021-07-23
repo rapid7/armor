@@ -1,5 +1,7 @@
 package com.rapid7.armor.store;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.entity.Entity;
@@ -7,7 +9,6 @@ import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
@@ -16,7 +17,6 @@ import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
 import com.rapid7.armor.xact.DistXact;
 import com.rapid7.armor.xact.DistXactUtil;
-import com.amazonaws.AmazonServiceException.ErrorType;
 import com.amazonaws.ResetException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
@@ -51,10 +51,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static com.rapid7.armor.Constants.COLUMN_METADATA_DIR;
+import static com.rapid7.armor.schema.ColumnId.keyName;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 
@@ -67,6 +70,11 @@ public class S3WriteStore implements WriteStore {
   private static final String INTERVAL_TAG = "interval";
   private static final String ARCHIVING_MARKER = "ARCHIVING";
   private static final Set<String> tenantCache = new HashSet<>();
+  private static final Cache<String, Set<String>> columnCache = CacheBuilder.newBuilder()
+      .maximumSize(1_000_000)
+      .concurrencyLevel(10)
+      .initialCapacity(200_000)
+      .expireAfterAccess(7, TimeUnit.DAYS).build();
   private Executor tpool;
 
   public void setThreadPool(int threads) {
@@ -211,60 +219,31 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public TableMetadata getTableMetadata(String tenant, String table) {
-   String tableMetapath = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
-    try {
-      if (doesObjectExist(bucket, tableMetapath)) {
-        try (S3Object s3Object = s3Client.getObject(bucket, tableMetapath); S3ObjectInputStream s3InputStream = s3Object.getObjectContent()) {
-          try {
-            return OBJECT_MAPPER.readValue(s3InputStream, TableMetadata.class);
-          } finally {
-            com.amazonaws.util.IOUtils.drainInputStream(s3InputStream);
-          }
-        } catch (IOException jpe) {
-          throw new RuntimeException(jpe);
-        }
-      } else
-        return null;
-    } catch (AmazonS3Exception as3) {
-      LOGGER.error("Unable to load metadata at on {} at {}", bucket, tableMetapath);
-      throw as3;
-    }
+  public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnIds, ColumnId entityColumnId) {
+      saveColumnMetadata(tenant, table, entityColumnId, true);
+      for (ColumnId column : columnIds) {
+        saveColumnMetadata(tenant, table, column, false);
+      }
   }
-
+  
   @Override
-  public void saveTableMetadata(String transaction, TableMetadata tableMetadata) {
-    DistXact status = getCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable());
-    if (status != null)
-      status.validateXact(transaction);
-    String targetTableMetaaPath = PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), transaction, Constants.TABLE_METADATA + ".armor");
-    for (int i = 0; i < 10; i++) {
-      try {
-        String payload = OBJECT_MAPPER.writeValueAsString(tableMetadata);
-        s3Client.putObject(bucket, targetTableMetaaPath, payload);
-        saveCurrentValues(tableMetadata.getTenant(), tableMetadata.getTable(), new DistXact(transaction, status == null ? null : status.getCurrent()));
-        break;
-      } catch (IOException ioe) {
-          if (i + 1 == 10)
-              throw new RuntimeException(ioe);
-          else {
-              try {
-                  Thread.sleep((i + 1) * 1000);
-              } catch (InterruptedException ie) {
-                  // do nothing
-              }
-          }
+  public void saveColumnMetadata(String tenant, String table, ColumnId column, boolean isEntityColumn) {
+    String metadataPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR);
+    String columnKey = keyName(column, isEntityColumn);
+    
+    if (!columnExistsInCache(tenant, columnKey)){
+      //save column file to s3
+      String columnPath = PathBuilder.buildPath(metadataPath, columnKey);
+      putObject(columnPath, "", null);
+  
+      //save column file to cache
+      Set<String> cachedColumns = columnCache.getIfPresent(tenant);
+      if (cachedColumns == null) {
+        cachedColumns = new HashSet<>();
+        cachedColumns.add(columnKey);
+        columnCache.put(tenant, cachedColumns);
       }
     }
-    if (status == null || status.getPrevious() == null)
-      return;
-    try {
-        String deleteTableMetaPath =
-          PathBuilder.buildPath(tableMetadata.getTenant(), tableMetadata.getTable(), status.getPrevious(), Constants.TABLE_METADATA + ".armor");
-        s3Client.deleteObject(bucket, deleteTableMetaPath);
-      } catch (Exception e) {
-        LOGGER.warn("Unable to previous shard version under {}", status.getPrevious(), e);
-      }
   }
 
   @Override
@@ -554,6 +533,7 @@ public class S3WriteStore implements WriteStore {
           break;
         }
       }
+      columnCache.invalidate(tenant);
     } catch (Exception e) {
       LOGGER.warn("Unable to completely remove tenant {}", tenant, e);
       throw e;
@@ -759,6 +739,14 @@ public class S3WriteStore implements WriteStore {
     throw new IllegalStateException("Should not have dropped into this section");
   }
   
+  private boolean columnExistsInCache(String tenant, String column) {
+    Set<String> columns = columnCache.getIfPresent(tenant);
+    if (columns != null) {
+      return columns.contains(column);
+    }
+    return false;
+  }
+  
   private void trackTenant(String tenant) {
     if (!tenantCache.contains(tenant)) {
       String key = PathBuilder.buildPath(StoreConstants.TENANT_CACHE_DIR, tenant);
@@ -902,5 +890,34 @@ public class S3WriteStore implements WriteStore {
   public boolean columnShardIdExists(ColumnShardId columnShardId) {
     String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(columnShardId.getShardId()), columnShardId.getColumnId().fullName());
     return s3Client.doesObjectExist(bucket, shardIdPath);
+  }
+
+  @Override
+  public ColumnId getEntityIdColumn(String tenant, String table) {
+    //Check cache first
+    Set<String> cachedColumns = columnCache.getIfPresent(tenant);
+    if (cachedColumns != null) {
+      String cachedEntityColumn = cachedColumns
+          .stream()
+          .filter(column -> column.startsWith(ColumnId.ENTITY_COLUMN_IDENTIFIER))
+          .findFirst()
+          .orElse(null);
+      if (cachedEntityColumn != null) {
+        return new ColumnId(cachedEntityColumn.substring(1));
+      }
+    }
+    
+    //Get from s3 if not in cache
+    String entityColumnPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR, ColumnId.ENTITY_COLUMN_IDENTIFIER);
+    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+        .withBucketName(bucket)
+        .withPrefix(entityColumnPath);
+    
+    ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+    if (!objectListing.getObjectSummaries().isEmpty()) {
+      String columnFullName = Paths.get(objectListing.getObjectSummaries().get(0).getKey()).getFileName().toString().substring(1);
+      return new ColumnId(columnFullName);
+    }
+    return null;
   }
 }
