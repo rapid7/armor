@@ -39,6 +39,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static com.rapid7.armor.Constants.COLUMN_METADATA_DIR;
 
 public class S3ReadStore implements ReadStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3ReadStore.class);
@@ -145,7 +146,26 @@ public class S3ReadStore implements ReadStore {
   
   @Override
   public List<ColumnId> getColumnIds(String tenant, String table) {
-    throw new UnsupportedOperationException("TODO");
+    String columnMetadataPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR);
+  
+    ListObjectsV2Request lor = new ListObjectsV2Request()
+        .withBucketName(bucket)
+        .withDelimiter(Constants.STORE_DELIMETER)
+        .withPrefix(columnMetadataPath + Constants.STORE_DELIMETER);
+    
+    List<ColumnId> columnIds = new ArrayList<>();
+    ListObjectsV2Result ol;
+    do {
+      ol = s3Client.listObjectsV2(lor);
+      List<S3ObjectSummary> summaries = ol.getObjectSummaries();
+      columnIds.addAll(summaries.stream()
+          .map(objectSummary -> Paths.get(objectSummary.getKey()).getFileName().toString().substring(1))
+          .map(ColumnId::new)
+          .collect(Collectors.toList())
+      );
+      lor.setContinuationToken(ol.getNextContinuationToken());
+    } while (ol.isTruncated());
+    return columnIds;
   }
 
   @Override

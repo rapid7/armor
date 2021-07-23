@@ -25,6 +25,7 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -73,14 +74,18 @@ public class S3ReadStoreTest {
     currentValue2.put("current", current2);
 
     client.putObject(TEST_BUCKET, "org1/table1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
 
     ShardId shard0Org1 = new ShardId("org1", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 0);
 
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
@@ -88,28 +93,34 @@ public class S3ReadStoreTest {
     ShardId shard1Org1 = new ShardId("org1", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 1);
 
     client.putObject(TEST_BUCKET, "org2/table1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
 
     ShardId shard0Org2 = new ShardId("org2", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 0);
 
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
     
     ShardId shard1Org2 = new ShardId("org2", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 1);
-
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-04T00:00:00Z/1/" + current2 + "/name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-04T00:00:00Z/1/" + current2 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-04T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-04T00:00:00Z/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
     
     ShardId shard1Org2Week_04 = new ShardId("org2", "table1", Interval.WEEKLY.getInterval(), "2021-01-04T00:00:00Z", 1);
-
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-11T00:00:00Z/1/" + current2 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-11T00:00:00Z/1/" + current2 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-11T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-11T00:00:00Z/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
@@ -150,9 +161,11 @@ public class S3ReadStoreTest {
     assertEquals(1, intervalStarts.size());
     assertTrue(intervalStarts.contains("2021-01-11T00:00:00Z"));
     
-    // TODO: Add test here.
-    Sets.newHashSet(readStore.getColumnIds("org1", "table1"));
-    Sets.newHashSet(readStore.getColumnIds("org2", "table1"));
+    HashSet<ColumnId> expectedColumns = Sets.newHashSet(new ColumnId("name", DataType.STRING), new ColumnId("level", DataType.INTEGER));
+    HashSet<ColumnId> org1Columns = Sets.newHashSet(readStore.getColumnIds("org1", "table1"));
+    HashSet<ColumnId> org2Columns = Sets.newHashSet(readStore.getColumnIds("org2", "table1"));
+    assertEquals(expectedColumns, org1Columns);
+    assertEquals(expectedColumns, org2Columns);
 
     List<Interval> intervals = readStore.getIntervals("org1", "table1"); 
     assertEquals(Sets.newHashSet(Interval.SINGLE), Sets.newHashSet(intervals));
