@@ -39,10 +39,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static com.rapid7.armor.schema.ColumnId.keyName;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 public class FileWriteStore implements WriteStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileWriteStore.class);
+  private static final String METADATA_KEY = "metadata";
   private final Path basePath;
   private final ShardStrategy shardStrategy;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -185,13 +187,31 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnId, ColumnId entityColumnId) {
-      throw new UnsupportedOperationException("TODO");
+  public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnIds, ColumnId entityColumnId) {
+    saveColumnMetadata(tenant, table, entityColumnId, true);
+    for (ColumnId column : columnIds) {
+      saveColumnMetadata(tenant, table, column, false);
+    }
   }
 
   @Override
   public void saveColumnMetadata(String tenant, String table, ColumnId column, boolean isEntityColumn) {
-    throw new UnsupportedOperationException("TODO");
+    String columnFile = PathBuilder.buildPath(
+        tenant,
+        table,
+        METADATA_KEY,
+        keyName(column, isEntityColumn)
+    );
+  
+    File file = basePath.resolve(columnFile).toFile();
+    try {
+      if (!file.exists()) {
+        Files.createDirectories(file.getParentFile().toPath());
+        file.createNewFile();
+      }
+    } catch (IOException ioe) {
+      throw new RuntimeException(ioe);
+    }
   }
   
   @Override
@@ -553,6 +573,13 @@ public class FileWriteStore implements WriteStore {
 
   @Override
   public ColumnId getEntityIdColumn(String tenant, String table) {
-      throw new UnsupportedOperationException("TODO");
+    File metadataDirectory = basePath.resolve(PathBuilder.buildPath(tenant, table, METADATA_KEY)).toFile();
+    File[] metadataFiles = metadataDirectory.listFiles((dir, name) -> name.startsWith(ColumnId.ENTITY_COLUMN_IDENTIFIER));
+  
+    if (metadataFiles != null && metadataFiles.length > 0) {
+      String columnFullName = metadataFiles[0].getName().substring(1);
+      return new ColumnId(columnFullName);
+    }
+    return null;
   }
 }

@@ -108,7 +108,7 @@ public interface WriteStore {
   
   void saveShardMetadata(String transaction, ShardMetadata shardMetadata);
   ColumnId getEntityIdColumn(String tenant, String table);
-  void saveTableMetadata(String tenant, String table, Set<ColumnId> columnId, ColumnId entityColumnId);
+  void saveTableMetadata(String tenant, String table, Set<ColumnId> columnIds, ColumnId entityColumnId);
   void saveColumnMetadata(String tenant, String table, ColumnId column, boolean isEntityColumn);
 
   // Loading from store
