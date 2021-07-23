@@ -135,12 +135,16 @@ public class FileStoreV2Test {
   }
 
   private void removeDirectory(Path removeDirectory) throws IOException {
-    Files.walk(removeDirectory).filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
-    Files.walk(removeDirectory)
-    .sorted(Comparator.reverseOrder())
-    .map(Path::toFile)
-    .filter(File::isDirectory)
-    .forEach(File::delete);
+    try {
+     Files.walk(removeDirectory).filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
+     Files.walk(removeDirectory)
+     .sorted(Comparator.reverseOrder())
+     .map(Path::toFile)
+     .filter(File::isDirectory)
+     .forEach(File::delete);
+    } catch (Exception e) {
+      System.out.println("Warning: Unable to remove directory: " + e.getMessage());
+    }
   }
 
   private Table entityToTableSawRow(Entity entity) {
