@@ -222,6 +222,8 @@ public class S3WriteStore implements WriteStore {
   public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnIds, ColumnId entityColumnId) {
       saveColumnMetadata(tenant, table, entityColumnId, true);
       for (ColumnId column : columnIds) {
+        if (entityColumnId.equals(column))
+            continue;
         saveColumnMetadata(tenant, table, column, false);
       }
   }
