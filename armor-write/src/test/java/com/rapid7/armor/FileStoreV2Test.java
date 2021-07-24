@@ -143,7 +143,7 @@ public class FileStoreV2Test {
      .filter(File::isDirectory)
      .forEach(File::delete);
     } catch (Exception e) {
-      System.out.println("Warning: Unable to remove directory: " + e.getMessage());
+      e.printStackTrace();
     }
   }
 

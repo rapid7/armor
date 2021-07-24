@@ -44,6 +44,8 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -468,11 +470,13 @@ public class S3WriteStore implements WriteStore {
       LOGGER.warn("Unable to log write requests for id {}: entities={}, writeRequests={}, delete={}", transaction, entities, requests, deleteEntity);
       return;
     }
-
+    // Build out prefix time for order of operations
+    LocalDate currentdate = LocalDate.now();
+    String datePrefix = currentdate.getYear() + "_" + currentdate.getMonth() + "_" + currentdate.getDayOfMonth() + "_" + System.currentTimeMillis();
     String key = PathBuilder.buildPath(
        shardId.getTenant(),
        Constants.CAPTURE,
-       transaction,
+       datePrefix,
        shardId.getTable(),
        shardId.getInterval(),
        shardId.getIntervalStart());
