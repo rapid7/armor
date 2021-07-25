@@ -178,8 +178,6 @@ public class ArmorWriter implements Closeable {
     if (transaction == null)
       throw new XactError(null, "No transaction was given, forget to call begin?");
     ShardId shardId = store.findShardId(tenant, table, interval, timestamp, entityId);
-    if (captureWrites != null && captureWrites.test(shardId, ArmorWriter.class.getSimpleName()))
-      store.captureWrites(null, shardId, null, null, entityId);
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter != null) {
@@ -286,8 +284,6 @@ public class ArmorWriter implements Closeable {
       throw new XactError(null, "No transaction was given, forget to call begin?");
     if (entities == null || entities.isEmpty())
       return;
-    if (captureWrites != null && captureWrites.test(new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), -1), ArmorWriter.class.getSimpleName()))
-      store.captureWrites(null, new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), -1), entities, null, null);
 
     HashMap<ShardId, List<Entity>> shardToUpdates = new HashMap<>();
     TableId tableId = new TableId(tenant, table);

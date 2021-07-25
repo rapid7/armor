@@ -163,7 +163,7 @@ public class ShardWriter implements IShardWriter {
     // Remove from list
     ensureInTransaction();
     if (captureWrite != null && captureWrite.test(shardId, ShardWriter.class.getSimpleName()))
-      store.captureWrites(null, shardId, null, null, entity);
+      store.captureWrites(armorTransaction, shardId, null, null, entity);
     for (ColumnFileWriter writer : columnFileWriters.values())
       writer.delete(entity, version, instanceId);
   }
@@ -171,7 +171,7 @@ public class ShardWriter implements IShardWriter {
   @Override
   public void write(ColumnId columnId, List<WriteRequest> writeRequests) throws IOException {
     if (captureWrite != null && captureWrite.test(shardId, ShardWriter.class.getSimpleName()))
-      store.captureWrites(null, shardId, null, writeRequests, null);
+      store.captureWrites(armorTransaction, shardId, null, writeRequests, null);
     ensureInTransaction();
 
     Optional<ColumnFileWriter> opt = columnFileWriters.values().stream().filter(w -> w.getColumnId().equals(columnId)).findFirst();

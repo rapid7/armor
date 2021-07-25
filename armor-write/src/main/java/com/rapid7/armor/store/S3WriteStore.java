@@ -476,17 +476,17 @@ public class S3WriteStore implements WriteStore {
     }
     // Build out prefix time for order of operations
     LocalDate currentdate = LocalDate.now();
-    String datePrefix = currentdate.getYear() + "_" + currentdate.getMonth() + "_" + currentdate.getDayOfMonth() + "_" + System.currentTimeMillis();
     String key = PathBuilder.buildPath(
        shardId.getTenant(),
        Constants.CAPTURE,
-       datePrefix,
+       Integer.toString(currentdate.getYear()),
+       Integer.toString(currentdate.getMonth().getValue()),
+       Integer.toString(currentdate.getDayOfMonth()),
        shardId.getTable(),
        shardId.getInterval(),
-       shardId.getIntervalStart());
-    if (shardId.getShardNum() >= 0) {
-      key = PathBuilder.buildPath(key, Integer.toString(shardId.getShardNum()));
-    }
+       shardId.getIntervalStart(),
+       Integer.toString(shardId.getShardNum()),
+       System.currentTimeMillis() + "_" + transaction.getTarget());
     try {
       if (entities != null) {
         String payloadName = PathBuilder.buildPath(key, "entities");
@@ -502,6 +502,9 @@ public class S3WriteStore implements WriteStore {
         String payloadName = PathBuilder.buildPath(key, deleteEntity.toString());
         putObject(payloadName, "deleted", shardId.getInterval());
       }
+      String payloadName = PathBuilder.buildPath(key, "armorTransaction");
+      String payload = OBJECT_MAPPER.writeValueAsString(transaction);
+      putObject(payloadName, payload, shardId.getInterval());
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
