@@ -2,7 +2,7 @@ package com.rapid7.armor.xact;
 
 import java.util.UUID;
 
-public class DistXact {
+public class DistXactRecord {
   public final static String CURRENT_MARKER = "CURRENT";
   private final static String TRANSACTION_SEPERATOR = ":";
   private String current;
@@ -10,7 +10,7 @@ public class DistXact {
   private Long currentTime;
   private Long previousTime;
 
-  public DistXact(ArmorXact armorTransaction, DistXact previous) {
+  public DistXactRecord(ArmorXact armorTransaction, DistXactRecord previous) {
     this.current = armorTransaction.getTarget();
     this.currentTime = armorTransaction.getTime();
     if (previous != null) {
@@ -19,7 +19,7 @@ public class DistXact {
     }
   }
 
-  public DistXact(Object current, Object currentTime, Object previous, Object previousTime) {
+  public DistXactRecord(Object current, Object currentTime, Object previous, Object previousTime) {
     this.current = current.toString();
     if (currentTime != null) {
         if (currentTime instanceof String)
@@ -57,7 +57,7 @@ public class DistXact {
     return previousTime;
   }
   
-  public static ArmorXact generateNewTransaction(String transaction, DistXact baseline) {
+  public static ArmorXact generateNewTransaction(String transaction, DistXactRecord baseline) {
     return new ArmorXact(transaction, baseline.getCurrent(), System.currentTimeMillis());
   }
 

@@ -149,5 +149,5 @@ public interface WriteStore {
    */
   void captureWrites(ArmorXact transaction, ShardId shardId, List<Entity> entities, List<WriteRequest> writeRequests, Object deleteRequest);
 
-  void saveError(ArmorXact transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error);
+  String saveError(ArmorXact transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error);
 }

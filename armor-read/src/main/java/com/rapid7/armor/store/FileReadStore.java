@@ -10,8 +10,8 @@ import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.xact.DistXact;
-import com.rapid7.armor.xact.DistXactUtil;
+import com.rapid7.armor.xact.DistXactRecord;
+import com.rapid7.armor.xact.DistXactRecordUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.DataInputStream;
 import java.io.File;
@@ -209,32 +209,32 @@ public class FileReadStore implements ReadStore {
   }
 
   private String resolveCurrentPath(ShardId shardId) {
-    DistXact status = getCurrentValues(shardId);
+    DistXactRecord status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
        return null;
     return basePath.resolve(Paths.get(shardId.shardIdPath(),status.getCurrent())).toString();
   }
 
-  private DistXact getCurrentValues(String tenant, String table) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
+  private DistXactRecord getCurrentValues(String tenant, String table) {
+    Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
     if (!Files.exists(searchPath))
       return null;
     else {
       try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactUtil.readXactStatus(is);
+        return DistXactRecordUtil.readXactStatus(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
     }
   }
   
-  private DistXact getCurrentValues(ShardId shardId) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
+  private DistXactRecord getCurrentValues(ShardId shardId) {
+    Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
     if (!Files.exists(searchPath))
       return null;
     else {
       try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactUtil.readXactStatus(is);
+        return DistXactRecordUtil.readXactStatus(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -376,7 +376,7 @@ public class FileReadStore implements ReadStore {
   }
   
   private String resolveCurrentPath(String tenant, String table) {
-    DistXact status = getCurrentValues(tenant, table);
+    DistXactRecord status = getCurrentValues(tenant, table);
     if (status == null || status.getCurrent() == null)
       return null;
     return basePath.resolve(Paths.get(tenant, table, status.getCurrent())).toString();

@@ -8,15 +8,15 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rapid7.armor.io.PathBuilder;
 
-public class DistXactUtil {
+public class DistXactRecordUtil {
   private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   @SuppressWarnings("unchecked")
-  public static DistXact readXactStatus(InputStream is) {
+  public static DistXactRecord readXactStatus(InputStream is) {
     try {
       Map<String, Object> status = OBJECT_MAPPER.readValue(is, Map.class);
       if (status != null) {
-        return new DistXact(status.get("current"), status.get("currentTime"), status.get("previous"), status.get("previousTime"));
+        return new DistXactRecord(status.get("current"), status.get("currentTime"), status.get("previous"), status.get("previousTime"));
       }
       return null;
     } catch (IOException ioe) {
@@ -25,10 +25,10 @@ public class DistXactUtil {
   }
     
   public static String buildCurrentMarker(String path) {
-    return PathBuilder.buildPath(path, DistXact.CURRENT_MARKER);
+    return PathBuilder.buildPath(path, DistXactRecord.CURRENT_MARKER);
   }
   
-  public static String prepareToCommit(DistXact status) {
+  public static String prepareToCommit(DistXactRecord status) {
     try {
       HashMap<String, Object> currentValues = new HashMap<>();
       currentValues.put("current", status.getCurrent());

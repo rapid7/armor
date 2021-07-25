@@ -410,11 +410,12 @@ public class ShardWriter implements IShardWriter {
       }
       StreamProduct otherColumnStreamProduct = cw.buildInputStream(compress);
       try (InputStream is = otherColumnStreamProduct.getInputStream()) {
-        store.saveError(transaction, cw.getColumnShardId(), otherColumnStreamProduct.getByteSize(), is, sb.toString());
+        String datapath = store.saveError(transaction, cw.getColumnShardId(), otherColumnStreamProduct.getByteSize(), is, sb.toString());
+        LOGGER.error("Detected an error, go to {} for full details", datapath);
       }
     }
 
-    throw new RuntimeException("The entity summaries do not match the baseline entity summaries on " + shardId.getTable() + " " + shardId);
+    throw new RuntimeException("The entity summaries do not match the baseline entity summaries on " + shardId.getTable() + " " + shardId + ":" + reportErrorMsg);
   }
 
   @Override

@@ -10,8 +10,8 @@ import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.xact.DistXact;
-import com.rapid7.armor.xact.DistXactUtil;
+import com.rapid7.armor.xact.DistXactRecord;
+import com.rapid7.armor.xact.DistXactRecordUtil;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
@@ -287,19 +287,19 @@ public class S3ReadStore implements ReadStore {
   }
 
   private String resolveCurrentPath(ShardId shardId) {
-    DistXact status = getCurrentValues(shardId);
+    DistXactRecord status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
       return null;
     return PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent());
   }
 
-  private DistXact getCurrentValues(ShardId shardId) {
-    String key = DistXactUtil.buildCurrentMarker(shardId.shardIdPath());
+  private DistXactRecord getCurrentValues(ShardId shardId) {
+    String key = DistXactRecordUtil.buildCurrentMarker(shardId.shardIdPath());
     if (!doesObjectExist(this.bucket, key))
       return null;
     else {
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return DistXactUtil.readXactStatus(inputStream);
+        return DistXactRecordUtil.readXactStatus(inputStream);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -429,19 +429,19 @@ public class S3ReadStore implements ReadStore {
   }
   
   private String resolveCurrentPath(String tenant, String table) {
-    DistXact status = getCurrentValues(tenant, table);
+    DistXactRecord status = getCurrentValues(tenant, table);
     if (status == null || status.getCurrent() == null)
       return null;
     return PathBuilder.buildPath(tenant, table, status.getCurrent());
   }
   
-  private DistXact getCurrentValues(String tenant, String table) {
-    String key = DistXactUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
+  private DistXactRecord getCurrentValues(String tenant, String table) {
+    String key = DistXactRecordUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
     if (!doesObjectExist(this.bucket, key))
       return null;
     else {
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return DistXactUtil.readXactStatus(inputStream);
+        return DistXactRecordUtil.readXactStatus(inputStream);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
