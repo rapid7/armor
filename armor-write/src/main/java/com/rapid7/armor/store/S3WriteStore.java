@@ -15,8 +15,9 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.shard.ShardStrategy;
 import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
-import com.rapid7.armor.xact.DistXact;
-import com.rapid7.armor.xact.DistXactUtil;
+import com.rapid7.armor.xact.ArmorXact;
+import com.rapid7.armor.xact.DistXactRecord;
+import com.rapid7.armor.xact.DistXactRecordUtil;
 import com.amazonaws.ResetException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
@@ -45,12 +46,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -97,8 +98,8 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void saveColumn(String transaction, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
-    String key = PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), transaction, columnShardId.getColumnId().fullName());
+  public void saveColumn(ArmorXact armorTransaction, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
+    String key = PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), armorTransaction.getTarget(), columnShardId.getColumnId().fullName());
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(byteSize);
     try {
@@ -268,9 +269,9 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void saveShardMetadata(String transaction, ShardMetadata shardMetadata) {
+  public void saveShardMetadata(ArmorXact transaction, ShardMetadata shardMetadata) {
     ShardId shardId = shardMetadata.getShardId();
-    String shardIdPath = PathBuilder.buildPath(shardId.shardIdPath(), transaction, Constants.SHARD_METADATA + ".armor");
+    String shardIdPath = PathBuilder.buildPath(shardId.shardIdPath(), transaction.getTarget(), Constants.SHARD_METADATA + ".armor");
     for (int i = 0; i < 10; i++) {
       try {
         String payload = OBJECT_MAPPER.writeValueAsString(shardMetadata);
@@ -339,7 +340,10 @@ public class S3WriteStore implements WriteStore {
             ).withNewObjectTagging(objectTagging)
         );
       }
-      saveCurrentValues(shardIdDst, new DistXact(Paths.get(currentShardKey).getFileName().toString(), null));
+      // TODO: Double check.
+      String transaction = Paths.get(currentShardKey).getFileName().toString();
+      ArmorXact axact = new ArmorXact(transaction, "none", System.currentTimeMillis());
+      saveCurrentValues(shardIdDst, new DistXactRecord(axact, null));
       
     } catch (Exception exception) {
       s3Client.listObjectsV2(
@@ -362,12 +366,11 @@ public class S3WriteStore implements WriteStore {
   }
   
   @Override
-  public void commit(String transaction, ShardId shardId) {
-    DistXact status = getCurrentValues(shardId);
-    if (status != null)
-      status.validateXact(transaction);
+  public void commit(ArmorXact armorTransaction, ShardId shardId) {
+    DistXactRecord status = getCurrentValues(shardId);
+    status.validateXact(armorTransaction);
   
-    saveCurrentValues(shardId, new DistXact(transaction, status == null ? null : status.getCurrent()));
+    saveCurrentValues(shardId, new DistXactRecord(armorTransaction, status));
     trackTenant(shardId.getTenant());
     boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
     
@@ -402,8 +405,8 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void rollback(String transaction, ShardId shardId) {
-    String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), transaction);
+  public void rollback(ArmorXact transaction, ShardId shardId) {
+    String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), transaction.getTarget());
     try {
       ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
           .withBucketName(bucket)
@@ -425,7 +428,7 @@ public class S3WriteStore implements WriteStore {
   }
 
   @Override
-  public void saveError(String transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error) {
+  public String saveError(ArmorXact transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error) {
     // First erase any previous errors that may have existed before.
     String toDelete = PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), Constants.LAST_ERROR);
     try {
@@ -435,7 +438,7 @@ public class S3WriteStore implements WriteStore {
       ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
       while (true) {
         for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
-          if (!objectSummary.getKey().contains(transaction))
+          if (!objectSummary.getKey().contains(transaction.getTarget()))
             s3Client.deleteObject(bucket, objectSummary.getKey());
         }
         if (objectListing.isTruncated()) {
@@ -448,24 +451,25 @@ public class S3WriteStore implements WriteStore {
       LOGGER.warn("Unable to previous shard version under {}", toDelete, e);
     }
 
-    String key = PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), Constants.LAST_ERROR, transaction, columnShardId.getColumnId().fullName());
+    String key = PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), Constants.LAST_ERROR, transaction.getTarget(), columnShardId.getColumnId().fullName());
     ObjectMetadata omd = new ObjectMetadata();
     omd.setContentLength(size);
     try {
       putObject(key, inputStream, omd, columnShardId.getInterval());
       if (error != null) {
         String description =
-          PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), Constants.LAST_ERROR, transaction, columnShardId.getColumnId().fullName() + "_msg");
+          PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), Constants.LAST_ERROR, transaction.getTarget(), columnShardId.getColumnId().fullName() + "_msg");
         putObject(description, error, columnShardId.getInterval());
       }
     } catch (ResetException e) {
       LOGGER.error("Detected a reset exception, the number of bytes is {}: {}", size, e.getExtraInfo());
       throw e;
     }
+    return key;
   }
 
   @Override
-  public void captureWrites(String transaction, ShardId shardId, List<Entity> entities, List<WriteRequest> requests, Object deleteEntity) {
+  public void captureWrites(ArmorXact transaction, ShardId shardId, List<Entity> entities, List<WriteRequest> requests, Object deleteEntity) {
     if (transaction == null) {
       LOGGER.warn("Unable to log write requests for id {}: entities={}, writeRequests={}, delete={}", transaction, entities, requests, deleteEntity);
       return;
@@ -614,14 +618,14 @@ public class S3WriteStore implements WriteStore {
   }
   
   private String resolveCurrentPath(String tenant, String table) {
-    DistXact status = getCurrentValues(tenant, table);
+    DistXactRecord status = getCurrentValues(tenant, table);
     if (status == null || status.getCurrent() == null)
       return null;
     return PathBuilder.buildPath(tenant, table, status.getCurrent());
   }
 
   private String resolveCurrentPath(ShardId shardId) {
-    DistXact status = getCurrentValues(shardId);
+    DistXactRecord status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
       return null;
     return PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent());
@@ -647,36 +651,36 @@ public class S3WriteStore implements WriteStore {
     return null;
   }
 
-  private DistXact getCurrentValues(String tenant, String table) {
-    String key = DistXactUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
+  private DistXactRecord getCurrentValues(String tenant, String table) {
+    String key = DistXactRecordUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
     if (!doesObjectExist(this.bucket, key))
       return null;
     else {
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return DistXactUtil.readXactStatus(inputStream);
+        return DistXactRecordUtil.readXactStatus(inputStream);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
     }
   }
 
-  private DistXact getCurrentValues(ShardId shardId) {
-    String key = DistXactUtil.buildCurrentMarker(shardId.shardIdPath());
+  private DistXactRecord getCurrentValues(ShardId shardId) {
+    String key = DistXactRecordUtil.buildCurrentMarker(shardId.shardIdPath());
     if (!doesObjectExist(this.bucket, key))
       return null;
     else {
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return DistXactUtil.readXactStatus(inputStream);
+        return DistXactRecordUtil.readXactStatus(inputStream);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
     }
   }
   
-  private void saveCurrentValues(String tenant, String table, DistXact status) {
-    String key = DistXactUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
+  private void saveCurrentValues(String tenant, String table, DistXactRecord status) {
+    String key = DistXactRecordUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
     try {
-      String payload = DistXactUtil.prepareToCommit(status);
+      String payload = DistXactRecordUtil.prepareToCommit(status);
       ObjectMetadata objectMetadata = new ObjectMetadata();
       objectMetadata.setContentType("text/plain");
       objectMetadata.setContentLength(payload.length());
@@ -687,10 +691,10 @@ public class S3WriteStore implements WriteStore {
     }
   }
 
-  private void saveCurrentValues(ShardId shardId, DistXact status) {
-    String key = DistXactUtil.buildCurrentMarker(shardId.shardIdPath());
+  private void saveCurrentValues(ShardId shardId, DistXactRecord status) {
+    String key = DistXactRecordUtil.buildCurrentMarker(shardId.shardIdPath());
     try {
-      String payload = DistXactUtil.prepareToCommit(status);
+      String payload = DistXactRecordUtil.prepareToCommit(status);
       ObjectMetadata objectMetadata = new ObjectMetadata();
       objectMetadata.setContentType("text/plain");
       objectMetadata.setContentLength(payload.length());
@@ -768,7 +772,7 @@ public class S3WriteStore implements WriteStore {
   private List<S3ObjectSummary> getCurrentShardObjects(ShardId shardId) {
     String currentShardKey = null;
     for (int i = 0; i < 10; i++) {
-      DistXact currentValues = getCurrentValues(shardId);
+      DistXactRecord currentValues = getCurrentValues(shardId);
       if (currentValues != null) {
         List<S3ObjectSummary> objects = new ArrayList<>();
         try {
@@ -925,5 +929,21 @@ public class S3WriteStore implements WriteStore {
       return new ColumnId(columnFullName);
     }
     return null;
+  }
+
+  @Override
+  public ArmorXact begin(String transaction, ShardId shardId) {
+    if (transaction == null)
+       throw new IllegalArgumentException("No transaction was given");
+    DistXactRecord xact = getCurrentValues(shardId);
+    
+    // Special case: First one wins scenario. Since no previous transaction exists start the process
+    // of claiming it by saving a current first then building another transaction.
+    if (xact == null) {
+        String baselineTransaction = UUID.randomUUID().toString();
+        xact = new DistXactRecord(baselineTransaction, System.currentTimeMillis(), null, null);
+        saveCurrentValues(shardId, xact);
+    }
+    return DistXactRecord.generateNewTransaction(transaction, xact);
   }
 }

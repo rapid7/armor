@@ -12,11 +12,12 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.write.WriteRequest;
 
 public interface IShardWriter extends AutoCloseable {
-  public ShardMetadata commit(String transaction, ColumnId columnEntityId) throws IOException;
+  public void begin(String transaction);
+  public ShardMetadata commit(ColumnId columnEntityId) throws IOException;
   public ShardId getShardId();
-  public void delete(String transaction, Object entityId, long version, String instanceId);
+  public void delete(Object entityId, long version, String instanceId);
   public ColumnMetadata getMetadata(String columnId);
-  public void write(String transaction, ColumnId columnId, List<WriteRequest> columns) throws IOException;
+  public void write(ColumnId columnId, List<WriteRequest> columns) throws IOException;
   public Map<Integer, EntityRecord> getEntities(String columnId);
 
 }

@@ -13,8 +13,9 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.shard.ShardStrategy;
 import com.rapid7.armor.write.WriteRequest;
 import com.rapid7.armor.write.writers.ColumnFileWriter;
-import com.rapid7.armor.xact.DistXact;
-import com.rapid7.armor.xact.DistXactUtil;
+import com.rapid7.armor.xact.ArmorXact;
+import com.rapid7.armor.xact.DistXactRecord;
+import com.rapid7.armor.xact.DistXactRecordUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -34,6 +35,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -100,8 +102,8 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void saveColumn(String transaction, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
-    Path shardIdPath = basePath.resolve(Paths.get(columnShardId.getShardId().shardIdPath(), transaction, columnShardId.getColumnId().fullName()));
+  public void saveColumn(ArmorXact armorTransaction, ColumnShardId columnShardId, int byteSize, InputStream inputStream) {
+    Path shardIdPath = basePath.resolve(Paths.get(columnShardId.getShardId().shardIdPath(), armorTransaction.getTarget(), columnShardId.getColumnId().fullName()));
     try {
       Files.createDirectories(shardIdPath.getParent());
       long copied = Files.copy(inputStream, shardIdPath, REPLACE_EXISTING);
@@ -233,9 +235,9 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void saveShardMetadata(String transaction, ShardMetadata shardMetadata) {
+  public void saveShardMetadata(ArmorXact transaction, ShardMetadata shardMetadata) {
     ShardId shardId = shardMetadata.getShardId();
-    Path shardIdPath = basePath.resolve(Paths.get(shardId.shardIdPath(), transaction, Constants.SHARD_METADATA + ".armor"));
+    Path shardIdPath = basePath.resolve(Paths.get(shardId.shardIdPath(), transaction.getTarget(), Constants.SHARD_METADATA + ".armor"));
     try {
       Files.createDirectories(shardIdPath.getParent());
       byte[] payload = OBJECT_MAPPER.writeValueAsBytes(shardMetadata);
@@ -280,11 +282,10 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void commit(String transaction, ShardId shardId) {
-    DistXact status = getCurrentValues(shardId);
-    if (status != null)
-      status.validateXact(transaction);
-    saveCurrentValues(shardId, transaction, status == null ? null : status.getCurrent());
+  public void commit(ArmorXact armorTransaction, ShardId shardId) {
+    DistXactRecord status = getCurrentValues(shardId);
+    status.validateXact(armorTransaction);
+    saveCurrentValues(shardId, new DistXactRecord(armorTransaction, status));
     try {
       Runnable runnable = () -> {
         try {
@@ -307,9 +308,9 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void rollback(String transaction, ShardId shardId) {
+  public void rollback(ArmorXact transaction, ShardId shardId) {
     try {
-      Path toDelete = basePath.resolve(Paths.get(shardId.shardIdPath(), transaction));
+      Path toDelete = basePath.resolve(Paths.get(shardId.shardIdPath(), transaction.getTarget()));
       Files.walk(toDelete)
           .sorted(Comparator.reverseOrder())
           .map(Path::toFile)
@@ -326,7 +327,7 @@ public class FileWriteStore implements WriteStore {
   }
 
   @Override
-  public void saveError(String transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error) {
+  public String saveError(ArmorXact transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error) {
 
     Path toDelete = basePath.resolve(
         Paths.get(columnShardId.getTenant(), columnShardId.getTable(), columnShardId.getInterval(), columnShardId.getIntervalStart(), Integer.toString(columnShardId.getShardNum()), Constants.LAST_ERROR));
@@ -334,7 +335,7 @@ public class FileWriteStore implements WriteStore {
       Files.walk(toDelete)
           .sorted(Comparator.reverseOrder())
           .map(Path::toFile)
-          .filter(f -> !f.getName().contains(transaction))
+          .filter(f -> !f.getName().contains(transaction.getTarget()))
           .forEach(File::delete);
     } catch (IOException ioe) {
       LOGGER.warn("Unable to previous shard version under {}", toDelete, ioe);
@@ -347,7 +348,7 @@ public class FileWriteStore implements WriteStore {
         columnShardId.getIntervalStart(),
         Integer.toString(columnShardId.getShardNum()),
         Constants.LAST_ERROR,
-        transaction,
+        transaction.getTarget(),
         columnShardId.getColumnId().fullName()));
     try {
       Files.createDirectories(shardIdPath.getParent());
@@ -358,10 +359,11 @@ public class FileWriteStore implements WriteStore {
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
+    return shardIdPath.toString();
   }
 
   @Override
-  public void captureWrites(String correlationId, ShardId shardId, List<Entity> entities, List<WriteRequest> requests, Object deleteEntity) {
+  public void captureWrites(ArmorXact armorTransaction, ShardId shardId, List<Entity> entities, List<WriteRequest> requests, Object deleteEntity) {
   }
 
   @Override
@@ -402,39 +404,39 @@ public class FileWriteStore implements WriteStore {
   }
 
   private String resolveCurrentPath(String tenant, String table) {
-    DistXact status = getCurrentValues(tenant, table);
+    DistXactRecord status = getCurrentValues(tenant, table);
     if (status == null || status.getCurrent() == null)
       return null;
     return basePath.resolve(Paths.get(tenant, table, status.getCurrent())).toString();
   }
 
   private String resolveCurrentPath(ShardId shardId) {
-    DistXact status = getCurrentValues(shardId);
+    DistXactRecord status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
       return null;
     return basePath.resolve(Paths.get(shardId.shardIdPath(), status.getCurrent())).toString();
   }
 
-  private DistXact getCurrentValues(String tenant, String table) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
+  private DistXactRecord getCurrentValues(String tenant, String table) {
+    Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
     if (!Files.exists(searchPath))
       return null;
     else {
       try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactUtil.readXactStatus(is);
+        return DistXactRecordUtil.readXactStatus(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
     }
   }
 
-  private DistXact getCurrentValues(ShardId shardId) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
+  private DistXactRecord getCurrentValues(ShardId shardId) {
+    Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
     if (!Files.exists(searchPath))
       return null;
     else {
       try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactUtil.readXactStatus(is);
+        return DistXactRecordUtil.readXactStatus(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -442,7 +444,7 @@ public class FileWriteStore implements WriteStore {
   }
 
   public void saveCurrentValues(String tenant, String table, String current, String previous) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
+    Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
     try {
       Files.createDirectories(searchPath.getParent());
       HashMap<String, String> currentValues = new HashMap<>();
@@ -455,14 +457,18 @@ public class FileWriteStore implements WriteStore {
     }
   }
 
-  public void saveCurrentValues(ShardId shardId, String current, String previous) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
+  public void saveCurrentValues(ShardId shardId, DistXactRecord transaction) {
+    Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
     try {
       Files.createDirectories(searchPath.getParent());
-      HashMap<String, String> currentValues = new HashMap<>();
-      currentValues.put("current", current);
-      if (previous != null)
-        currentValues.put("previous", previous);
+      HashMap<String, Object> currentValues = new HashMap<>();
+      currentValues.put("current", transaction.getCurrent());
+      currentValues.put("currentTime", transaction.getCurrentTime());
+
+      if (transaction.getPrevious() != null)
+        currentValues.put("previous", transaction.getPrevious());
+      if (transaction.getPreviousTime() != null)
+        currentValues.put("previousTime", transaction.getPreviousTime());
       Files.write(searchPath, OBJECT_MAPPER.writeValueAsBytes(currentValues), StandardOpenOption.CREATE);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -475,7 +481,7 @@ public class FileWriteStore implements WriteStore {
       paths.filter(file -> !src.equals(file)).forEach(
           file -> {
             try {
-              if (file.endsWith(DistXact.CURRENT_MARKER)) {
+              if (file.endsWith(DistXactRecord.CURRENT_MARKER)) {
                 current.set(file);
               } else {
                 Files.copy(file, dst.resolve(src.relativize(file)), REPLACE_EXISTING);
@@ -583,5 +589,21 @@ public class FileWriteStore implements WriteStore {
       return new ColumnId(columnFullName);
     }
     return null;
+  }
+
+  @Override
+  public ArmorXact begin(String transaction, ShardId shardId) {
+      if (transaction == null)
+          throw new IllegalArgumentException("No transaction was given");
+      DistXactRecord xact = getCurrentValues(shardId);
+      
+      // Special case: First one wins scenario. Since no previous transaction exists start the process
+      // of claiming it by saving a current first then building another transaction.
+      if (xact == null) {
+          String baselineTransaction = UUID.randomUUID().toString();
+          xact = new DistXactRecord(baselineTransaction, System.currentTimeMillis(), null, null);
+          saveCurrentValues(shardId, xact);
+      }
+      return DistXactRecord.generateNewTransaction(transaction, xact);
   }
 }
