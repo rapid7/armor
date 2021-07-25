@@ -321,7 +321,7 @@ public class S3StoreTest {
       for (Compression compression : Compression.values()) {
         S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
         try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, compression, 10, () -> 1, null)) {
-          String transaction = armorWriter.startTransaction();
+          armorWriter.begin();
           Entity e11 = Entity.buildEntity("assetId", 1, 1, null, name, time, vuln);
           e11.addRows(
               "a", 6L, 1,
@@ -361,10 +361,9 @@ public class S3StoreTest {
               2L, 5,
               null, 6);
 
-          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
-
+          armorWriter.write(myorg, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+          armorWriter.commit();
+          armorWriter.begin();
           // Verify store/shard stuff
           List<ShardId> shardIds = writeStore.findShardIds(myorg, table, SINGLE, Instant.now(), "vuln");
           assertFalse(shardIds.isEmpty());
@@ -385,9 +384,9 @@ public class S3StoreTest {
           checkEntityIndexRecord(vulnEntityRecords1.get(2), 24, 24, 15, (byte) 0);
 
           // Delete the entity 1
-          armorWriter.delete(transaction, myorg, table, SINGLE, Instant.now(), 1, Integer.MAX_VALUE, "dkfjd;kfd");
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.delete(myorg, table, SINGLE, Instant.now(), 1, Integer.MAX_VALUE, "dkfjd;kfd");
+          armorWriter.commit();
+          armorWriter.begin();
           Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(2, vulnEntityRecords2.size());
@@ -410,11 +409,11 @@ public class S3StoreTest {
               "1", 2L, 5,
               "1", null, 6);
 
-          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Collections.singletonList(e21));
+          armorWriter.write(myorg, table, SINGLE, Instant.now(), Collections.singletonList(e21));
           Map<Integer, EntityRecord> test1 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "time", 0);
 
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.commit();
+          armorWriter.begin();
 
           Map<Integer, EntityRecord> test = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "time", 0);
 
@@ -440,9 +439,9 @@ public class S3StoreTest {
           e31.addRow("1", null, 2);
           e31.addRow("1", null, -1);
 
-          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Arrays.asList(e23, e31));
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.write(myorg, table, SINGLE, Instant.now(), Arrays.asList(e23, e31));
+          armorWriter.commit();
+          armorWriter.begin();
 
           Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
@@ -461,15 +460,16 @@ public class S3StoreTest {
           e32.addRow("1", null, -1);
           e32.addRow(null, null, null);
 
-          ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, compression, 10, () -> 1, null);
-          Map<Integer, EntityRecord> records5a = amrorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ArmorWriter armorWriter2 = new ArmorWriter("test", writeStore, compression, 10, () -> 1, null);
+          armorWriter2.begin();
+          Map<Integer, EntityRecord> records5a = armorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
 
-          amrorWriter2.write(transaction, myorg, table, SINGLE, Instant.now(), Collections.singletonList(e32));
-          amrorWriter2.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter2.write(myorg, table, SINGLE, Instant.now(), Collections.singletonList(e32));
+          armorWriter2.commit();
+          armorWriter2.begin();;
 
-          Map<Integer, EntityRecord> records5 = amrorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
-          ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          Map<Integer, EntityRecord> records5 = armorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ColumnMetadata md5 = armorWriter2.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(2, records5.size());
           assertEquals(Integer.valueOf(0), Integer.valueOf(md5.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), md5.getMaxValue());
@@ -483,7 +483,7 @@ public class S3StoreTest {
           List<S3ObjectSummary> entityColumnObjects = client.listObjects(new ListObjectsRequest().withBucketName(TEST_BUCKET).withPrefix(entityColumnPath)).getObjectSummaries();
           assertEquals(1, entityColumnObjects.size());
   
-          amrorWriter2.close(); // Close this FS and open a new one to test the load.
+          armorWriter2.close(); // Close this FS and open a new one to test the load.
         } finally {
           try {
             writeStore.deleteTenant(myorg);
@@ -506,7 +506,7 @@ public class S3StoreTest {
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
     
     try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, Compression.NONE, 10, () -> 1, null)) {
-      String transaction = armorWriter.startTransaction();
+      armorWriter.begin();
       Entity e11 = Entity.buildEntity("assetId", 1, 1, null, name, time, vuln);
       e11.addRows(
           "a", 6L, 1,
@@ -546,11 +546,11 @@ public class S3StoreTest {
           2L, 5,
           null, 6);
     
-      armorWriter.write(transaction, org1, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
-      armorWriter.commit(transaction, org1, table);
-      
-      armorWriter.write(transaction, org2, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
-      armorWriter.commit(transaction, org2, table);
+      armorWriter.write(org1, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+      armorWriter.commit();
+      armorWriter.begin();
+      armorWriter.write(org2, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+      armorWriter.commit();
   
       S3ReadStore s3ReadStore = new S3ReadStore(client, TEST_BUCKET);
       List<String> tenants = s3ReadStore.getTenants(true);
