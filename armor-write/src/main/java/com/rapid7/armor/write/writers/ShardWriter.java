@@ -50,7 +50,7 @@ public class ShardWriter implements IShardWriter {
   
   private void ensureInTransaction() {
     if (armorTransaction == null) {
-       throw new IllegalStateException("Must be in a transaction");
+       throw new IllegalStateException("Writes and deletes must be in a transaction");
     }
   }
 
@@ -132,6 +132,8 @@ public class ShardWriter implements IShardWriter {
   public ShardMetadata commit(ColumnId columnEntityId) throws IOException {
     boolean committed = false;
     try {
+      if (armorTransaction == null)
+         throw new IllegalStateException("No active transaction has been established");
       ColumnMetadata entityColumnMetadata = consistencyCheck(armorTransaction, columnEntityId.getName(), columnEntityId.dataType());
       for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
@@ -149,7 +151,7 @@ public class ShardWriter implements IShardWriter {
       committed = true;
       return smd;
     } catch (Exception e) {
-      LOGGER.error("Unable to commit transaction", e);
+      LOGGER.error("Unable to commit transaction: {}", armorTransaction, e);
       throw e;
     } finally {
       if (!committed && armorTransaction != null)

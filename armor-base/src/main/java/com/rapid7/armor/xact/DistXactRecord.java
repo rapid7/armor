@@ -71,6 +71,8 @@ public class DistXactRecord {
     
     // Check the baseline MUST match current
     if (!current.equalsIgnoreCase(armorTransaction.getBaseline()))
-      throw new XactError(armorTransaction.getBaseline(), "The baseline transaction doesn't match, another process already has written to it");
+      throw new XactError(armorTransaction.getBaseline(),
+         "The transaction " + armorTransaction.getTarget() + "at " + armorTransaction.getTime() + " has a baseline transaction of " + armorTransaction.getBaseline() 
+              + " that doesn't match the stored baseline of " + current + ", another process already has written to it, verify locking is correct");
   }
 }
