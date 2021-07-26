@@ -321,8 +321,10 @@ public class ArmorWriter implements Closeable {
           () -> {
             String originalThreadName = Thread.currentThread().getName();
             try {
-              MDC.put("tenant_id", tenant);
               ShardId shardId = entry.getKey();
+              MDC.put("tenant_id", tenant);
+              MDC.put("armor_shard", Integer.toString(shardId.getShardNum()));
+              MDC.put("xact", transaction);
               IShardWriter shardWriter = tableWriter.getShard(shardId);
               Thread.currentThread().setName(originalThreadName + "(" + shardId.toString() + ")");
               if (shardWriter == null) {
@@ -354,6 +356,8 @@ public class ArmorWriter implements Closeable {
               return null;
             } finally {
               MDC.remove("tenant_id");
+              MDC.remove("armor_shard");
+              MDC.remove("xact");
               Thread.currentThread().setName(originalThreadName);
             }
         }
@@ -416,6 +420,8 @@ public class ArmorWriter implements Closeable {
             try {
               Thread.currentThread().setName("shardwriter-" + shardWriter.getShardId());
               MDC.put("tenant_id", tableWriter.getTenant());
+              MDC.put("xact", transaction);
+              MDC.put("armor_shard", Integer.toString(shardWriter.getShardId().getShardNum()));
               ShardMetadata meta = shardWriter.commit(finalEntityColumnId);
               return meta;
             } catch (NoSuchFileException nse) {
@@ -434,6 +440,8 @@ public class ArmorWriter implements Closeable {
             } finally {
               Thread.currentThread().setName(originalName);
               MDC.remove("tenant_id");
+              MDC.remove("armor_shard");
+              MDC.remove("xact");
             }
         }
       );
