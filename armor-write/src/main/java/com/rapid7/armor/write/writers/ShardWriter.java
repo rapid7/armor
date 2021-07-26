@@ -50,7 +50,7 @@ public class ShardWriter implements IShardWriter {
   
   private void ensureInTransaction() {
     if (armorTransaction == null) {
-       throw new IllegalStateException("Must be in a transaction");
+       throw new IllegalStateException("Writes and deletes must be in a transaction");
     }
   }
 
@@ -132,6 +132,8 @@ public class ShardWriter implements IShardWriter {
   public ShardMetadata commit(ColumnId columnEntityId) throws IOException {
     boolean committed = false;
     try {
+      if (armorTransaction == null)
+         throw new IllegalStateException("No active transaction has been established");
       ColumnMetadata entityColumnMetadata = consistencyCheck(armorTransaction, columnEntityId.getName(), columnEntityId.dataType());
       for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
@@ -149,7 +151,7 @@ public class ShardWriter implements IShardWriter {
       committed = true;
       return smd;
     } catch (Exception e) {
-      LOGGER.error("Unable to commit transaction", e);
+      LOGGER.error("Unable to commit transaction: {}", armorTransaction, e);
       throw e;
     } finally {
       if (!committed && armorTransaction != null)
@@ -391,7 +393,8 @@ public class ShardWriter implements IShardWriter {
       try (InputStream is = baselineStream.getInputStream()) {
         StringBuilder storeMsg = new StringBuilder(sb.toString());
         storeMsg.append("Entity mismatch baseline column.\n");
-        store.saveError(transaction, baselineCw.getColumnShardId(), baselineStream.getByteSize(), is, storeMsg.toString());
+        String errorPath = store.saveError(transaction, baselineCw.getColumnShardId(), baselineStream.getByteSize(), is, storeMsg.toString());
+        LOGGER.error("Error was detected and stored at {}", errorPath);
       }
     }
     ColumnFileWriter testWriter = columnFileWriters.get(testColumn);
@@ -399,7 +402,8 @@ public class ShardWriter implements IShardWriter {
     try (InputStream is = testColumnStreamProduct.getInputStream()) {
       StringBuilder storeMsg = new StringBuilder(sb.toString());
       storeMsg.append("Entity mismatch test column.\n");
-      store.saveError(transaction, testWriter.getColumnShardId(), testColumnStreamProduct.getByteSize(), is, storeMsg.toString());
+      String errorPath = store.saveError(transaction, testWriter.getColumnShardId(), testColumnStreamProduct.getByteSize(), is, storeMsg.toString());
+      LOGGER.error("Error was detected and stored at {}", errorPath);
     }
 
     // Save other columns for analysis
@@ -411,7 +415,7 @@ public class ShardWriter implements IShardWriter {
       StreamProduct otherColumnStreamProduct = cw.buildInputStream(compress);
       try (InputStream is = otherColumnStreamProduct.getInputStream()) {
         String datapath = store.saveError(transaction, cw.getColumnShardId(), otherColumnStreamProduct.getByteSize(), is, sb.toString());
-        LOGGER.error("Detected an error, go to {} for full details", datapath);
+        LOGGER.error("Error was detected and stored at {}", datapath);
       }
     }
 

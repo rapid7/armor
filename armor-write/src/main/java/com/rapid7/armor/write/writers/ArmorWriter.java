@@ -105,13 +105,14 @@ public class ArmorWriter implements Closeable {
     return name;
   }
 
-  public void begin() {
+  public String begin() {
     transaction = UUID.randomUUID().toString();
     for (TableWriter tw : tableWriters.values()) {
       for (IShardWriter sw : tw.getShardWriters()) {
         sw.begin(transaction);
       }
     }
+    return transaction;
   }
 
   public Map<Integer, EntityRecord> columnEntityRecords(String tenant, String table, Interval interval, Instant timestamp, String columnId, int shard) {
@@ -157,6 +158,7 @@ public class ArmorWriter implements Closeable {
 
   @Override
   public void close() {
+    transaction = null;
     if (selfPool) {
       try {
         threadPool.shutdown();
