@@ -78,6 +78,10 @@ public class EntityIndexWriter extends FileComponent {
     return entities.get(entityId);
   }
 
+  public List<EntityRecord> getActiveEntities() {
+      return entities.values().stream().filter(e -> e.getDeleted() == 0).collect(Collectors.toList());
+  }
+
   public Map<Integer, EntityRecord> getEntities() {
     return entities;
   }

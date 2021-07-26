@@ -46,6 +46,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -71,7 +72,7 @@ public class ColumnFileWriter implements AutoCloseable {
   private boolean alwaysCompact = true;
 
   public void setSkipMetaData(boolean skipMetaData) {
-	this.skipMetaData = skipMetaData;
+    this.skipMetaData = skipMetaData;
   }
   public void setAlwaysCompact(boolean alwaysCompact) { this.alwaysCompact = alwaysCompact; }
 
@@ -81,7 +82,6 @@ public class ColumnFileWriter implements AutoCloseable {
     this.columnShardId = columnShardId;
     metadata.setColumnType(columnShardId.getColumnId().dataType());
     metadata.setColumnName(columnShardId.getColumnId().getName());
-    columnShardId.getColumnId().dataType();
     if (dataType == DataType.STRING)
       valueDictionary = new DictionaryWriter(false);
 
@@ -136,7 +136,7 @@ public class ColumnFileWriter implements AutoCloseable {
     return entityIndexWriter;
   }
 
-  public Map<Integer, EntityRecord> getEntites() {
+  public Map<Integer, EntityRecord> getEntities() {
     return entityIndexWriter.getEntities();
   }
 
@@ -661,7 +661,7 @@ public class ColumnFileWriter implements AutoCloseable {
     outputStream.write(IOTools.toByteArray(uncompressed));
   }
 
-  public synchronized boolean delete(String transaction, Object entity, long version, String instanceId) {
+  public synchronized boolean delete(Object entity, long version, String instanceId) {
     int entityId;
     boolean hasStringIds = !entityDictionary.isEmpty();
     if (entity instanceof String) {
@@ -676,10 +676,10 @@ public class ColumnFileWriter implements AutoCloseable {
       entityId = ((Integer) entity);
     } else
       throw new EntityIdTypeException("The entity type of " + entity.getClass().toString() + " is not supported for identity on entites");
-    return delete(transaction, entityId, version, instanceId);
+    return delete(entityId, version, instanceId);
   }
 
-  private synchronized boolean delete(String transaction, int entity, long version, String instanceId) {
+  private synchronized boolean delete(int entity, long version, String instanceId) {
     try {
       return entityIndexWriter.delete(entity, version, instanceId) != null;
     } catch (IOException ioe) {
@@ -706,9 +706,10 @@ public class ColumnFileWriter implements AutoCloseable {
     return entityInt;
   }
 
-  public synchronized void write(String transaction, List<WriteRequest> writeRequests) throws IOException {
+  public synchronized void write(List<WriteRequest> writeRequests) throws IOException {
     // First filter out already old stuff that doesn't need to be written.
-    HashMap<Object, WriteRequest> groupByMax = new HashMap<>();
+    // NOTE: Maintain write order via a linkedhashmap or can't guarantee baseline/entity column is same as other.
+    LinkedHashMap<Object, WriteRequest> groupByMax = new LinkedHashMap<>(); 
     for (WriteRequest wr : writeRequests) {
       WriteRequest maxVersionWriteRequest = groupByMax.get(wr.getEntityId());
       if (maxVersionWriteRequest == null) {

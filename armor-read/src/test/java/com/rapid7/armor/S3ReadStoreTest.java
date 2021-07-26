@@ -3,7 +3,6 @@ package com.rapid7.armor;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.read.predicate.InstantPredicate;
 import com.rapid7.armor.read.predicate.StringPredicate;
 import com.rapid7.armor.schema.ColumnId;
@@ -11,8 +10,8 @@ import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.Operator;
 import com.rapid7.armor.store.S3ReadStore;
-import com.rapid7.armor.xact.DistXact;
-import com.rapid7.armor.xact.DistXactUtil;
+import com.rapid7.armor.xact.DistXactRecord;
+import com.rapid7.armor.xact.DistXactRecordUtil;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.AnonymousAWSCredentials;
@@ -26,6 +25,7 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -41,15 +41,6 @@ public class S3ReadStoreTest {
   private static final S3Mock S3_MOCK = new S3Mock.Builder().withPort(8001).withInMemoryBackend().build();
   private static AmazonS3 client;
   private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
-  private TableMetadata generateTestTableMedataDate() {
-    TableMetadata tmd = new TableMetadata("org", "tenant", "columnId", "columnIdType");
-    ColumnId c1 = new ColumnId("column1", DataType.STRING);
-    ColumnId c2 = new ColumnId("column2", DataType.STRING);
-    ColumnId c3 = new ColumnId("column3", DataType.STRING);
-    tmd.addColumnIds(Arrays.asList(c1, c2, c3));
-    return tmd;
-  }
 
   @BeforeAll
   public static void setupBucket() throws ParseException {
@@ -82,51 +73,58 @@ public class S3ReadStoreTest {
     HashMap<String, String> currentValue2 = new HashMap<>();
     currentValue2.put("current", current2);
 
-    TableMetadata tmdTest = generateTestTableMedataDate();
-    String tmdJson = OBJECT_MAPPER.writeValueAsString(tmdTest);
-    client.putObject(TEST_BUCKET, "org1/table1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
-    client.putObject(TEST_BUCKET, "org1/table1/" + current1 + "/table-metadata.armor", tmdJson);
+    client.putObject(TEST_BUCKET, "org1/table1/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/_name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/-level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/0/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
 
     ShardId shard0Org1 = new ShardId("org1", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 0);
 
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org1/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org1/table1/single/1970-01-01T00:00:00Z/1/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
     
     ShardId shard1Org1 = new ShardId("org1", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 1);
 
-    client.putObject(TEST_BUCKET, "org2/table1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
-    client.putObject(TEST_BUCKET, "org2/table1/" + current1 + "/table-metadata.armor", tmdJson);
+    client.putObject(TEST_BUCKET, "org2/table1/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/0/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
 
     ShardId shard0Org2 = new ShardId("org2", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 0);
 
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org2/table1/single/1970-01-01T00:00:00Z/1/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
     
     ShardId shard1Org2 = new ShardId("org2", "table1", Interval.SINGLE.getInterval(), "1970-01-01T00:00:00Z", 1);
-
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-04T00:00:00Z/1/" + current2 + "/name_S", "Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-04T00:00:00Z/1/" + current2 + "/level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-04T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-04T00:00:00Z/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-04T00:00:00Z/1/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
     
     ShardId shard1Org2Week_04 = new ShardId("org2", "table1", Interval.WEEKLY.getInterval(), "2021-01-04T00:00:00Z", 1);
-
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_name_S", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-11T00:00:00Z/1/" + current2 + "/name_S", " Empty content");
+    client.putObject(TEST_BUCKET, "org2/table1/metadata/_level_I", "Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-11T00:00:00Z/1/" + current2 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-11T00:00:00Z/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-11T00:00:00Z/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org2/table1/weekly/2021-01-11T00:00:00Z/1/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
 
     ShardId shard1Org2Week_11 = new ShardId("org2", "table1", Interval.WEEKLY.getInterval(), "2021-01-11T00:00:00Z", 1);
 
@@ -164,10 +162,11 @@ public class S3ReadStoreTest {
     assertEquals(1, intervalStarts.size());
     assertTrue(intervalStarts.contains("2021-01-11T00:00:00Z"));
     
-    TableMetadata tmd1 = readStore.getTableMetadata("org1", "table1");
-    assertEquals(Sets.newHashSet(tmd1.getColumnIds()), Sets.newHashSet(readStore.getColumnIds("org1", "table1")));
-    TableMetadata tmd2 = readStore.getTableMetadata("org1", "table1");
-    assertEquals(Sets.newHashSet(tmd2.getColumnIds()), Sets.newHashSet(readStore.getColumnIds("org2", "table1")));
+    HashSet<ColumnId> expectedColumns = Sets.newHashSet(new ColumnId("name", DataType.STRING), new ColumnId("level", DataType.INTEGER));
+    HashSet<ColumnId> org1Columns = Sets.newHashSet(readStore.getColumnIds("org1", "table1"));
+    HashSet<ColumnId> org2Columns = Sets.newHashSet(readStore.getColumnIds("org2", "table1"));
+    assertEquals(expectedColumns, org1Columns);
+    assertEquals(expectedColumns, org2Columns);
 
     List<Interval> intervals = readStore.getIntervals("org1", "table1"); 
     assertEquals(Sets.newHashSet(Interval.SINGLE), Sets.newHashSet(intervals));

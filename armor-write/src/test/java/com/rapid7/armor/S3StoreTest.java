@@ -1,11 +1,13 @@
 package com.rapid7.armor;
 
+import com.amazonaws.services.s3.model.ListObjectsRequest;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.rapid7.armor.entity.Entity;
 import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
+import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
@@ -15,7 +17,7 @@ import com.rapid7.armor.store.S3ReadStore;
 import com.rapid7.armor.store.S3WriteStore;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.writers.ArmorWriter;
-import com.rapid7.armor.xact.DistXact;
+import com.rapid7.armor.xact.DistXactRecord;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -106,17 +108,19 @@ public class S3StoreTest {
     HashMap<String, String> currentValue1 = new HashMap<>();
     currentValue1.put("current", current1);
     
-    client.putObject(TEST_BUCKET, "org10/table1/table-metadata.armor", " Empty content");
+    // TODO: Setup test for metadata
+    //client.putObject(TEST_BUCKET, "org10/table1/table-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org10/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     
-    client.putObject(TEST_BUCKET, "org10/table2/table-metadata.armor", " Empty content");
+    // TODO: Setup test for metadata
+    //client.putObject(TEST_BUCKET, "org10/table2/table-metadata.armor", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org10/table2/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
     List<ShardId> shards = writeStore.findShardIds("org10", "table1", SINGLE, Instant.now());
@@ -148,12 +152,12 @@ public class S3StoreTest {
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
 
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current2 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current2 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current2 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
+    client.putObject(TEST_BUCKET, "org1/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue2));
 
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(2));
     ShardId shard0 = writeStore.findShardId("org1", "table1", SINGLE, Instant.now(), 0);
@@ -236,13 +240,13 @@ public class S3StoreTest {
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + current1 + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
     
     // Make these distinct in name to ensure test is valid.
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current1 + "/name_S_a", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current1 + "/level_I_a", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + current1 + "/shard-metadata.armora", " Empty content");
-    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentValue1));
  
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
     try (ArmorWriter aw = new ArmorWriter("test", writeStore, Compression.NONE, 1)) {
@@ -250,8 +254,8 @@ public class S3StoreTest {
       String interavlStart = Interval.WEEKLY.getIntervalStart(now);
       aw.snapshotCurrentToInterval("orgA", "table1", Interval.WEEKLY, now);
       
-      String expectedCurrent0 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/0/" + DistXact.CURRENT_MARKER;
-      String expectedCurrent1 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/1/" + DistXact.CURRENT_MARKER;
+      String expectedCurrent0 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/0/" + DistXactRecord.CURRENT_MARKER;
+      String expectedCurrent1 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + interavlStart + "/1/" + DistXactRecord.CURRENT_MARKER;
       assertTrue(client.doesObjectExist(TEST_BUCKET, expectedCurrent0));
       assertTrue(client.doesObjectExist(TEST_BUCKET, expectedCurrent1));
       
@@ -275,13 +279,13 @@ public class S3StoreTest {
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + currentId + "/name_S", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + currentId + "/level_I", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + currentId + "/shard-metadata.armor", " Empty content");
-    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentData));
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/0/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentData));
     
     // Make these distinct in name to ensure test is valid.
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + currentId + "/name_S_a", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + currentId + "/level_I_a", " Empty content");
     client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + currentId + "/shard-metadata.armora", " Empty content");
-    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + DistXact.CURRENT_MARKER, mapper.writeValueAsString(currentData));
+    client.putObject(TEST_BUCKET, "orgA/table1/" + SINGLE.getInterval() + Constants.STORE_DELIMETER + Instant.ofEpochMilli(0) + "/1/" + DistXactRecord.CURRENT_MARKER, mapper.writeValueAsString(currentData));
     
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
     try (ArmorWriter aw = new ArmorWriter("test", writeStore, Compression.NONE, 1)) {
@@ -290,8 +294,8 @@ public class S3StoreTest {
       assertTrue(runtimeException.getMessage().contains("Expected current shard to contain objects"));
       
       String intervalStart = Interval.WEEKLY.getIntervalStart(now);
-      String copiedWeeklyShard0 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + intervalStart + "/0/" + DistXact.CURRENT_MARKER;
-      String copiedWeeklyShard1 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + intervalStart + "/1/" + DistXact.CURRENT_MARKER;
+      String copiedWeeklyShard0 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + intervalStart + "/0/" + DistXactRecord.CURRENT_MARKER;
+      String copiedWeeklyShard1 = "orgA/table1/" + Interval.WEEKLY.getInterval() + Constants.STORE_DELIMETER + intervalStart + "/1/" + DistXactRecord.CURRENT_MARKER;
       assertFalse(client.doesObjectExist(TEST_BUCKET, copiedWeeklyShard0));
       assertFalse(client.doesObjectExist(TEST_BUCKET, copiedWeeklyShard1));
   
@@ -304,8 +308,8 @@ public class S3StoreTest {
 
   @Test
   public void basicTests() throws Exception {
-    String myorg = "myorg";
-    String table = "vulntable";
+    String myorg = "myorg1";
+    String table = "vulntable2";
     ColumnId name = new ColumnId("name", DataType.STRING.getCode());
     ColumnId time = new ColumnId("time", DataType.LONG.getCode());
     ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
@@ -317,7 +321,7 @@ public class S3StoreTest {
       for (Compression compression : Compression.values()) {
         S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
         try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, compression, 10, () -> 1, null)) {
-          String transaction = armorWriter.startTransaction();
+          armorWriter.begin();
           Entity e11 = Entity.buildEntity("assetId", 1, 1, null, name, time, vuln);
           e11.addRows(
               "a", 6L, 1,
@@ -357,10 +361,9 @@ public class S3StoreTest {
               2L, 5,
               null, 6);
 
-          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
-
+          armorWriter.write(myorg, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+          armorWriter.commit();
+          armorWriter.begin();
           // Verify store/shard stuff
           List<ShardId> shardIds = writeStore.findShardIds(myorg, table, SINGLE, Instant.now(), "vuln");
           assertFalse(shardIds.isEmpty());
@@ -381,9 +384,9 @@ public class S3StoreTest {
           checkEntityIndexRecord(vulnEntityRecords1.get(2), 24, 24, 15, (byte) 0);
 
           // Delete the entity 1
-          armorWriter.delete(transaction, myorg, table, SINGLE, Instant.now(), 1, Integer.MAX_VALUE, "dkfjd;kfd");
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.delete(myorg, table, SINGLE, Instant.now(), 1, Integer.MAX_VALUE, "dkfjd;kfd");
+          armorWriter.commit();
+          armorWriter.begin();
           Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(1, vulnEntityRecords2.size());
@@ -407,11 +410,11 @@ public class S3StoreTest {
               "1", 2L, 5,
               "1", null, 6);
 
-          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Collections.singletonList(e21));
+          armorWriter.write(myorg, table, SINGLE, Instant.now(), Collections.singletonList(e21));
           Map<Integer, EntityRecord> test1 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "time", 0);
 
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.commit();
+          armorWriter.begin();
 
           Map<Integer, EntityRecord> test = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "time", 0);
 
@@ -437,9 +440,9 @@ public class S3StoreTest {
           e31.addRow("1", null, 2);
           e31.addRow("1", null, -1);
 
-          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Arrays.asList(e23, e31));
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.write(myorg, table, SINGLE, Instant.now(), Arrays.asList(e23, e31));
+          armorWriter.commit();
+          armorWriter.begin();
 
           Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
@@ -458,15 +461,16 @@ public class S3StoreTest {
           e32.addRow("1", null, -1);
           e32.addRow(null, null, null);
 
-          ArmorWriter amrorWriter2 = new ArmorWriter("test", writeStore, compression, 10, () -> 1, null);
-          Map<Integer, EntityRecord> records5a = amrorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ArmorWriter armorWriter2 = new ArmorWriter("test", writeStore, compression, 10, () -> 1, null);
+          armorWriter2.begin();
+          Map<Integer, EntityRecord> records5a = armorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
 
-          amrorWriter2.write(transaction, myorg, table, SINGLE, Instant.now(), Collections.singletonList(e32));
-          amrorWriter2.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter2.write(myorg, table, SINGLE, Instant.now(), Collections.singletonList(e32));
+          armorWriter2.commit();
+          armorWriter2.begin();;
 
-          Map<Integer, EntityRecord> records5 = amrorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
-          ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          Map<Integer, EntityRecord> records5 = armorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
+          ColumnMetadata md5 = armorWriter2.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(2, records5.size());
           assertEquals(Integer.valueOf(0), Integer.valueOf(md5.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), md5.getMaxValue());
@@ -476,7 +480,11 @@ public class S3StoreTest {
           checkEntityIndexRecord(records5.get(2), 0, 20, 15, (byte) 0);
           checkEntityIndexRecord(records5.get(3), 35, 12, 18, (byte) 0);
 
-          amrorWriter2.close(); // Close this FS and open a new one to test the load.
+          String entityColumnPath = PathBuilder.buildPath(myorg, table, "metadata", ColumnId.ENTITY_COLUMN_IDENTIFIER);
+          List<S3ObjectSummary> entityColumnObjects = client.listObjects(new ListObjectsRequest().withBucketName(TEST_BUCKET).withPrefix(entityColumnPath)).getObjectSummaries();
+          assertEquals(1, entityColumnObjects.size());
+  
+          armorWriter2.close(); // Close this FS and open a new one to test the load.
         } finally {
           try {
             writeStore.deleteTenant(myorg);
@@ -492,14 +500,14 @@ public class S3StoreTest {
   public void getCachedTenantsTest() {
     String org1 = "org1";
     String org2 = "org2";
-    String table = "vulntable";
+    String table = "vulntable1";
     ColumnId name = new ColumnId("name", DataType.STRING.getCode());
     ColumnId time = new ColumnId("time", DataType.LONG.getCode());
     ColumnId vuln = new ColumnId("vuln", DataType.INTEGER.getCode());
     S3WriteStore writeStore = new S3WriteStore(client, TEST_BUCKET, new ModShardStrategy(1));
     
     try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, Compression.NONE, 10, () -> 1, null)) {
-      String transaction = armorWriter.startTransaction();
+      armorWriter.begin();
       Entity e11 = Entity.buildEntity("assetId", 1, 1, null, name, time, vuln);
       e11.addRows(
           "a", 6L, 1,
@@ -539,11 +547,11 @@ public class S3StoreTest {
           2L, 5,
           null, 6);
     
-      armorWriter.write(transaction, org1, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
-      armorWriter.commit(transaction, org1, table);
-      
-      armorWriter.write(transaction, org2, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
-      armorWriter.commit(transaction, org2, table);
+      armorWriter.write(org1, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+      armorWriter.commit();
+      armorWriter.begin();
+      armorWriter.write(org2, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+      armorWriter.commit();
   
       S3ReadStore s3ReadStore = new S3ReadStore(client, TEST_BUCKET);
       List<String> tenants = s3ReadStore.getTenants(true);

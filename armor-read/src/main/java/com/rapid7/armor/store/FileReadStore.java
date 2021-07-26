@@ -2,7 +2,6 @@ package com.rapid7.armor.store;
 
 import com.rapid7.armor.Constants;
 import com.rapid7.armor.meta.ShardMetadata;
-import com.rapid7.armor.meta.TableMetadata;
 import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.predicate.InstantPredicate;
 import com.rapid7.armor.read.predicate.StringPredicate;
@@ -11,8 +10,8 @@ import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.shard.ShardId;
-import com.rapid7.armor.xact.DistXact;
-import com.rapid7.armor.xact.DistXactUtil;
+import com.rapid7.armor.xact.DistXactRecord;
+import com.rapid7.armor.xact.DistXactRecordUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.DataInputStream;
 import java.io.File;
@@ -35,6 +34,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import static com.rapid7.armor.Constants.COLUMN_METADATA_DIR;
 
 public class FileReadStore implements ReadStore {
   private final Path basePath;
@@ -46,20 +46,6 @@ public class FileReadStore implements ReadStore {
 
   private ShardId buildShardId(String tenant, String table, Interval interval, Instant timestamp, String shardNum) {
     return new ShardId(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp), Integer.parseInt(shardNum));
-  }
-  
-  @Override
-  public TableMetadata getTableMetadata(String tenant, String table) {
-    String relativeTarget = PathBuilder.buildPath(resolveCurrentPath(tenant, table), Constants.TABLE_METADATA + ".armor");
-    Path target = basePath.resolve(relativeTarget);
-    if (!Files.exists(target))
-      return null;
-    try {
-      byte[] payload = Files.readAllBytes(target);
-      return OBJECT_MAPPER.readValue(payload, TableMetadata.class);
-    } catch (IOException ioe) {
-      throw new RuntimeException(ioe);
-    }
   }
 
   @Override
@@ -223,32 +209,32 @@ public class FileReadStore implements ReadStore {
   }
 
   private String resolveCurrentPath(ShardId shardId) {
-    DistXact status = getCurrentValues(shardId);
+    DistXactRecord status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
        return null;
     return basePath.resolve(Paths.get(shardId.shardIdPath(),status.getCurrent())).toString();
   }
 
-  private DistXact getCurrentValues(String tenant, String table) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
+  private DistXactRecord getCurrentValues(String tenant, String table) {
+    Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
     if (!Files.exists(searchPath))
       return null;
     else {
       try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactUtil.readXactStatus(is);
+        return DistXactRecordUtil.readXactStatus(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
     }
   }
   
-  private DistXact getCurrentValues(ShardId shardId) {
-    Path searchPath = basePath.resolve(DistXactUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
+  private DistXactRecord getCurrentValues(ShardId shardId) {
+    Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
     if (!Files.exists(searchPath))
       return null;
     else {
       try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactUtil.readXactStatus(is);
+        return DistXactRecordUtil.readXactStatus(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -306,11 +292,17 @@ public class FileReadStore implements ReadStore {
 
   @Override
   public List<ColumnId> getColumnIds(String tenant, String table) {
-    TableMetadata tm = getTableMetadata(tenant, table);
-    if (tm == null) {
-      return new ArrayList<>();
+    File columnMetadataDirectory = basePath.resolve(PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR)).toFile();
+    File[] columnMetadataFiles = columnMetadataDirectory.listFiles();
+  
+    Set<ColumnId> columnIds = new HashSet<>();
+    if (columnMetadataFiles != null && columnMetadataFiles.length > 0) {
+      for (File columnFile : columnMetadataFiles){
+        String columnFullName = columnFile.getName().substring(1);
+        columnIds.add(new ColumnId(columnFullName));
+      }
     }
-    return new ArrayList<>(tm.getColumnIds());
+    return new ArrayList<>(columnIds);
   }
   
   @Override
@@ -384,7 +376,7 @@ public class FileReadStore implements ReadStore {
   }
   
   private String resolveCurrentPath(String tenant, String table) {
-    DistXact status = getCurrentValues(tenant, table);
+    DistXactRecord status = getCurrentValues(tenant, table);
     if (status == null || status.getCurrent() == null)
       return null;
     return basePath.resolve(Paths.get(tenant, table, status.getCurrent())).toString();

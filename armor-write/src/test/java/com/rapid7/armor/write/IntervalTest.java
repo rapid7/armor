@@ -70,11 +70,11 @@ public class IntervalTest {
     String org = "myorg";
     String table = "table";
     try (ArmorWriter armorWriter = new ArmorWriter("name", writeStore, Compression.ZSTD, 10, () -> 1, null)) {
-      String xact = armorWriter.startTransaction();
+      armorWriter.begin();
       LocalDateTime ldt = LocalDateTime.of(2020, 12, 10, 0, 0);
       Entity decEntity = Entity.buildEntity(ASSET_ID, 1, 1, UUID.randomUUID().toString(), COLUMNS, Arrays.asList(texasVuln, caliVuln));
-      armorWriter.write(xact, org, table, Interval.MONTHLY, ldt.toInstant(ZoneOffset.UTC), Arrays.asList(decEntity));
-      armorWriter.commit(xact, org, table);
+      armorWriter.write(org, table, Interval.MONTHLY, ldt.toInstant(ZoneOffset.UTC), Arrays.asList(decEntity));
+      armorWriter.commit();
       
       // Verify we have a december
       List<ShardId> shards = writeStore.findShardIds(org, table, Interval.MONTHLY, ldt.toInstant(ZoneOffset.UTC));
@@ -105,9 +105,9 @@ public class IntervalTest {
       
       
       // Now lets write to current
-      xact = armorWriter.startTransaction();
-      armorWriter.write(xact, org, table, Interval.SINGLE, Instant.now(), Arrays.asList(decEntity));
-      armorWriter.commit(xact, org, table);
+      armorWriter.begin();
+      armorWriter.write(org, table, Interval.SINGLE, Instant.now(), Arrays.asList(decEntity));
+      armorWriter.commit();
 
       // Ok snapshot now.
       armorWriter.snapshotCurrentToInterval(org, table, Interval.WEEKLY, ldt4.toInstant(ZoneOffset.UTC));

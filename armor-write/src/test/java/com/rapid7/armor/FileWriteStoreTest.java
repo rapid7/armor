@@ -47,12 +47,16 @@ public class FileWriteStoreTest {
   }
 
   private void removeDirectory(Path removeDirectory) throws IOException {
-    Files.walk(removeDirectory).filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
-    Files.walk(removeDirectory)
-    .sorted(Comparator.reverseOrder())
-    .map(Path::toFile)
-    .filter(File::isDirectory)
-    .forEach(File::delete);
+    try {
+     Files.walk(removeDirectory).filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
+     Files.walk(removeDirectory)
+     .sorted(Comparator.reverseOrder())
+     .map(Path::toFile)
+     .filter(File::isDirectory)
+     .forEach(File::delete);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
   }
 
   @Test
@@ -82,17 +86,17 @@ public class FileWriteStoreTest {
       for (Compression compression : Compression.values()) {
         try {
           try (ArmorWriter armorWriter = new ArmorWriter("test", fileStore, compression, 10, null, null)) {
-            String transaction = armorWriter.startTransaction();
-            armorWriter.write(transaction, "myorg", "testtable", SINGLE, Instant.now(), Arrays.asList(e1, e2, e3, e4, e5, e6, e7));
+            armorWriter.begin();
+            armorWriter.write("myorg", "testtable", SINGLE, Instant.now(), Arrays.asList(e1, e2, e3, e4, e5, e6, e7));
             armorWriter.columnEntityRecords("myorg", "testtable", SINGLE, Instant.now(), "vuln", 0);
-            armorWriter.commit(transaction, "myorg", "testtable");
+            armorWriter.commit();
           }
 
           try (ArmorWriter armorWriter2 = new ArmorWriter("test", fileStore, compression, 10, null, null)) {
-            String transaction = armorWriter2.startTransaction();
+            armorWriter2.begin();
             Entity e8 = Entity.buildEntity("asset", 8, 1, null, vuln);
-            armorWriter2.write(transaction, "myorg", "testtable", SINGLE, Instant.now(), Collections.singletonList(e8));
-            armorWriter2.commit(transaction, "myorg", "testtable");
+            armorWriter2.write("myorg", "testtable", SINGLE, Instant.now(), Collections.singletonList(e8));
+            armorWriter2.commit();
           }
         } finally {
           removeDirectory(testDirectory);
@@ -158,10 +162,10 @@ public class FileWriteStoreTest {
               3L, null,
               2L, 5,
               null, 6);
-          String transaction = armorWriter.startTransaction();
-          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.begin();
+          armorWriter.write(myorg, table, SINGLE, Instant.now(), Arrays.asList(e11, e12, e10, e20));
+          armorWriter.commit();
+          armorWriter.begin();
           // Verify store/shard stuff
           List<ShardId> shardIds = fileStore.findShardIds(myorg, table, SINGLE, Instant.now(), "vuln");
           assertFalse(shardIds.isEmpty());
@@ -182,10 +186,10 @@ public class FileWriteStoreTest {
           checkEntityIndexRecord(vulnEntityRecords1.get(2), 24, 24, 15, (byte) 0);
 
           // Delete the entity 1
-          armorWriter.delete(transaction, myorg, table, SINGLE, Instant.now(), 1, 1000l, "test");
+          armorWriter.delete(myorg, table, SINGLE, Instant.now(), 1, 1000l, "test");
 
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.commit();
+          armorWriter.begin();
 
           Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
@@ -211,9 +215,9 @@ public class FileWriteStoreTest {
               "1", 2L, 5,
               "1", null, 6);
 
-          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Collections.singletonList(e21));
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.write(myorg, table, SINGLE, Instant.now(), Collections.singletonList(e21));
+          armorWriter.commit();
+          armorWriter.begin();
 
           Map<Integer, EntityRecord> vulnEntityRecords3 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata cmd3 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
@@ -237,9 +241,9 @@ public class FileWriteStoreTest {
           e31.addRow("1", null, 2);
           e31.addRow("1", null, -1);
 
-          armorWriter.write(transaction, myorg, table, SINGLE, Instant.now(), Arrays.asList(e23, e31));
-          armorWriter.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          armorWriter.write(myorg, table, SINGLE, Instant.now(), Arrays.asList(e23, e31));
+          armorWriter.commit();
+          armorWriter.begin();
 
           Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
@@ -259,10 +263,10 @@ public class FileWriteStoreTest {
           e32.addRow(null, null, null);
 
           ArmorWriter amrorWriter2 = new ArmorWriter("test", fileStore, compression, 10, null, null);
-
-          amrorWriter2.write(transaction, myorg, table, SINGLE, Instant.now(), Collections.singletonList(e32));
-          amrorWriter2.commit(transaction, myorg, table);
-          transaction = armorWriter.startTransaction();
+          amrorWriter2.begin();
+          amrorWriter2.write(myorg, table, SINGLE, Instant.now(), Collections.singletonList(e32));
+          amrorWriter2.commit();
+          amrorWriter2.begin();
 
           Map<Integer, EntityRecord> records5 = amrorWriter2.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata md5 = amrorWriter2.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);

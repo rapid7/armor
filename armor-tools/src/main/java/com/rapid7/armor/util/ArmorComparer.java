@@ -124,8 +124,8 @@ public class ArmorComparer {
       ColumnShardId dummyShard = new ColumnShardId(columnMinMax.columnShardId.getShardId(), columnMinMax.columnShardId.getColumnId());
       try (ColumnFileWriter maxWriter = new ColumnFileWriter(new DataInputStream(Files.newInputStream(maxPath, StandardOpenOption.READ)), dummyShard);
            ColumnFileWriter minWriter = new ColumnFileWriter(new DataInputStream(Files.newInputStream(minPath, StandardOpenOption.READ)), dummyShard)) {
-        Map<Integer, EntityRecord> minRecords = minWriter.getEntites();
-        Map<Integer, EntityRecord> maxRecords = maxWriter.getEntites();
+        Map<Integer, EntityRecord> minRecords = minWriter.getEntities();
+        Map<Integer, EntityRecord> maxRecords = maxWriter.getEntities();
         Set<Integer> minRecordsInt = minRecords.keySet();
         Set<Integer> maxRecordsInt = maxRecords.keySet();
         Set<Integer> removedEntitySurrogates = minRecords.keySet().stream().filter(k -> !maxRecordsInt.contains(k)).collect(Collectors.toSet());

@@ -8,7 +8,7 @@
     <parent>
         <groupId>com.rapid7</groupId>
         <artifactId>armor-parent</artifactId>
-        <version>0.0.35-SNAPSHOT</version>
+        <version>0.0.44-SNAPSHOT</version>
     </parent>
 
     <dependencies>
@@ -36,6 +36,11 @@
             <groupId>it.unimi.dsi</groupId>
             <artifactId>fastutil</artifactId>
             <version>8.3.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>20.0</version>
         </dependency>
     </dependencies>
 </project>

@@ -57,7 +57,7 @@ public final class Constants {
   // Designates start of armor column
   public final static short MAGIC_HEADER = (short) 0xA1EE;
 
-  public final static String TABLE_METADATA = "table-metadata";
+  public final static String COLUMN_METADATA_DIR = "metadata";
   public final static String SHARD_METADATA = "shard-metadata";
 
 }

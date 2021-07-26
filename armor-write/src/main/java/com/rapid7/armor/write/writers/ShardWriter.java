@@ -13,6 +13,7 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.store.WriteStore;
 import com.rapid7.armor.write.StreamProduct;
 import com.rapid7.armor.write.WriteRequest;
+import com.rapid7.armor.xact.ArmorXact;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,7 +46,14 @@ public class ShardWriter implements IShardWriter {
   private final BiPredicate<ShardId, String> captureWrite;
   private final Supplier<Integer> compactionTrigger;
   private Compression compress = Compression.ZSTD;
+  private ArmorXact armorTransaction;
   
+  private void ensureInTransaction() {
+    if (armorTransaction == null) {
+       throw new IllegalStateException("Writes and deletes must be in a transaction");
+    }
+  }
+
   private synchronized ColumnFileWriter addColumnFileWriter(ColumnFileWriter cfw) {
     ColumnFileWriter previous = columnFileWriters.get(cfw.getColumnShardId());
     if (previous != null) {
@@ -61,8 +69,7 @@ public class ShardWriter implements IShardWriter {
     WriteStore store,
     Compression compress,
     Supplier<Integer> compactionTriggerSupplier,
-    BiPredicate<ShardId, String> captureWrite
-  ) {
+    BiPredicate<ShardId, String> captureWrite) {
     this.shardId = shardId;
     this.store = store;
     this.compress = compress;
@@ -77,6 +84,7 @@ public class ShardWriter implements IShardWriter {
   }
 
   public void close() {
+    armorTransaction = null;
     for (ColumnFileWriter cfw : columnFileWriters.values()) {
       try {
         cfw.close();
@@ -101,7 +109,7 @@ public class ShardWriter implements IShardWriter {
   public Map<Integer, EntityRecord> getEntities(String columnId) {
     ColumnFileWriter csw = getWriterByColumnId(columnId);
     if (csw != null)
-      return csw.getEntites();
+      return csw.getEntities();
     return null;
   }
 
@@ -115,21 +123,22 @@ public class ShardWriter implements IShardWriter {
   /**
    * Commits the any changes the shard writer has been writing too.
    *
-   * @param transaction The transaction of the writes.
    * @param columnEntityId The id for the entity column for this table.
    *
    * @return The metadata of the shard just written.
    * 
    * @throws IOException If an io error occurs.
    */
-  public ShardMetadata commit(String transaction, ColumnId columnEntityId) throws IOException {
+  public ShardMetadata commit(ColumnId columnEntityId) throws IOException {
     boolean committed = false;
     try {
-      ColumnMetadata entityColumnMetadata = consistencyCheck(transaction, columnEntityId.getName(), columnEntityId.dataType());
+      if (armorTransaction == null)
+         throw new IllegalStateException("No active transaction has been established");
+      ColumnMetadata entityColumnMetadata = consistencyCheck(armorTransaction, columnEntityId.getName(), columnEntityId.dataType());
       for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
         StreamProduct streamProduct = entry.getValue().buildInputStream(compress);
         try (InputStream inputStream = streamProduct.getInputStream()) {
-          store.saveColumn(transaction, entry.getKey(), streamProduct.getByteSize(), inputStream);
+          store.saveColumn(armorTransaction, entry.getKey(), streamProduct.getByteSize(), inputStream);
         }
       }
 
@@ -137,27 +146,35 @@ public class ShardWriter implements IShardWriter {
       List<ColumnMetadata> columnMetadata = columnFileWriters.values().stream().map(ColumnFileWriter::getMetadata).collect(Collectors.toList());
       columnMetadata.add(entityColumnMetadata);
       ShardMetadata smd = new ShardMetadata(shardId, columnMetadata);
-      store.saveShardMetadata(transaction, smd);
-      store.commit(transaction, shardId);
+      store.saveShardMetadata(armorTransaction, smd);
+      store.commit(armorTransaction, shardId);
       committed = true;
       return smd;
+    } catch (Exception e) {
+      LOGGER.error("Unable to commit transaction: {}", armorTransaction, e);
+      throw e;
     } finally {
-      if (!committed)
-        store.rollback(transaction, shardId);
+      if (!committed && armorTransaction != null)
+        store.rollback(armorTransaction, shardId);
+      armorTransaction = null;
     }
   }
 
-  public void delete(String transaction, Object entity, long version, String instanceId) {
+  @Override
+  public void delete(Object entity, long version, String instanceId) {
     // Remove from list
+    ensureInTransaction();
     if (captureWrite != null && captureWrite.test(shardId, ShardWriter.class.getSimpleName()))
-      store.captureWrites(transaction, shardId, null, null, entity);
+      store.captureWrites(armorTransaction, shardId, null, null, entity);
     for (ColumnFileWriter writer : columnFileWriters.values())
-      writer.delete(transaction, entity, version, instanceId);
+      writer.delete(entity, version, instanceId);
   }
 
-  public void write(String transaction, ColumnId columnId, List<WriteRequest> writeRequests) throws IOException {
+  @Override
+  public void write(ColumnId columnId, List<WriteRequest> writeRequests) throws IOException {
     if (captureWrite != null && captureWrite.test(shardId, ShardWriter.class.getSimpleName()))
-      store.captureWrites(transaction, shardId, null, writeRequests, null);
+      store.captureWrites(armorTransaction, shardId, null, writeRequests, null);
+    ensureInTransaction();
 
     Optional<ColumnFileWriter> opt = columnFileWriters.values().stream().filter(w -> w.getColumnId().equals(columnId)).findFirst();
     ColumnFileWriter columnFileWriter;
@@ -171,15 +188,15 @@ public class ShardWriter implements IShardWriter {
       columnFileWriter = opt.get();
       columnShardId = columnFileWriter.getColumnShardId();
     }
-    columnFileWriter.write(transaction, writeRequests);
+    columnFileWriter.write(writeRequests);
   }
 
   /**
-   * Verifies the save request is "consistent" across columns with the shard. Part of the the consistency check
+   * Verifies the save request is "consistent" across columns within the shard. Part of the the consistency check
    * is to build a "entity id" column derived from the consistency check.
    */
-  private ColumnMetadata consistencyCheck(String transaction, String entityIdColumn, DataType entityIdType) throws IOException {
-    // First for all columns do check and do a compaction before continuing.
+  private ColumnMetadata consistencyCheck(ArmorXact transaction, String entityIdColumn, DataType entityIdType) throws IOException {
+    // First for all columns check for compaction before continuing.
     for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
       ColumnFileWriter cw = columnFileWriters.get(entry.getKey());
       ColumnMetadata md = cw.getMetadata();
@@ -198,7 +215,7 @@ public class ShardWriter implements IShardWriter {
     List<EntityRecordSummary> baselineSummaries = null;
     ColumnShardId baselineColumn = null;
     int maxEntities = 0;
-    Map<ColumnShardId, List<EntityRecordSummary>> otherEntitiesMap = new HashMap<>();
+    Map<ColumnShardId, List<EntityRecordSummary>> otherColumns = new HashMap<>();
     for (Map.Entry<ColumnShardId, ColumnFileWriter> entry : columnFileWriters.entrySet()) {
       ColumnFileWriter cw = entry.getValue();
       List<EntityRecordSummary> currentSummaries = cw.getEntityRecordSummaries();
@@ -207,13 +224,13 @@ public class ShardWriter implements IShardWriter {
         maxEntities = currentSummaries.size();
         baselineColumn = cw.getColumnShardId();
       }
-      otherEntitiesMap.put(cw.getColumnShardId(), currentSummaries);
+      otherColumns.put(cw.getColumnShardId(), currentSummaries);
     }
     
     // If baseline column is null, that means the table is empty. In this case we should ensure all summaries should be set to zero.
     if (baselineColumn == null) {
       // Ensure its all zeros
-      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherEntitiesMap.entrySet().iterator();
+      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherColumns.entrySet().iterator();
       while (iterator.hasNext()) {
         Map.Entry<ColumnShardId, List<EntityRecordSummary>> entry = iterator.next();
         List<EntityRecordSummary> testSummaries = entry.getValue();
@@ -225,14 +242,16 @@ public class ShardWriter implements IShardWriter {
       }
     } else {
       // Once baseline is established, find the ones that need to be compacted.
-      otherEntitiesMap.remove(baselineColumn);
+      otherColumns.remove(baselineColumn);
       // For the ones that have the same number of entities, do a check to make sure
       // a) In the right order
       // b) Same number of rows
-      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherEntitiesMap.entrySet().iterator();
+      Iterator<Map.Entry<ColumnShardId, List<EntityRecordSummary>>> iterator = otherColumns.entrySet().iterator();
       while (iterator.hasNext()) {
         Map.Entry<ColumnShardId, List<EntityRecordSummary>> entry = iterator.next();
         List<EntityRecordSummary> testSummaries = entry.getValue();
+        
+        // If they are the same, then that should mean they should be exactly the same.
         if (testSummaries.size() == baselineSummaries.size()) {
           ColumnShardId testColumn = entry.getKey();
           if (!testSummaries.equals(baselineSummaries)) {
@@ -243,15 +262,14 @@ public class ShardWriter implements IShardWriter {
       }
     }
 
-    // Remaining entries need to be resynced, meaning additional rows need to be added.
-    for (ColumnShardId column : otherEntitiesMap.keySet()) {
+    for (ColumnShardId column : otherColumns.keySet()) {
       LOGGER.info("The column {} needs to be resync according to the baseline, this may be expected if its a new column", column);
       ColumnFileWriter cw = columnFileWriters.get(column);
       cw.compact(baselineSummaries == null ? new ArrayList<>() : baselineSummaries);
     }
 
     // To be extra careful, do another check with these left over columns
-    for (ColumnShardId column : otherEntitiesMap.keySet()) {
+    for (ColumnShardId column : otherColumns.keySet()) {
       ColumnFileWriter cw = columnFileWriters.get(column);
       List<EntityRecordSummary> testSummaries = cw.getEntityRecordSummaries();
       if (baselineSummaries == null) {
@@ -272,7 +290,7 @@ public class ShardWriter implements IShardWriter {
    * Builds and store the entity id column. This entity id column is based off a given baseline. The baseline should be checked for consistency before
    * it passed into this method.
    */
-  private ColumnMetadata buildStoreEntityIdColumn(String transaction, List<EntityRecordSummary> baselineSummaries, String entityIdColumn, DataType entityIdType)
+  private ColumnMetadata buildStoreEntityIdColumn(ArmorXact transaction, List<EntityRecordSummary> baselineSummaries, String entityIdColumn, DataType entityIdType)
     throws IOException {
     ColumnId cn = new ColumnId(entityIdColumn, entityIdType.getCode());
     String randomId = UUID.randomUUID().toString();
@@ -290,7 +308,7 @@ public class ShardWriter implements IShardWriter {
           putRequests.add(put);
         }
       }
-      cw.write(transaction, putRequests);
+      cw.write(putRequests);
       try {
         StreamProduct streamProduct = cw.buildInputStream(compress);
         try (InputStream inputStream = streamProduct.getInputStream()) {
@@ -305,7 +323,7 @@ public class ShardWriter implements IShardWriter {
   }
 
   private void reportError(
-    String transaction,
+    ArmorXact transaction,
     ColumnShardId baselineColumn,
     ColumnShardId testColumn,
     List<EntityRecordSummary> baselineSummaries,
@@ -375,7 +393,8 @@ public class ShardWriter implements IShardWriter {
       try (InputStream is = baselineStream.getInputStream()) {
         StringBuilder storeMsg = new StringBuilder(sb.toString());
         storeMsg.append("Entity mismatch baseline column.\n");
-        store.saveError(transaction, baselineCw.getColumnShardId(), baselineStream.getByteSize(), is, storeMsg.toString());
+        String errorPath = store.saveError(transaction, baselineCw.getColumnShardId(), baselineStream.getByteSize(), is, storeMsg.toString());
+        LOGGER.error("Error was detected and stored at {}", errorPath);
       }
     }
     ColumnFileWriter testWriter = columnFileWriters.get(testColumn);
@@ -383,7 +402,8 @@ public class ShardWriter implements IShardWriter {
     try (InputStream is = testColumnStreamProduct.getInputStream()) {
       StringBuilder storeMsg = new StringBuilder(sb.toString());
       storeMsg.append("Entity mismatch test column.\n");
-      store.saveError(transaction, testWriter.getColumnShardId(), testColumnStreamProduct.getByteSize(), is, storeMsg.toString());
+      String errorPath = store.saveError(transaction, testWriter.getColumnShardId(), testColumnStreamProduct.getByteSize(), is, storeMsg.toString());
+      LOGGER.error("Error was detected and stored at {}", errorPath);
     }
 
     // Save other columns for analysis
@@ -394,10 +414,20 @@ public class ShardWriter implements IShardWriter {
       }
       StreamProduct otherColumnStreamProduct = cw.buildInputStream(compress);
       try (InputStream is = otherColumnStreamProduct.getInputStream()) {
-        store.saveError(transaction, cw.getColumnShardId(), otherColumnStreamProduct.getByteSize(), is, sb.toString());
+        String datapath = store.saveError(transaction, cw.getColumnShardId(), otherColumnStreamProduct.getByteSize(), is, sb.toString());
+        LOGGER.error("Error was detected and stored at {}", datapath);
       }
     }
 
-    throw new RuntimeException("The entity summaries do not match the baseline entity summaries on " + shardId.getTable() + " " + shardId);
+    throw new RuntimeException("The entity summaries do not match the baseline entity summaries on " + shardId.getTable() + " " + shardId + ":" + reportErrorMsg);
+  }
+
+  @Override
+  public void begin(String transaction) {
+      if (armorTransaction != null)
+          throw new IllegalStateException("A previous transaction is already in progress, call close or commit before starting");
+      if (transaction == null)
+          throw new IllegalArgumentException("No transaction was given");
+      armorTransaction = store.begin(transaction, shardId);
   }
 }
