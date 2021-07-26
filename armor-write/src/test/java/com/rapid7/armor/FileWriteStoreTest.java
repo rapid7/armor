@@ -47,12 +47,16 @@ public class FileWriteStoreTest {
   }
 
   private void removeDirectory(Path removeDirectory) throws IOException {
-    Files.walk(removeDirectory).filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
-    Files.walk(removeDirectory)
-    .sorted(Comparator.reverseOrder())
-    .map(Path::toFile)
-    .filter(File::isDirectory)
-    .forEach(File::delete);
+    try {
+     Files.walk(removeDirectory).filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
+     Files.walk(removeDirectory)
+     .sorted(Comparator.reverseOrder())
+     .map(Path::toFile)
+     .filter(File::isDirectory)
+     .forEach(File::delete);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
   }
 
   @Test
