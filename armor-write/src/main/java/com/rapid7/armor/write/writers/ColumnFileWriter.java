@@ -68,10 +68,12 @@ public class ColumnFileWriter implements AutoCloseable {
   private final String ROWGROUP_STORE_SUFFIX = "_rowgroup-";
   private final String ENTITYINDEX_STORE_SUFFIX = "_entityindex-";
   private boolean skipMetaData = false;
-  
+  private boolean alwaysCompact = true;
+
   public void setSkipMetaData(boolean skipMetaData) {
 	this.skipMetaData = skipMetaData;
   }
+  public void setAlwaysCompact(boolean alwaysCompact) { this.alwaysCompact = alwaysCompact; }
 
   public ColumnFileWriter(ColumnShardId columnShardId) throws IOException {
     metadata = new ColumnMetadata();
@@ -290,8 +292,12 @@ public class ColumnFileWriter implements AutoCloseable {
    * @return A list of entity record summaries.
    */
   public List<EntityRecordSummary> getEntityRecordSummaries() {
-    int byteLength = metadata.getColumnType().getByteLength();
     List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
+    return computeEntityRecordSummaries(records);
+  }
+
+  private List<EntityRecordSummary> computeEntityRecordSummaries(List<EntityRecord> records) {
+    int byteLength = metadata.getColumnType().getByteLength();
     if (entityDictionary.isEmpty()) {
       return records.stream()
           .map(e -> new EntityRecordSummary(
@@ -615,23 +621,32 @@ public class ColumnFileWriter implements AutoCloseable {
     else
       metadata.setCompressionAlgorithm(Compression.NONE.name());
 
-    // TODO - should we have compacted the entities first?
-
-    List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
-    entityIndexWriter.runThroughRecords(metadata, records);
-    // Run through the values to update metadata
-    if (!skipMetaData) {
-      rowGroupWriter.runThoughValues(metadata, records);
-    } else {
-      metadata.setMaxValue(null);
-      metadata.setMinValue(null);
-    }
+    compactAndUpdateRecords(metadata, true);
     // Store metadata
     String metadataStr = OBJECT_MAPPER.writeValueAsString(metadata);
     byte[] metadataPayload = metadataStr.getBytes();
     //writeLength(metadataPortion.getOutputStream(), 0, metadataPayload.length);
     metadataPortion.getOutputStream().write(metadataPayload);
     return metadataPortion.buildWithLength();
+  }
+
+  private void compactAndUpdateRecords(ColumnMetadata m, boolean alwaysCompact) throws IOException {
+    List<EntityRecordSummary> entityRecordSummaries = getEntityRecordSummaries();
+
+    if (alwaysCompact) {
+      compact(entityRecordSummaries, true);
+    } else {
+      // can we do this work while we are compacting?
+      List<EntityRecord> records = entityIndexWriter.getEntityRecords(entityDictionary);
+      entityIndexWriter.runThroughRecords(m, records);
+      // Run through the values to update metadata
+      if (!skipMetaData) {
+        rowGroupWriter.runThoughValues(m, records);
+      } else {
+        m.setMaxValue(null);
+        m.setMinValue(null);
+      }
+    }
   }
 
   private static byte[] writeLength(int compressed, int uncompressed) throws IOException {
@@ -742,6 +757,14 @@ public class ColumnFileWriter implements AutoCloseable {
 
   // Compaction requires a list of entities to use, it can either be preexisting or non-existing.
   public void compact(List<EntityRecordSummary> entitiesToKeep) throws IOException {
+    compact(entitiesToKeep, false);
+  }
+
+  public void compact(List<EntityRecordSummary> entitiesToKeep, boolean updateMetadata) throws IOException {
+    ColumnMetadata metadataToUpdate = null;
+    if (updateMetadata) {
+      metadataToUpdate = metadata;
+    }
 	Instant mark = Instant.now();
     List<EntityRecord> entityRecords = new ArrayList<>();
     for (EntityRecordSummary entityCheck : entitiesToKeep) {
@@ -775,8 +798,8 @@ public class ColumnFileWriter implements AutoCloseable {
     }
 
     // With a list of sorted records, lets start the process of compaction
-    List<EntityRecord> adjustedRecords = rowGroupWriter.compact(entityRecords);
-    entityIndexWriter.compact(adjustedRecords);
+    List<EntityRecord> adjustedRecords = rowGroupWriter.compactAndUpdateMetadata(entityRecords, metadataToUpdate);
+    entityIndexWriter.compactAndUpdateMetadata(adjustedRecords, metadataToUpdate);
 
     // Now hard-deleted deleted entites from entity index writer.
     Set<Integer> deletedEntities = 

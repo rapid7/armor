@@ -189,14 +189,16 @@ public class FileWriteStoreTest {
 
           Map<Integer, EntityRecord> vulnEntityRecords2 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata cmd2 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
-          assertEquals(2, vulnEntityRecords2.size());
-          assertEquals(Integer.valueOf(50), Integer.valueOf(cmd2.getFragmentationLevel()));
+          assertEquals(1, vulnEntityRecords2.size());
+          assertEquals(Integer.valueOf(0), Integer.valueOf(cmd2.getFragmentationLevel()));
+          //assertEquals(Integer.valueOf(50), Integer.valueOf(cmd2.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), cmd2.getMaxValue());
           assertEquals(Double.valueOf(5.0), cmd2.getMinValue());
           assertEquals(6, cmd2.getNumRows());
           assertEquals(1, cmd2.getNumEntities());
-          checkEntityIndexRecord(vulnEntityRecords2.get(1), 0, 24, 0, (byte) 1);
-          checkEntityIndexRecord(vulnEntityRecords2.get(2), 24, 24, 15, (byte) 0);
+          //checkEntityIndexRecord(vulnEntityRecords2.get(1), 0, 24, 0, (byte) 1);
+          // since we compact automatically, the only record is for entityId 2
+          checkEntityIndexRecord(vulnEntityRecords2.get(2), 0, 24, 15, (byte) 0);
 
 
           // Write a new entry same exact thing
@@ -242,13 +244,13 @@ public class FileWriteStoreTest {
           Map<Integer, EntityRecord> records4 = armorWriter.columnEntityRecords(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           ColumnMetadata md4 = armorWriter.columnMetadata(myorg, table, SINGLE, Instant.now(), "vuln", 0);
           assertEquals(2, records4.size());
-          assertEquals(Integer.valueOf(58), Integer.valueOf(md4.getFragmentationLevel()));
+          assertEquals(Integer.valueOf(0), Integer.valueOf(md4.getFragmentationLevel()));
           assertEquals(Double.valueOf(6.0), md4.getMaxValue());
           assertEquals(Double.valueOf(-1.0), md4.getMinValue());
           assertEquals(7, md4.getNumRows());
           assertEquals(2, md4.getNumEntities());
-          checkEntityIndexRecord(records4.get(2), 39, 20, 15, (byte) 0);
-          checkEntityIndexRecord(records4.get(3), 74, 8, 0, (byte) 0);
+          checkEntityIndexRecord(records4.get(2), 0, 20, 15, (byte) 0);
+          checkEntityIndexRecord(records4.get(3), 35, 8, 0, (byte) 0);
 
           // Overwrite existing one but this time expand the row count
           Entity e32 = Entity.buildEntity("assetId", 3, 2, instanceId, columns);

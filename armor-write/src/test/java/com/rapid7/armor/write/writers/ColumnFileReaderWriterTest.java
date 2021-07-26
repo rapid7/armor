@@ -3,6 +3,9 @@ package com.rapid7.armor.write.writers;
 import com.rapid7.armor.columnfile.ColumnFileListener;
 import com.rapid7.armor.columnfile.ColumnFileReader;
 import com.rapid7.armor.columnfile.ColumnFileSection;
+import com.rapid7.armor.entity.Column;
+import com.rapid7.armor.entity.EntityRecord;
+import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
 import com.rapid7.armor.meta.ColumnMetadata;
@@ -18,10 +21,9 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
+
+import com.rapid7.armor.write.WriteRequest;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -54,22 +56,12 @@ public class ColumnFileReaderWriterTest {
       ColumnFileWriter cfw = new ColumnFileWriter(columnShardId);
       StreamProduct result = cfw.buildInputStream(Compression.NONE);
       assertNotNull(result);
-      InputStream is = result.getInputStream();
-      byte[] bytes = ByteStreams.toByteArray(is);
+      byte[] bytes = bytesFromStreamProduct(result);
       assertEquals(result.getByteSize(), bytes.length);
       assertTrue(bytes.length > 0);
       System.out.println("size: " + bytes.length);
 
-      DataInputStream str = new DataInputStream(ByteSource.wrap(bytes).openStream());
-      ColumnFileReader cfr = new ColumnFileReader();
-      ColumnFileListener listener = new ColumnFileListener() {
-         @Override public int columnFileSection(
-            ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength) {
-            System.out.println("Got section " + armorSection + " compressed: " + compressedLength + " uncompressed: " + uncompressedLength);
-            return 0;
-         }
-      };
-      cfr.read(str, listener);
+      runColumnFileListener(bytes, printListener());
 
    }
 
@@ -86,20 +78,34 @@ public class ColumnFileReaderWriterTest {
       ColumnFileWriter cfw = new ColumnFileWriter(columnShardId);
       StreamProduct result = cfw.buildInputStreamV2(Compression.NONE);
       assertNotNull(result);
-      InputStream is = result.getInputStream();
-      byte[] bytes = ByteStreams.toByteArray(is);
+      byte[] bytes = bytesFromStreamProduct(result);
       assertEquals(result.getByteSize(), bytes.length);
       assertTrue(bytes.length > 0);
 
-      DataInputStream str = new DataInputStream(ByteSource.wrap(bytes).openStream());
-      ColumnFileReader cfr = new ColumnFileReader();
-      ColumnFileListener listener = new ColumnFileListener() {
-         @Override public int columnFileSection(
-            ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength) {
+      runColumnFileListener(bytes, printListener());
+      return;
+   }
+
+   private ColumnFileListener printListener() {
+      return new ColumnFileListener() {
+         @Override
+         public int columnFileSection(
+                 ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength) {
             System.out.println("Got section " + armorSection + " compressed: " + compressedLength + " uncompressed: " + uncompressedLength);
             return 0;
          }
       };
+   }
+
+   private void runColumnFileListener(byte[] bytes, ColumnFileListener listener) throws IOException {
+      DataInputStream str = new DataInputStream(ByteSource.wrap(bytes).openStream());
+      ColumnFileReader cfr = new ColumnFileReader();
       cfr.read(str, listener);
+   }
+
+
+   private byte[] bytesFromStreamProduct(StreamProduct result2) throws IOException {
+      InputStream is2 = result2.getInputStream();
+      return ByteStreams.toByteArray(is2);
    }
 }
