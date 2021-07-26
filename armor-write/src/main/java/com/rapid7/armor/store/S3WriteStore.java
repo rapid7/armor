@@ -937,13 +937,14 @@ public class S3WriteStore implements WriteStore {
   @Override
   public ArmorXact begin(String transaction, ShardId shardId) {
     if (transaction == null)
-       throw new IllegalArgumentException("No transaction was given");
+       throw new IllegalArgumentException("No transaction was given to start the transaction");
     DistXactRecord xact = getCurrentValues(shardId);
     
     // Special case: First one wins scenario. Since no previous transaction exists start the process
     // of claiming it by saving a current first then building another transaction.
     if (xact == null) {
         String baselineTransaction = UUID.randomUUID().toString();
+        LOGGER.info("The shard at {} doesn't exist for transaction {}, establishing new baseline transaction of {}", shardId, transaction, baselineTransaction);
         xact = new DistXactRecord(baselineTransaction, System.currentTimeMillis(), null, null);
         saveCurrentValues(shardId, xact);
     }
