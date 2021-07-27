@@ -74,7 +74,7 @@ public class ShardWriter implements IShardWriter {
     this.store = store;
     this.compress = compress;
     if (compactionTriggerSupplier == null)
-      this.compactionTrigger = () -> 90;
+      this.compactionTrigger = () -> 10;
     else
       this.compactionTrigger = compactionTriggerSupplier;
     this.captureWrite = captureWrite;
