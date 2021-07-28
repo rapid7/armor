@@ -752,21 +752,12 @@ public class ColumnFileWriter implements AutoCloseable {
     outputStream.write(IOTools.toByteArray(version.getVal()));
   }
 
-  public void compact() throws IOException {
-    compact(getEntityRecordSummaries());
-  }
-
-  // Compaction requires a list of entities to use, it can either be preexisting or non-existing.
-  public void compact(List<EntityRecordSummary> entitiesToKeep) throws IOException {
-    compact(entitiesToKeep, false);
-  }
-
   public void compact(List<EntityRecordSummary> entitiesToKeep, boolean updateMetadata) throws IOException {
     ColumnMetadata metadataToUpdate = null;
     if (updateMetadata) {
       metadataToUpdate = metadata;
     }
-	Instant mark = Instant.now();
+    Instant mark = Instant.now();
     List<EntityRecord> entityRecords = new ArrayList<>();
     for (EntityRecordSummary entityCheck : entitiesToKeep) {
       final Integer entityId;
