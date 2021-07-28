@@ -175,6 +175,94 @@ public class RowGroupWriter extends FileComponent {
     }
   }
 
+  private class MetadataUpdater {
+    private final ColumnMetadata metadata;
+    Double prevMax;
+    Double prevMin;
+    Set<Object> cardinality = new HashSet<>();
+    ByteBuffer valBorrow = BYTE_BUFFER_POOL.get();
+    ByteBuffer nilBorrow = BYTE_BUFFER_POOL.get();
+    ByteBuffer valBuf = valBorrow;
+    ByteBuffer nilBuf = nilBorrow;
+    private boolean success;
+
+
+    MetadataUpdater(ColumnMetadata metadata) {
+      this.metadata = metadata;
+      prevMax = metadata.getMaxValue();
+      prevMax = metadata.getMinValue();
+
+      metadata.resetMinMax();
+      success = false;
+    }
+
+    void resetOldValues() {
+      metadata.setMaxValue(prevMax);
+      metadata.setMinValue(prevMin);
+    }
+
+    void cleanup() {
+      BYTE_BUFFER_POOL.release(valBorrow);
+      BYTE_BUFFER_POOL.release(nilBorrow);
+      if (!success) {
+        resetOldValues();
+      }
+    }
+
+    public void updateRow(EntityRecord eir) throws IOException {
+      int offset = eir.getRowGroupOffset();
+      position(offset);
+      int valueLength = eir.getValueLength();
+      valBuf = insureByteBufferIsBigEnough(valueLength, valBuf);
+      int valRead = read(valBuf);
+      int nullLength = eir.getNullLength();
+      final RoaringBitmap nilRb;
+      nilBuf = insureByteBufferIsBigEnough(nullLength, nilBuf);
+      if (nullLength > 0) {
+        int nilRead = read(nilBuf);
+        nilBuf.flip();
+        nilRb = new RoaringBitmap();
+        nilRb.deserialize(nilBuf);
+      } else {
+        nilRb = null;
+        nilBuf.flip();
+      }
+
+      dataType.traverseByteBuffer(valBuf, nilRb, eir.getValueLength(), (rowCount, value) -> {
+        if (nilRb == null || !nilRb.contains(rowCount)) {
+          metadata.handleMinMax(value);
+          cardinality.add(value);
+        }
+      });
+    }
+
+    public void writeBuffersToOutput(ByteBuffer bb, int totalLength) {
+
+      valBuf.rewind();
+      nilBuf.rewind();
+      //valBuf.limit();
+
+      bb.put(valBuf);
+      bb.put(nilBuf);
+    }
+
+    private ByteBuffer insureByteBufferIsBigEnough(int len, ByteBuffer buf) {
+      if (len > buf.capacity()) {
+        buf = ByteBuffer.allocate(len);
+      } else {
+        buf.clear();
+        buf.limit(len);
+      }
+      return buf;
+    }
+
+    public void finishUpdate() {
+      metadata.setCardinality(cardinality.size());
+      success = true;
+    }
+  }
+
+
   /**
    * Does a pass through the row group to update statistics and bitmap.
    * 
@@ -183,65 +271,23 @@ public class RowGroupWriter extends FileComponent {
    * 
    * @throws IOException If an io error occurs.
    */
+
+  // Both runThoughValues() and compactAndUpdateMetadata() share the same logic to update metadata.
+  // 1 - during compactAndUpdateMetadata(), the entities are in the process of being rewritten - will that affect the ability to do some of the position() stuff that is being done?
+  // 2 - there is some try/finally stuff which also needs to be managed. in EntityIndexWriter, we did the inversion from a for loop to being a callback that is callable
+  //    from within the for loop.
   public void runThoughValues(ColumnMetadata metadata, List<EntityRecord> records) throws IOException {
     long previousPosition = position();
-    Double prevMax = metadata.getMaxValue();
-    Double prevMin = metadata.getMinValue();
-
-    Set<Object> cardinality = new HashSet<>();
-    boolean success = false;
-    ByteBuffer valBorrow = BYTE_BUFFER_POOL.get();
-    ByteBuffer nilBorrow = BYTE_BUFFER_POOL.get();
+    MetadataUpdater metadataUpdater = new MetadataUpdater(metadata);
     try {
-      ByteBuffer valBuf = valBorrow;
-      ByteBuffer nilBuf = nilBorrow;
-      metadata.resetMinMax();
       for (EntityRecord eir : records) {
         if (eir.getDeleted() == 1)
           continue;
-        int offset = eir.getRowGroupOffset();
-        position(offset);
-        int valueLength = eir.getValueLength();
-        if (valueLength > valBuf.capacity()) {
-          valBuf = ByteBuffer.allocate(valueLength);
-        } else {
-          valBuf.clear();
-          valBuf.limit(valueLength);
-        }
-
-        int valRead = read(valBuf);
-        int nullLength = eir.getNullLength();
-        final RoaringBitmap nilRb;
-        if (nullLength > 0) {
-          if (nullLength > nilBuf.capacity()) {
-            nilBuf = ByteBuffer.allocate(nullLength);
-          } else {
-            nilBuf.clear();
-            nilBuf.limit(nullLength);
-          }
-          int nilRead = read(nilBuf);
-          nilBuf.flip();
-          nilRb = new RoaringBitmap();
-          nilRb.deserialize(nilBuf);
-        } else
-          nilRb = null;
-
-        dataType.traverseByteBuffer(valBuf, nilRb, eir.getValueLength(), (rowCount, value) -> {
-          if (nilRb == null || !nilRb.contains(rowCount)) {
-            metadata.handleMinMax(value);
-            cardinality.add(value);
-          }
-        });
+        metadataUpdater.updateRow(eir);
       }
-      metadata.setCardinality(cardinality.size());
-      success = true;
+      metadataUpdater.finishUpdate();
     } finally {
-      BYTE_BUFFER_POOL.release(valBorrow);
-      BYTE_BUFFER_POOL.release(nilBorrow);
-      if (!success) {
-        metadata.setMaxValue(prevMax);
-        metadata.setMinValue(prevMin);
-      }
+      metadataUpdater.cleanup();
       position(previousPosition);
     }
   }
@@ -406,6 +452,14 @@ public class RowGroupWriter extends FileComponent {
    * @throws IOException If an io error occurs.
    */
   public List<EntityRecord> compact(List<EntityRecord> entitiesToKeep) throws IOException {
+    return compactAndUpdateMetadata(entitiesToKeep, null);
+  }
+
+  public List<EntityRecord> compactAndUpdateMetadata(List<EntityRecord> entitiesToKeep, ColumnMetadata metadata) throws IOException {
+    MetadataUpdater metadataUpdater = null;
+    if (metadata != null) {
+      metadataUpdater = new MetadataUpdater(metadata);
+    }
     int totalRequiredBytes = entitiesToKeep.stream().mapToInt(EntityRecord::totalLength).sum();
     ByteBuffer output = ByteBuffer.allocate(totalRequiredBytes * 2);
     Path path = TempFileUtil.createTempFile(columnShardId.alternateString() + ROWGROUP_COMPACTION_SUFFIX, ".armor");
@@ -427,15 +481,23 @@ public class RowGroupWriter extends FileComponent {
           // Move the position into place and read contents from file
           position(er.getRowGroupOffset());
 
-          // Restrict the read to expected length
-          output.limit(output.position() + er.totalLength());
-          int read = read(output);
-
+          // metadataUpdater.updateRow / writeBuffersToOutput reads values and nulls separately,
+          // so that the work in runThroughValues can be done here as well.
+          if (metadataUpdater != null) {
+            output.limit(output.position() + er.totalLength());
+            metadataUpdater.updateRow(er);
+            metadataUpdater.writeBuffersToOutput(output, er.totalLength()); // will write values and nulls to output buffer
+          } else {
+            // Restrict the read to expected length
+            output.limit(output.position() + er.totalLength());
+            int read = read(output);
+          }
           // Expand to full capacity
           output.limit(output.capacity());
         }
         er.setRowGroupOffset((int) position);
       }
+
       // Now write to the file
       output.flip();
       fileChannel.write(output);

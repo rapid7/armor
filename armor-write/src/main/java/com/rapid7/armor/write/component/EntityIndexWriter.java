@@ -113,13 +113,22 @@ public class EntityIndexWriter extends FileComponent {
     }
   }
 
-  public void runThroughRecords(ColumnMetadata metadata, List<EntityRecord> entityRecords) {
-    // Now traverse through noting bytes used and unused.
+  private class MetadataUpdater {
+    private final ColumnMetadata metadata;
+    private final List<EntityRecord> entityRecords; // only used for throwing the exception
+    private final ColumnShardId columnShardId; // only used for throwing the exception
     int cursor = 0;
     long freeableBytes = 0;
     int usedBytes = 0;
     int numEntities = 0;
-    for (EntityRecord er : entityRecords) {
+
+    public MetadataUpdater(ColumnMetadata metadata, List<EntityRecord> er, ColumnShardId id) {
+      this.metadata = metadata;
+      this.entityRecords = er;
+      this.columnShardId = id;
+    }
+
+    public void accept(EntityRecord er) {
       if (cursor < er.getRowGroupOffset()) {
         freeableBytes += er.getRowGroupOffset() - cursor;
         cursor = er.getRowGroupOffset();
@@ -146,10 +155,24 @@ public class EntityIndexWriter extends FileComponent {
         throw new EntityOffsetException(columnShardId, cursor, er, entityRecords);
       }
     }
-    metadata.setNumEntities(numEntities);
-    float fragPercent = ((float) freeableBytes / (freeableBytes + usedBytes));
-    metadata.setFragmentationLevel((int) (fragPercent * 100));
-    metadata.setNumRows(metadata.getColumnType().rowCount(usedBytes));
+
+    public void completeUpdate() {
+      metadata.setNumEntities(numEntities);
+      float fragPercent = ((float) freeableBytes / (freeableBytes + usedBytes));
+      metadata.setFragmentationLevel((int) (fragPercent * 100));
+      metadata.setNumRows(metadata.getColumnType().rowCount(usedBytes));
+    }
+  }
+
+  public void runThroughRecords(ColumnMetadata metadata, List<EntityRecord> entityRecords) {
+    MetadataUpdater metadataUpdater = new MetadataUpdater(metadata, entityRecords, columnShardId);
+    // Now traverse through noting bytes used and unused.
+    // entityRecords must be ordered from smallest to largest rowGroupOffset, otherwise we will throw exception
+
+    for (EntityRecord er : entityRecords) {
+      metadataUpdater.accept(er);
+    }
+    metadataUpdater.completeUpdate();
   }
 
   public EntityRecord delete(int entityUuid, long version, String instanceId) throws IOException {
@@ -280,9 +303,18 @@ public class EntityIndexWriter extends FileComponent {
    * 
    * @param entitiesToKeep A list of entity records to keep during compaction.
    * 
-   * @throws IOException If an IO error ocurrs.
+   * @throws IOException If an IO error occurs.
    */
   public void compact(List<EntityRecord> entitiesToKeep) throws IOException {
+    compactAndUpdateMetadata(entitiesToKeep, null);
+  }
+
+  public void compactAndUpdateMetadata(List<EntityRecord> entitiesToKeep, ColumnMetadata metadata) throws IOException {
+    MetadataUpdater metadataUpdater = null;
+    if (metadata != null) {
+      metadataUpdater = new MetadataUpdater(metadata, entitiesToKeep, columnShardId);
+    }
+
     Map<Integer, EntityRecord> tempEntities = new HashMap<>();
     Map<Integer, Integer> tempIndexOffsets = new HashMap<>();
     Path path = TempFileUtil.createTempFile(columnShardId.alternateString() + ENTITY_INDEX_COMPACTION_SUFFIX, ".armor");
@@ -301,6 +333,11 @@ public class EntityIndexWriter extends FileComponent {
         if (written != RECORD_SIZE_BYTES)
           throw new RuntimeException("When compacting, only write " + written + " when it should have been " + RECORD_SIZE_BYTES);
         recordOffset += RECORD_SIZE_BYTES;
+        // we ignore deleted EntityRecords for metadata purpose since this is done
+        // during compaction
+        if (metadataUpdater != null) {
+          metadataUpdater.accept(er);
+        }
       }
       copied = true;
     } finally {
@@ -322,5 +359,8 @@ public class EntityIndexWriter extends FileComponent {
     nextOffset = (int) Files.size(path);
     entities = tempEntities;
     indexOffsets = tempIndexOffsets;
+    if (metadataUpdater != null) {
+      metadataUpdater.completeUpdate();
+    }
   }
 }

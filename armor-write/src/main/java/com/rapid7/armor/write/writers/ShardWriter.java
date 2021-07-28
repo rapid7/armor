@@ -74,7 +74,7 @@ public class ShardWriter implements IShardWriter {
     this.store = store;
     this.compress = compress;
     if (compactionTriggerSupplier == null)
-      this.compactionTrigger = () -> 90;
+      this.compactionTrigger = () -> 10;
     else
       this.compactionTrigger = compactionTriggerSupplier;
     this.captureWrite = captureWrite;
@@ -202,7 +202,7 @@ public class ShardWriter implements IShardWriter {
       ColumnMetadata md = cw.getMetadata();
       if (md.getFragmentationLevel() > compactionTrigger.get()) {
         Instant mark = Instant.now();
-        cw.compact();
+        cw.compact(cw.getEntityRecordSummaries(), false);
         LOGGER.info("The column fragment level for {} is at {} which is over {}, took {}",
             cw.getColumnShardId().alternateString(),
             md.getFragmentationLevel(),
@@ -265,7 +265,7 @@ public class ShardWriter implements IShardWriter {
     for (ColumnShardId column : otherColumns.keySet()) {
       LOGGER.info("The column {} needs to be resync according to the baseline, this may be expected if its a new column", column);
       ColumnFileWriter cw = columnFileWriters.get(column);
-      cw.compact(baselineSummaries == null ? new ArrayList<>() : baselineSummaries);
+      cw.compact(baselineSummaries == null ? new ArrayList<>() : baselineSummaries, false);
     }
 
     // To be extra careful, do another check with these left over columns
