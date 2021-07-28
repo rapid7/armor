@@ -10,6 +10,7 @@ import com.rapid7.armor.io.PathBuilder;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.meta.ShardMetadata;
 import com.rapid7.armor.schema.ColumnId;
+import com.rapid7.armor.schema.DataType;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.shard.ShardStrategy;
@@ -50,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -148,6 +150,21 @@ public class S3WriteStore implements WriteStore {
     } while (ol.isTruncated());
     return new ArrayList<>(columnIds);
   }
+  
+  private List<ColumnId> getColumnIds(String tenant, String table) {
+    String metadataPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR);
+    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+        .withBucketName(bucket)
+        .withPrefix(metadataPath);
+    List<S3ObjectSummary> objectSummaries = s3Client.listObjects(listObjectsRequest).getObjectSummaries();
+    
+    List<ColumnId> columnIds = objectSummaries.stream()
+        .map(summary -> Paths.get(summary.getKey()).getFileName().toString().substring(1))
+        .map(ColumnId::new)
+        .collect(toList());
+    
+    return columnIds;
+  }
 
   @Override
   public List<ShardId> findShardIds(String tenant, String table, Interval interval, Instant timestamp) {
@@ -223,12 +240,23 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public void saveTableMetadata(String tenant, String table, Set<ColumnId> columnIds, ColumnId entityColumnId) {
-      saveColumnMetadata(tenant, table, entityColumnId, true);
-      for (ColumnId column : columnIds) {
-        if (entityColumnId.equals(column))
-            continue;
-        saveColumnMetadata(tenant, table, column, false);
-      }
+    ColumnId storedEntityColumnId = getEntityIdColumn(tenant, table);
+    if (!entityColumnId.equals(storedEntityColumnId))
+      throw new RuntimeException("Cannot save table metadata. Reason: provided entity column " + entityColumnId + " does not match existing entity column " + storedEntityColumnId);
+    
+    saveColumnMetadata(tenant, table, entityColumnId, true);
+  
+    Map<String, DataType> storedColumns = getColumnIds(tenant, table).stream().collect(Collectors.toMap(ColumnId::getName, ColumnId::dataType));
+    for (ColumnId column : columnIds) {
+      if (entityColumnId.equals(column))
+          continue;
+  
+      DataType storedType = storedColumns.get(column.getName());
+      if (storedType != null && !storedType.equals(column.dataType()))
+        throw new RuntimeException("Cannot save table metadata. Reason: provided column " + column + " does not match existing column type " + storedType);
+      
+      saveColumnMetadata(tenant, table, column, false);
+    }
   }
   
   @Override
@@ -236,7 +264,7 @@ public class S3WriteStore implements WriteStore {
     String metadataPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR);
     String columnKey = keyName(column, isEntityColumn);
     
-    if (!columnExistsInCache(tenant, columnKey)){
+    if (!columnExistsInCache(tenant, columnKey)) {
       //save column file to s3
       String columnPath = PathBuilder.buildPath(metadataPath, columnKey);
       putObject(columnPath, "", null);
