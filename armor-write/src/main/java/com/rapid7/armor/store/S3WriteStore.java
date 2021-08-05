@@ -920,7 +920,7 @@ public class S3WriteStore implements WriteStore {
       }
     }
     
-    //Get from s3 if not in cache
+    // Get from s3 if not in cache
     String entityColumnPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR, ColumnId.ENTITY_COLUMN_IDENTIFIER);
     ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
         .withBucketName(bucket)
