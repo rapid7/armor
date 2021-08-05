@@ -177,6 +177,7 @@ public class RowGroupWriter extends FileComponent {
 
   private class MetadataUpdater {
     private final ColumnMetadata metadata;
+    private final IndexUpdater indexUpdater;
     Double prevMax;
     Double prevMin;
     Set<Object> cardinality = new HashSet<>();
@@ -187,8 +188,9 @@ public class RowGroupWriter extends FileComponent {
     private boolean success;
 
 
-    MetadataUpdater(ColumnMetadata metadata) {
+    MetadataUpdater(ColumnMetadata metadata, IndexUpdater indexUpdater) {
       this.metadata = metadata;
+      this.indexUpdater = indexUpdater;
       prevMax = metadata.getMaxValue();
       prevMax = metadata.getMinValue();
 
@@ -232,6 +234,11 @@ public class RowGroupWriter extends FileComponent {
         if (nilRb == null || !nilRb.contains(rowCount)) {
           metadata.handleMinMax(value);
           cardinality.add(value);
+          if(indexUpdater != null)
+            indexUpdater.add(value, eir.getEntityId(), rowCount);
+        } else {
+          if(indexUpdater != null)
+            indexUpdater.add(null, eir.getEntityId(), rowCount);
         }
       });
     }
@@ -258,6 +265,9 @@ public class RowGroupWriter extends FileComponent {
 
     public void finishUpdate() {
       metadata.setCardinality(cardinality.size());
+      if (indexUpdater != null) {
+        indexUpdater.finish();
+      }
       success = true;
     }
   }
@@ -278,7 +288,7 @@ public class RowGroupWriter extends FileComponent {
   //    from within the for loop.
   public void runThoughValues(ColumnMetadata metadata, List<EntityRecord> records) throws IOException {
     long previousPosition = position();
-    MetadataUpdater metadataUpdater = new MetadataUpdater(metadata);
+    MetadataUpdater metadataUpdater = new MetadataUpdater(metadata, null);
     try {
       for (EntityRecord eir : records) {
         if (eir.getDeleted() == 1)
@@ -452,13 +462,13 @@ public class RowGroupWriter extends FileComponent {
    * @throws IOException If an io error occurs.
    */
   public List<EntityRecord> compact(List<EntityRecord> entitiesToKeep) throws IOException {
-    return compactAndUpdateMetadata(entitiesToKeep, null);
+    return compactAndUpdateMetadata(entitiesToKeep, null, null);
   }
 
-  public List<EntityRecord> compactAndUpdateMetadata(List<EntityRecord> entitiesToKeep, ColumnMetadata metadata) throws IOException {
+  public List<EntityRecord> compactAndUpdateMetadata(List<EntityRecord> entitiesToKeep, ColumnMetadata metadata, IndexUpdater indexUpdater) throws IOException {
     MetadataUpdater metadataUpdater = null;
     if (metadata != null) {
-      metadataUpdater = new MetadataUpdater(metadata);
+      metadataUpdater = new MetadataUpdater(metadata, indexUpdater);
     }
     int totalRequiredBytes = entitiesToKeep.stream().mapToInt(EntityRecord::totalLength).sum();
     ByteBuffer output = ByteBuffer.allocate(totalRequiredBytes * 2);

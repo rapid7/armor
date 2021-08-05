@@ -207,4 +207,50 @@ public enum DataType {
       rowCount++;
     }
   }
+
+  public Number fromString(String key)
+  {
+    if ("null".equals(key)) {
+      return null;
+    } else {
+      switch (this) {
+        case LONG:
+        case DATETIME:
+          return Long.parseLong(key);
+        case FLOAT:
+          return Float.parseFloat(key);
+        case INTEGER:
+        case STRING:
+          return Integer.parseInt(key);
+        case BOOLEAN:
+          return Byte.parseByte(key);
+        case DOUBLE:
+          return Double.parseDouble(key);
+      }
+    }
+    throw new IllegalStateException("unknown object type");
+  }
+
+  public String toString(Object val) {
+    if (val == null) {
+      return "null";
+    } else {
+      switch (this) {
+        case LONG:
+        case DATETIME:
+          return Long.toString((Long) val);
+        case FLOAT:
+          return Float.toString((Float) val);
+        case INTEGER:
+        case STRING:
+          return Integer.toString((Integer) val);
+        case BOOLEAN:
+          return Byte.toString((Byte) val);
+        case DOUBLE:
+          return Double.toString((Double) val);
+      }
+    }
+    throw new IllegalStateException("unknown object type");
+  }
+
 }

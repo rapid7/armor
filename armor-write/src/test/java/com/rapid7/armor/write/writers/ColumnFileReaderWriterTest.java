@@ -24,8 +24,10 @@ import java.time.Instant;
 import java.util.*;
 
 import com.rapid7.armor.write.WriteRequest;
+import com.rapid7.armor.write.component.ValueIndexWriter;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -83,6 +85,84 @@ public class ColumnFileReaderWriterTest {
       assertTrue(bytes.length > 0);
 
       runColumnFileListener(bytes, printListener());
+      return;
+   }
+
+   static private class FoundValueIndex {
+      boolean foundValueIndex = false;
+   };
+
+   @Test
+   public void testValueIndex()
+      throws IOException {
+      ModShardStrategy shardStrategy = new ModShardStrategy(10);
+      int entity1Shard = shardStrategy.shardNum(1);
+      ColumnId testColumn = new ColumnId("vuln", DataType.LONG);
+
+      ColumnShardId columnShardId = new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn);
+
+      ColumnFileWriter cfw = new ColumnFileWriter(columnShardId);
+      List<WriteRequest> writeRequests = new ArrayList<>();
+      for(int i = 0 ; i < 10 ; ++i)
+      {
+         Number entityId = 1000 + i;
+         long version = 1;
+         String randomId = UUID.randomUUID().toString();
+         Column ecv = new Column(testColumn);
+         for (long j = 0 ; j < 10; ++j)
+         {
+            ecv.addValue(j);
+         }
+
+         WriteRequest wr = new WriteRequest(entityId, version, randomId, ecv);
+         writeRequests.add(wr);
+      }
+      cfw.write(writeRequests);
+
+      StreamProduct result = cfw.buildInputStreamV2(Compression.NONE);
+      assertNotNull(result);
+      byte[] bytes = bytesFromStreamProduct(result);
+      assertEquals(result.getByteSize(), bytes.length);
+      assertTrue(bytes.length > 0);
+
+      runColumnFileListener(bytes, printListener());
+      FoundValueIndex fvi = new FoundValueIndex();
+      runColumnFileListener(bytes, new ColumnFileListener()
+      {
+         @Override public int columnFileSection(ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength)
+         {
+            if (armorSection == ColumnFileSection.VALUE_INDEX) {
+               assertEquals(compressedLength, 0);
+               assertEquals(uncompressedLength, 561);
+               byte[] json = new byte[561];
+               int bytesRead = 0;
+               try
+               {
+                  bytesRead = inputStream.read(json);
+               }
+               catch (IOException e)
+               {
+                  assertFalse(true, "error reading inputStream for 561 bytes");
+               }
+
+               System.out.println(json);
+               try
+               {
+                  ValueIndexWriter x = new ValueIndexWriter(columnShardId, json);
+                  Set<Integer> vals = x.getValToEntities().get(0L);
+                  assertEquals(10, vals.size());
+               }
+               catch (IOException e)
+               {
+                  assertFalse(true, "error while parsing valueIndexWriter");
+               }
+               fvi.foundValueIndex = true;
+               return bytesRead;
+            }
+            return 0;
+         }
+      });
+      assertTrue(fvi.foundValueIndex, "found value index");
       return;
    }
 

@@ -20,6 +20,7 @@ import com.rapid7.armor.write.component.EntityIndexVariableWidthException;
 import com.rapid7.armor.write.component.EntityIndexWriter;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.component.RowGroupWriter.RgOffsetWriteResult;
+import com.rapid7.armor.write.component.ValueIndexWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.luben.zstd.RecyclingBufferPool;
 import com.github.luben.zstd.Zstd;
@@ -65,9 +66,12 @@ public class ColumnFileWriter implements AutoCloseable {
   private ColumnMetadata metadata;
   private DictionaryWriter valueDictionary;
   private DictionaryWriter entityDictionary;
+  private ValueIndexWriter valueIndexWriter;
   private final ColumnShardId columnShardId;
   private final String ROWGROUP_STORE_SUFFIX = "_rowgroup-";
   private final String ENTITYINDEX_STORE_SUFFIX = "_entityindex-";
+  private final String VALUEINDEX_STORE_SUFFIX = "_valueindex-";
+
   private boolean skipMetaData = false;
   private boolean alwaysCompact = true;
 
@@ -88,6 +92,7 @@ public class ColumnFileWriter implements AutoCloseable {
     entityDictionary = new DictionaryWriter(true);
     rowGroupWriter = new RowGroupWriter(TempFileUtil.createTempFile(columnShardId.alternateString() + ROWGROUP_STORE_SUFFIX, ".armor"), columnShardId, valueDictionary);
     entityIndexWriter = new EntityIndexWriter(TempFileUtil.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor"), columnShardId);
+    valueIndexWriter = new ValueIndexWriter(columnShardId);
   }
 
   public ColumnFileWriter(DataInputStream dataInputStream, ColumnShardId columnShardId) {
@@ -114,6 +119,7 @@ public class ColumnFileWriter implements AutoCloseable {
         entityDictionary = new DictionaryWriter(true);
         rowGroupWriter = new RowGroupWriter(TempFileUtil.createTempFile(columnShardId.alternateString() + ROWGROUP_STORE_SUFFIX, ".armor"), columnShardId, valueDictionary);
         entityIndexWriter = new EntityIndexWriter(TempFileUtil.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor"), columnShardId);
+        valueIndexWriter = new ValueIndexWriter(columnShardId);
       }
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
@@ -201,7 +207,23 @@ public class ColumnFileWriter implements AutoCloseable {
     }
     return read;
   }
-  
+
+  private int loadValueIndex(DataInputStream inputStream, int compressed, int uncompressed) throws IOException {
+    // Load str value dictionary
+    int read = 0;
+    if (compressed > 0) {
+      byte[] compressedDict = new byte[compressed];
+      read = IOTools.readFully(inputStream, compressedDict, 0, compressed);
+      byte[] decompressed = Zstd.decompress(compressedDict, uncompressed);
+      valueIndexWriter = new ValueIndexWriter(columnShardId, decompressed);
+    } else if (uncompressed > 0) {
+      byte[] uncompressedDict = new byte[uncompressed];
+      read = IOTools.readFully(inputStream, uncompressedDict, 0, uncompressed);
+      valueIndexWriter = new ValueIndexWriter(columnShardId, uncompressedDict);
+    }
+    return read;
+  }
+
   private int loadEntityIndex(DataInputStream inputStream, int compressed, int uncompressed, List<Path> temps) throws IOException {
     Path entityIndexTemp = TempFileUtil.createTempFile(columnShardId.alternateString() + ENTITYINDEX_STORE_SUFFIX, ".armor");
     temps.add(entityIndexTemp);
@@ -267,6 +289,8 @@ public class ColumnFileWriter implements AutoCloseable {
             return loadEntityIndex(is, compressed, uncompressed, tempPaths);
           } else if (section == ColumnFileSection.ROWGROUP) {
             return loadRowGroup(inputStream, compressed, uncompressed, tempPaths);
+          } else if (section == ColumnFileSection.VALUE_INDEX) {
+            return loadValueIndex(inputStream, compressed, uncompressed);
           } else
             return 0;
         } catch (IOException ioe) {
@@ -511,6 +535,7 @@ public class ColumnFileWriter implements AutoCloseable {
       sections.add(computeEntityDictionarySection(compress, tempPaths));
       sections.add(computeValueDictionarySection(compress, tempPaths));
       sections.add(computeEntityIndexSection(compress, tempPaths));
+      sections.add(computeValueIndexSection(compress, tempPaths));
       sections.add(computeRowGroupSection(compress, tempPaths));
 
       ArrayList<InputStream> sequenceInputStreams = new ArrayList<>();
@@ -570,6 +595,12 @@ public class ColumnFileWriter implements AutoCloseable {
     return computeSectionCompressible(compress, tempPaths, "entity-temp_",
        ColumnFileSection.ENTITY_INDEX, entityIndexWriter, null, columnShardId.alternateString());
   }
+
+  private Section computeValueIndexSection(Compression compress, List<Path> tempPaths) throws IOException {
+    return computeSectionCompressible(compress, tempPaths, "value-index-temp_",
+       ColumnFileSection.VALUE_INDEX, valueIndexWriter, x -> x == null, columnShardId.alternateString());
+  }
+
 
   private <T extends Component> Section computeSectionCompressible(
      Compression compress, List<Path> tempPaths, String tempPrefix, ColumnFileSection sectionType, T component, Predicate<T> isEmptyPredicate, String shardTempName)
@@ -790,7 +821,7 @@ public class ColumnFileWriter implements AutoCloseable {
     }
 
     // With a list of sorted records, lets start the process of compaction
-    List<EntityRecord> adjustedRecords = rowGroupWriter.compactAndUpdateMetadata(entityRecords, metadataToUpdate);
+    List<EntityRecord> adjustedRecords = rowGroupWriter.compactAndUpdateMetadata(entityRecords, metadataToUpdate, valueIndexWriter);
     entityIndexWriter.compactAndUpdateMetadata(adjustedRecords, metadataToUpdate);
 
     // Now hard-deleted deleted entites from entity index writer.
