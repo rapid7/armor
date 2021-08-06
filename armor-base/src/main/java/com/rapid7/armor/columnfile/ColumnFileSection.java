@@ -10,7 +10,7 @@ public enum ColumnFileSection {
   VALUE_DICTIONARY(3),
   ENTITY_INDEX(4),
   ROWGROUP(5),
-  VALUE_INDEX(6);
+  EXTENDED_INDEX(6);
 
   private final int sectionID;
 

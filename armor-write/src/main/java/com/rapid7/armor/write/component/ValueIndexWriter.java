@@ -17,7 +17,7 @@ import java.util.Set;
 /**
  *
  */
-public class ValueIndexWriter implements Component, IndexUpdater {
+public class ValueIndexWriter implements ExtendedIndexWriter {
   private final ColumnShardId columnShardId;
   private final DataType dataType;
   private Map<Number, Set<Integer>> valToEntities = new HashMap<>();
@@ -28,8 +28,12 @@ public class ValueIndexWriter implements Component, IndexUpdater {
     this.dataType = columnShardId.getColumnId().dataType();
   }
 
-  public ValueIndexWriter(ColumnShardId columnShardId, byte[] json) throws IOException {
-    this(columnShardId);
+  @Override public long extendedType()
+  {
+    return 0x31460001L; // value must be globally unique
+  }
+
+  @Override public void load(InputStream json) throws IOException {
     @SuppressWarnings("unchecked")
     Map<String, List<Integer>> map = OBJECT_MAPPER.readValue(json, Map.class);
     valToEntities = new HashMap<>();

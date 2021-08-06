@@ -8,6 +8,7 @@ import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
+import com.rapid7.armor.io.IOTools;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
@@ -17,9 +18,11 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.write.StreamProduct;
 import com.google.common.io.ByteSource;
 import com.google.common.io.ByteStreams;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.*;
 
@@ -131,33 +134,29 @@ public class ColumnFileReaderWriterTest {
       {
          @Override public int columnFileSection(ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength)
          {
-            if (armorSection == ColumnFileSection.VALUE_INDEX) {
+            if (armorSection == ColumnFileSection.EXTENDED_INDEX) {
                assertEquals(compressedLength, 0);
-               assertEquals(uncompressedLength, 561);
-               byte[] json = new byte[561];
-               int bytesRead = 0;
-               try
-               {
-                  bytesRead = inputStream.read(json);
-               }
-               catch (IOException e)
-               {
-                  assertFalse(true, "error reading inputStream for 561 bytes");
-               }
+               assertEquals(uncompressedLength, 569);
 
-               System.out.println(json);
                try
                {
-                  ValueIndexWriter x = new ValueIndexWriter(columnShardId, json);
+                  long uuid = inputStream.readLong();
+                  assertEquals(0x31460001, uuid);
+                  byte[] raw = new byte[561];
+                  int bytesRead = 0;
+                  bytesRead = inputStream.read(raw);
+
+                  ValueIndexWriter x = new ValueIndexWriter(columnShardId);
+                  x.load(new ByteArrayInputStream(raw));
                   Set<Integer> vals = x.getValToEntities().get(0L);
                   assertEquals(10, vals.size());
+                  fvi.foundValueIndex = true;
+                  return bytesRead;
                }
                catch (IOException e)
                {
-                  assertFalse(true, "error while parsing valueIndexWriter");
+                  throw new RuntimeException("Unexpected IO exception within columnFileSection", e);
                }
-               fvi.foundValueIndex = true;
-               return bytesRead;
             }
             return 0;
          }
