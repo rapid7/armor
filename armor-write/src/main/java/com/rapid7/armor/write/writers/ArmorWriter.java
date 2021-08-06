@@ -298,11 +298,13 @@ public class ArmorWriter implements Closeable {
         // Make sure the entityid column hasn't changed.
         ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
         if (entityIdColumn == null) {
-            throw new XactError(transaction, "The table exists but there is no defined entity id, does this exist or is a race condition?");
+          Entity entity = entities.get(0);
+          tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
+        } else {
+          if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())))
+            throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
+          tableEntityColumnIds.put(tableId, entityIdColumn); 
         }
-        if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())))
-          throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
-        tableEntityColumnIds.put(tableId, entityIdColumn); 
       } else {
         Entity entity = entities.get(0);
         // No shard metadata exists, create the first shard metadata for this.
