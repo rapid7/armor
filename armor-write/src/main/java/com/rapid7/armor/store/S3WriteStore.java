@@ -236,17 +236,18 @@ public class S3WriteStore implements WriteStore {
     String metadataPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR);
     String columnKey = keyName(column, isEntityColumn);
     
-    if (!columnExistsInCache(tenant, columnKey)){
+    if (!columnExistsInCache(tenant, table, columnKey)){
       //save column file to s3
       String columnPath = PathBuilder.buildPath(metadataPath, columnKey);
       putObject(columnPath, "", null);
   
       //save column file to cache
-      Set<String> cachedColumns = columnCache.getIfPresent(tenant);
+      String cachekey = PathBuilder.buildPath(tenant, table);
+      Set<String> cachedColumns = columnCache.getIfPresent(cachekey);
       if (cachedColumns == null) {
         cachedColumns = new HashSet<>();
         cachedColumns.add(columnKey);
-        columnCache.put(tenant, cachedColumns);
+        columnCache.put(cachekey, cachedColumns);
       }
     }
   }
@@ -546,7 +547,11 @@ public class S3WriteStore implements WriteStore {
           break;
         }
       }
-      columnCache.invalidate(tenant);
+      // Keys are in order of tenant/table
+      for (String key : new HashSet<>(columnCache.asMap().keySet())) {
+          if (key.startsWith(tenant))
+              columnCache.invalidate(key);
+      }
     } catch (Exception e) {
       LOGGER.warn("Unable to completely remove tenant {}", tenant, e);
       throw e;
@@ -752,8 +757,8 @@ public class S3WriteStore implements WriteStore {
     throw new IllegalStateException("Should not have dropped into this section");
   }
   
-  private boolean columnExistsInCache(String tenant, String column) {
-    Set<String> columns = columnCache.getIfPresent(tenant);
+  private boolean columnExistsInCache(String tenant, String table, String column) {
+    Set<String> columns = columnCache.getIfPresent(PathBuilder.buildPath(tenant, table));
     if (columns != null) {
       return columns.contains(column);
     }
