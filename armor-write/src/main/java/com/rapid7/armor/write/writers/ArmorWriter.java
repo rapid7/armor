@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionService;
@@ -301,8 +302,11 @@ public class ArmorWriter implements Closeable {
           Entity entity = entities.get(0);
           tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
         } else {
-          if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())))
-            throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
+          if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName()))) {
+            Optional<Entity> first = entities.stream().findFirst(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName()));
+            String otherColumn = first.get().getEntityIdColumn();
+            throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name " + otherColumn);
+          }
           tableEntityColumnIds.put(tableId, entityIdColumn); 
         }
       } else {
