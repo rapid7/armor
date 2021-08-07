@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionService;
@@ -201,7 +202,12 @@ public class ArmorWriter implements Closeable {
     if (tableWriter == null) {
       tableWriter = getTableWriter(tableId);
     }
-    tableEntityColumnIds.put(tableId, store.getEntityIdColumn(tenant, table));
+    ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
+    if (entityIdColumn != null)
+        tableEntityColumnIds.put(tableId, entityIdColumn);
+    else {
+        LOGGER.warn("Unable to determine entity id column for table {}, this may be expected if its a new table", tableId);
+    }
 
     IShardWriter sw = tableWriter.getShard(shardId);
     if (sw == null) {
@@ -301,8 +307,11 @@ public class ArmorWriter implements Closeable {
           Entity entity = entities.get(0);
           tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
         } else {
-          if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())))
-            throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name");
+          if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName()))) {
+            Optional<Entity> first = entities.stream().findFirst(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName()));
+            String otherColumn = first.get().getEntityIdColumn();
+            throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name " + otherColumn);
+          }
           tableEntityColumnIds.put(tableId, entityIdColumn); 
         }
       } else {
