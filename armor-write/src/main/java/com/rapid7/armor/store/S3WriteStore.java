@@ -907,8 +907,8 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public ColumnId getEntityIdColumn(String tenant, String table) {
-    //Check cache first
-    Set<String> cachedColumns = columnCache.getIfPresent(tenant);
+    // Check cache first if it exist to avoid writing.
+    Set<String> cachedColumns = columnCache.getIfPresent(PathBuilder.buildPath(tenant, table));
     if (cachedColumns != null) {
       String cachedEntityColumn = cachedColumns
           .stream()
