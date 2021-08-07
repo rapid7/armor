@@ -308,9 +308,10 @@ public class ArmorWriter implements Closeable {
           tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
         } else {
           if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName()))) {
-            Optional<Entity> first = entities.stream().findFirst(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName()));
+            Optional<Entity> first = entities.stream().filter(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())).findFirst();
             String otherColumn = first.get().getEntityIdColumn();
-            throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + " but detected an entity that had a different name " + otherColumn);
+            throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + 
+                " but detected an entity that had a different name " + otherColumn + " for table " + tableId);
           }
           tableEntityColumnIds.put(tableId, entityIdColumn); 
         }
