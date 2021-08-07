@@ -202,7 +202,12 @@ public class ArmorWriter implements Closeable {
     if (tableWriter == null) {
       tableWriter = getTableWriter(tableId);
     }
-    tableEntityColumnIds.put(tableId, store.getEntityIdColumn(tenant, table));
+    ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
+    if (entityIdColumn != null)
+        tableEntityColumnIds.put(tableId, entityIdColumn);
+    else {
+        LOGGER.warn("Unable to determine entity id column for table {}, this may be expected if its a new table", tableId);
+    }
 
     IShardWriter sw = tableWriter.getShard(shardId);
     if (sw == null) {
