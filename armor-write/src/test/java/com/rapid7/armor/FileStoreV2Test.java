@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
@@ -385,24 +386,38 @@ public class FileStoreV2Test {
 
     try {
       for (int i = 0; i < 2; i++) {
+        List<String> track = Collections.synchronizedList(new ArrayList<>());
         if (i == 1)
           RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
         for (Compression compression : Compression.values()) {
           try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10)) {
             writer.begin();
+            track.add("going to write " + e1.getEntityId());
             writer.write(TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e1));
+            track.add("wrote " + e1.getEntityId());
             new Thread(new Runnable() {
               @Override
               public void run() {
                 Entity e = new Entity(ASSET_ID, e1.getEntityId(), 3, "test");
+                String pre = "going to delete " + e1.getEntityId();
+                track.add(pre);
                 writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, e);
+                String post = "deleted " + e1.getEntityId();
+                track.add(post);
               }
             }).start();
+            track.add("going to write " + e2.getEntityId());
             writer.write(TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e2));
+            track.add("wrote " + e2.getEntityId());
             writer.commit();
+          } catch (Exception e) {
+            System.out.println("Detected an error, going to print out the order of writes/deletes");
+            for (String line : track)
+                System.out.println(line);
+            throw e;
           }
         }
-      }
+      } 
     } finally {
       removeDirectory(testDirectory);
     }
