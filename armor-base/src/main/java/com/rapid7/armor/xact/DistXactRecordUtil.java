@@ -24,6 +24,7 @@ public class DistXactRecordUtil {
         DistXactRecord record = new DistXactRecord(status.get(CURRENT), status.get(CURRENT_TIME), status.get(PREVIOUS), status.get(PREVIOUS_TIME));
         if (status.containsKey(CURRENT_AUTO))
             record.setAutoCurrent(Boolean.parseBoolean(status.get(CURRENT_AUTO).toString()));
+        return record;
       }
       return null;
     } catch (IOException ioe) {
