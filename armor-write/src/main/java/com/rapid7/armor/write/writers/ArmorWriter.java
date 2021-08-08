@@ -179,7 +179,7 @@ public class ArmorWriter implements Closeable {
 
   public void delete(String tenant, String table, Interval interval, Instant timestamp, Entity delete) {
     if (transaction == null)
-      throw new XactError(null, "No transaction was given, forget to call begin?");
+      throw new XactError("No transaction was given, forget to call begin?");
     ShardId shardId = store.findShardId(tenant, table, interval, timestamp, delete.getEntityId());
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
@@ -291,7 +291,7 @@ public class ArmorWriter implements Closeable {
 
   public void write(String tenant, String table, Interval interval, Instant timestamp, List<Entity> entities) {
     if (transaction == null)
-      throw new XactError(null, "No transaction was given, forget to call begin?");
+      throw new XactError("No transaction was given, forget to call begin?");
     if (entities == null || entities.isEmpty())
       return;
 
