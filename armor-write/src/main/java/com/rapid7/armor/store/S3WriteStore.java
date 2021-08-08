@@ -202,6 +202,7 @@ public class S3WriteStore implements WriteStore {
             s3InputStream = s3Object.getObjectContent();
             ColumnFileWriter writer = new ColumnFileWriter(new DataInputStream(s3InputStream), new ColumnShardId(shardId, columnId));
             if (writer.getMetadata().getEntityId()) {
+              // Skip entity column writers, this is written to on commit.
               writer.close();
               continue;
             }

@@ -177,17 +177,17 @@ public class ArmorWriter implements Closeable {
     }
   }
 
-  public void delete(String tenant, String table, Interval interval, Instant timestamp, Object entityId, long version, String instanceId) {
+  public void delete(String tenant, String table, Interval interval, Instant timestamp, Entity delete) {
     if (transaction == null)
       throw new XactError(null, "No transaction was given, forget to call begin?");
-    ShardId shardId = store.findShardId(tenant, table, interval, timestamp, entityId);
+    ShardId shardId = store.findShardId(tenant, table, interval, timestamp, delete.getEntityId());
     TableId tableId = new TableId(tenant, table);
     TableWriter tableWriter = tableWriters.get(tableId);
     if (tableWriter != null) {
       // This occurs if a write happened first then delete.
       IShardWriter sw = tableWriter.getShard(shardId);
       if (sw != null) {
-        sw.delete(entityId, version, instanceId);
+        sw.delete(delete.getEntityId(), delete.getVersion(), delete.getInstanceId());
         return;
       } else {
         // NOTE: Let it fall through, since its a new shard we haven't loaded yet.
@@ -203,10 +203,12 @@ public class ArmorWriter implements Closeable {
       tableWriter = getTableWriter(tableId);
     }
     ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
-    if (entityIdColumn != null)
+    if (entityIdColumn != null) {
+        if (!entityIdColumn.equals(delete.entityColumnId()))
+            throw new RuntimeException("The entity id column " + entityIdColumn + " is not equal to " + delete.entityColumnId());
         tableEntityColumnIds.put(tableId, entityIdColumn);
-    else {
-        LOGGER.warn("Unable to determine entity id column for table {}, this may be expected if its a new table", tableId);
+    } else {
+        tableEntityColumnIds.put(tableId, delete.entityColumnId());        
     }
 
     IShardWriter sw = tableWriter.getShard(shardId);
@@ -215,7 +217,7 @@ public class ArmorWriter implements Closeable {
       sw1.begin(transaction);
       sw = tableWriter.addShard(sw1);
     }
-    sw.delete(entityId, version, instanceId);
+    sw.delete(delete.getEntityId(), delete.getVersion(), delete.getInstanceId());
   }
   
   public synchronized TableWriter getTableWriter(TableId tableId) {

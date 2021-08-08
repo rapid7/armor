@@ -9,11 +9,10 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
@@ -37,7 +36,6 @@ import com.rapid7.armor.read.fast.FastArmorShardColumn;
 import com.rapid7.armor.read.slow.SlowArmorReader;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
-import com.rapid7.armor.schema.DiffTableName;
 import com.rapid7.armor.shard.ColumnShardId;
 import com.rapid7.armor.shard.ModShardStrategy;
 import com.rapid7.armor.shard.ShardId;
@@ -46,7 +44,6 @@ import com.rapid7.armor.store.FileWriteStore;
 import com.rapid7.armor.write.component.RowGroupWriter;
 import com.rapid7.armor.write.writers.ArmorWriter;
 import com.rapid7.armor.write.writers.EntityIdTypeException;
-import com.rapid7.armor.write.writers.TempFileUtil;
 import com.rapid7.armor.xact.XactError;
 
 import tech.tablesaw.api.IntColumn;
@@ -371,7 +368,8 @@ public class FileStoreV2Test {
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.NONE, 1)) {
         writer.begin();
         writer.write(TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e1));
-        writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, 3, System.currentTimeMillis(), null);
+        Entity e = new Entity(ASSET_ID, 3, System.currentTimeMillis(), null);
+        writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, e);
       } finally {
         removeDirectory(testDirectory);       
       }
@@ -388,23 +386,38 @@ public class FileStoreV2Test {
 
     try {
       for (int i = 0; i < 2; i++) {
+        List<String> track = Collections.synchronizedList(new ArrayList<>());
         if (i == 1)
           RowGroupWriter.setupFixedCapacityBufferPoolSize(1);
         for (Compression compression : Compression.values()) {
           try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10)) {
             writer.begin();
+            track.add("going to write " + e1.getEntityId());
             writer.write(TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e1));
+            track.add("wrote " + e1.getEntityId());
             new Thread(new Runnable() {
               @Override
               public void run() {
-                writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, e1.getEntityId(), 3, "test");
+                Entity e = new Entity(ASSET_ID, e1.getEntityId(), 3, "test");
+                String pre = "going to delete " + e1.getEntityId();
+                track.add(pre);
+                writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, e);
+                String post = "deleted " + e1.getEntityId();
+                track.add(post);
               }
             }).start();
+            track.add("going to write " + e2.getEntityId());
             writer.write(TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e2));
+            track.add("wrote " + e2.getEntityId());
             writer.commit();
+          } catch (Exception e) {
+            System.out.println("Detected an error, going to print out the order of writes/deletes");
+            for (String line : track)
+                System.out.println(line);
+            throw e;
           }
         }
-      }
+      } 
     } finally {
       removeDirectory(testDirectory);
     }
@@ -568,7 +581,8 @@ public class FileStoreV2Test {
         try (ArmorWriter writer = new ArmorWriter("aw1", store, compression, 10, null, null)) {
           writer.begin();
           for (int i = 0; i < 1000; i++) {
-            writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, i, 100, null);
+            Entity delete = new Entity(ASSET_ID, i, 100, null);
+            writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, delete);
           }
           writer.commit();
           verifyTableReaderPOV(0, testDirectory, 0);
@@ -864,7 +878,8 @@ public class FileStoreV2Test {
           writer = new ArmorWriter("aw1", store, Compression.ZSTD, numShards, null, null);
           writer.begin();
           for (int i = 0; i < 1000; i++) {
-            writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, i, Integer.MAX_VALUE, null);
+            Entity delete = new Entity(ASSET_ID, i, Integer.MAX_VALUE, null);
+            writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, delete);
           }
           writer.commit();
           writer.close();

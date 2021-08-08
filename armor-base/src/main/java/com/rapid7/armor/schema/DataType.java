@@ -3,7 +3,10 @@ package com.rapid7.armor.schema;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.time.LocalDate;
+import java.time.temporal.Temporal;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -27,6 +30,27 @@ public enum DataType {
     this.code = code;
   }
 
+  public static DataType inferDataType(Object sample) {
+    if (sample instanceof Integer) {
+        return DataType.INTEGER;
+    } else if (sample instanceof Double) {
+        return DataType.DOUBLE;
+    } else if (sample instanceof String) {
+        return DataType.STRING;
+    } else if (sample instanceof Float) {
+        return DataType.FLOAT;
+    } else if (sample instanceof Long) {
+        return DataType.LONG;
+    } else if (sample instanceof Boolean) {
+        return DataType.BOOLEAN;
+    } else if (sample instanceof Date) {
+        return DataType.DATETIME;
+    } else if (sample instanceof Temporal) {
+        return DataType.DATETIME;
+    } else {
+        throw new IllegalArgumentException("The type " + sample.getClass().getCanonicalName() + " can't be infered into a supported datatype");
+    }
+  }
   public static DataType getDataType(String code) {
     for (DataType dt : DataType.values()) {
       if (dt.getCode().equals(code))
