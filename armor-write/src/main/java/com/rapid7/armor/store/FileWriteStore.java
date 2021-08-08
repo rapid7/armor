@@ -284,7 +284,7 @@ public class FileWriteStore implements WriteStore {
   @Override
   public void commit(ArmorXact armorTransaction, ShardId shardId) {
     DistXactRecord status = getCurrentValues(shardId);
-    status.validateXact(armorTransaction);
+    DistXactRecordUtil.validateXact(status, armorTransaction);
     saveCurrentValues(shardId, new DistXactRecord(armorTransaction, status));
     try {
       Runnable runnable = () -> {
@@ -403,13 +403,6 @@ public class FileWriteStore implements WriteStore {
     }
   }
 
-  private String resolveCurrentPath(String tenant, String table) {
-    DistXactRecord status = getCurrentValues(tenant, table);
-    if (status == null || status.getCurrent() == null)
-      return null;
-    return basePath.resolve(Paths.get(tenant, table, status.getCurrent())).toString();
-  }
-
   private String resolveCurrentPath(ShardId shardId) {
     DistXactRecord status = getCurrentValues(shardId);
     if (status == null || status.getCurrent() == null)
@@ -423,7 +416,7 @@ public class FileWriteStore implements WriteStore {
       return null;
     else {
       try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactRecordUtil.readXactStatus(is);
+        return DistXactRecordUtil.readXactRecord(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -436,7 +429,7 @@ public class FileWriteStore implements WriteStore {
       return null;
     else {
       try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactRecordUtil.readXactStatus(is);
+        return DistXactRecordUtil.readXactRecord(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }

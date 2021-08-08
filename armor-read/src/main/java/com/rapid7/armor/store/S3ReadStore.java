@@ -299,7 +299,7 @@ public class S3ReadStore implements ReadStore {
       return null;
     else {
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return DistXactRecordUtil.readXactStatus(inputStream);
+        return DistXactRecordUtil.readXactRecord(inputStream);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -426,26 +426,6 @@ public class S3ReadStore implements ReadStore {
       lor.setContinuationToken(result.getNextContinuationToken());
     } while (result.isTruncated());
     return allPrefixes.stream().map(i -> Interval.toInterval(i)).filter(i -> i != null).collect(Collectors.toList());
-  }
-  
-  private String resolveCurrentPath(String tenant, String table) {
-    DistXactRecord status = getCurrentValues(tenant, table);
-    if (status == null || status.getCurrent() == null)
-      return null;
-    return PathBuilder.buildPath(tenant, table, status.getCurrent());
-  }
-  
-  private DistXactRecord getCurrentValues(String tenant, String table) {
-    String key = DistXactRecordUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
-    if (!doesObjectExist(this.bucket, key))
-      return null;
-    else {
-      try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return DistXactRecordUtil.readXactStatus(inputStream);
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
-      }
-    }
   }
   
   /**

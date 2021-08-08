@@ -344,7 +344,7 @@ public class S3WriteStore implements WriteStore {
       }
       // TODO: Double check.
       String transaction = Paths.get(currentShardKey).getFileName().toString();
-      ArmorXact axact = new ArmorXact(transaction, "none", System.currentTimeMillis());
+      ArmorXact axact = new ArmorXact(transaction, "none", System.currentTimeMillis(), true);
       saveCurrentValues(shardIdDst, new DistXactRecord(axact, null));
       
     } catch (Exception exception) {
@@ -370,7 +370,7 @@ public class S3WriteStore implements WriteStore {
   @Override
   public void commit(ArmorXact armorTransaction, ShardId shardId) {
     DistXactRecord status = getCurrentValues(shardId);
-    status.validateXact(armorTransaction);
+    DistXactRecordUtil.validateXact(status, armorTransaction);
   
     saveCurrentValues(shardId, new DistXactRecord(armorTransaction, status));
     trackTenant(shardId.getTenant());
@@ -625,13 +625,6 @@ public class S3WriteStore implements WriteStore {
     } while (result.isTruncated());
     return orgs.stream().filter(t -> !t.startsWith(StoreConstants.TENANT_EXCLUDE_FILTER_PREFIX)).collect(Collectors.toList());
   }
-  
-  private String resolveCurrentPath(String tenant, String table) {
-    DistXactRecord status = getCurrentValues(tenant, table);
-    if (status == null || status.getCurrent() == null)
-      return null;
-    return PathBuilder.buildPath(tenant, table, status.getCurrent());
-  }
 
   private String resolveCurrentPath(ShardId shardId) {
     DistXactRecord status = getCurrentValues(shardId);
@@ -660,50 +653,23 @@ public class S3WriteStore implements WriteStore {
     return null;
   }
 
-  private DistXactRecord getCurrentValues(String tenant, String table) {
-    String key = DistXactRecordUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
-    if (!doesObjectExist(this.bucket, key))
-      return null;
-    else {
-      try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return DistXactRecordUtil.readXactStatus(inputStream);
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
-      }
-    }
-  }
-
   private DistXactRecord getCurrentValues(ShardId shardId) {
     String key = DistXactRecordUtil.buildCurrentMarker(shardId.shardIdPath());
     if (!doesObjectExist(this.bucket, key))
       return null;
     else {
       try (S3Object s3Object = s3Client.getObject(bucket, key); S3ObjectInputStream inputStream = s3Object.getObjectContent()) {
-        return DistXactRecordUtil.readXactStatus(inputStream);
+        return DistXactRecordUtil.readXactRecord(inputStream);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
     }
   }
   
-  private void saveCurrentValues(String tenant, String table, DistXactRecord status) {
-    String key = DistXactRecordUtil.buildCurrentMarker(PathBuilder.buildPath(tenant, table));
-    try {
-      String payload = DistXactRecordUtil.prepareToCommit(status);
-      ObjectMetadata objectMetadata = new ObjectMetadata();
-      objectMetadata.setContentType("text/plain");
-      objectMetadata.setContentLength(payload.length());
-      PutObjectRequest putObjectRequest = new PutObjectRequest(bucket, key, new StringInputStream(payload), objectMetadata);
-      s3Client.putObject(putObjectRequest);
-    } catch (IOException ioe) {
-      throw new RuntimeException(ioe);
-    }
-  }
-
-  private void saveCurrentValues(ShardId shardId, DistXactRecord status) {
+  private void saveCurrentValues(ShardId shardId, DistXactRecord record) {
     String key = DistXactRecordUtil.buildCurrentMarker(shardId.shardIdPath());
     try {
-      String payload = DistXactRecordUtil.prepareToCommit(status);
+      String payload = DistXactRecordUtil.prepareToCommit(record);
       ObjectMetadata objectMetadata = new ObjectMetadata();
       objectMetadata.setContentType("text/plain");
       objectMetadata.setContentLength(payload.length());
@@ -952,6 +918,7 @@ public class S3WriteStore implements WriteStore {
         String baselineTransaction = UUID.randomUUID().toString();
         LOGGER.info("The shard at {} doesn't exist for transaction {}, establishing new baseline transaction of {}", shardId, transaction, baselineTransaction);
         xact = new DistXactRecord(baselineTransaction, System.currentTimeMillis(), null, null);
+        xact.setAutoCurrent(true);
         saveCurrentValues(shardId, xact);
     }
     return DistXactRecord.generateNewTransaction(transaction, xact);

@@ -214,19 +214,6 @@ public class FileReadStore implements ReadStore {
        return null;
     return basePath.resolve(Paths.get(shardId.shardIdPath(),status.getCurrent())).toString();
   }
-
-  private DistXactRecord getCurrentValues(String tenant, String table) {
-    Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(tenant, table).toString()));
-    if (!Files.exists(searchPath))
-      return null;
-    else {
-      try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactRecordUtil.readXactStatus(is);
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
-      }
-    }
-  }
   
   private DistXactRecord getCurrentValues(ShardId shardId) {
     Path searchPath = basePath.resolve(DistXactRecordUtil.buildCurrentMarker(Paths.get(shardId.shardIdPath()).toString()));
@@ -234,7 +221,7 @@ public class FileReadStore implements ReadStore {
       return null;
     else {
       try (InputStream is = Files.newInputStream(searchPath)) {
-        return DistXactRecordUtil.readXactStatus(is);
+        return DistXactRecordUtil.readXactRecord(is);
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -373,12 +360,5 @@ public class FileReadStore implements ReadStore {
       throw new RuntimeException(ioe);
     }
     return intervals;
-  }
-  
-  private String resolveCurrentPath(String tenant, String table) {
-    DistXactRecord status = getCurrentValues(tenant, table);
-    if (status == null || status.getCurrent() == null)
-      return null;
-    return basePath.resolve(Paths.get(tenant, table, status.getCurrent())).toString();
   }
 }
