@@ -367,7 +367,7 @@ public class FileStoreV2Test {
       try (ArmorWriter writer = new ArmorWriter("aw1", store, Compression.NONE, 1)) {
         writer.begin();
         writer.write(TENANT, TABLE, INTERVAL, TIMESTAMP, Arrays.asList(e1));
-        Entity e = new Entity(ASSET_ID, e1.getEntityId(), System.currentTimeMillis(), null);
+        Entity e = new Entity(ASSET_ID, 3, System.currentTimeMillis(), null);
         writer.delete(TENANT, TABLE, INTERVAL, TIMESTAMP, e);
       } finally {
         removeDirectory(testDirectory);       
