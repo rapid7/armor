@@ -8,7 +8,7 @@
     <parent>
         <groupId>com.rapid7</groupId>
         <artifactId>armor-parent</artifactId>
-        <version>0.0.49</version>
+        <version>0.0.50-SNAPSHOT</version>
     </parent>
 
     <dependencies>
