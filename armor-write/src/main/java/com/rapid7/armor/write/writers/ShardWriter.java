@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -130,6 +131,7 @@ public class ShardWriter implements IShardWriter {
    * @throws IOException If an io error occurs.
    */
   public ShardMetadata commit(ColumnId columnEntityId) throws IOException {
+    Objects.requireNonNull(columnEntityId, "The column entity id cannot be null");
     boolean committed = false;
     try {
       if (armorTransaction == null)

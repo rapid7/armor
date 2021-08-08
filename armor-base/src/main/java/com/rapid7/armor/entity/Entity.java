@@ -1,6 +1,8 @@
 package com.rapid7.armor.entity;
 
 import com.rapid7.armor.schema.ColumnId;
+import com.rapid7.armor.schema.DataType;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -68,6 +70,10 @@ public class Entity {
     checkEntityIdColumn();
   }
   
+  public ColumnId entityColumnId() {
+      return new ColumnId(entityIdColumn, DataType.inferDataType(entityId));
+  }
+
   private Object verifyIdType(Object entityId) {
     if (entityId instanceof String)
       return entityId;

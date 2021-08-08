@@ -186,7 +186,8 @@ public class FileWriteStoreTest {
           checkEntityIndexRecord(vulnEntityRecords1.get(2), 24, 24, 15, (byte) 0);
 
           // Delete the entity 1
-          armorWriter.delete(myorg, table, SINGLE, Instant.now(), 1, 1000l, "test");
+          Entity delete1 = new Entity("assetId", 1, 1000l, "test");
+          armorWriter.delete(myorg, table, SINGLE, Instant.now(), delete1);
 
           armorWriter.commit();
           armorWriter.begin();
