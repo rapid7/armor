@@ -937,7 +937,7 @@ public class S3WriteStore implements WriteStore {
      try {
         // Detect if a capture exists if it does then trigger a thread to slowly remove the capture information.
      } catch (Throwable t) {
-        LOGGER.warn("", t);
+        LOGGER.warn("Unable to trigger clean capture", t);
      }
   }
 }

@@ -152,8 +152,7 @@ public interface WriteStore {
   /**
    * Cleans up any captures if a capture exists.
    *
-   * @param shardId
-   * @return
+   * @param shardId The shard to check what to cleanup.
    */
   void cleanCapture(ShardId shardId);
 
