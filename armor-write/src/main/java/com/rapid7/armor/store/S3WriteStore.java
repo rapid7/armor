@@ -501,7 +501,6 @@ public class S3WriteStore implements WriteStore {
       }
     } catch (AmazonS3Exception s3error) {
       LOGGER.error("Detected an s3 issue saving errors", s3error);
-      throw s3error;
     } catch (Exception e) {
       LOGGER.warn("Unable to previous shard version under {}", toDelete, e);
     }
@@ -918,7 +917,7 @@ public class S3WriteStore implements WriteStore {
         }
       }
     } catch (AmazonS3Exception s3error) {
-      LOGGER.error("Detected an s3 issue starting the transaction", s3error);
+      LOGGER.error("Detected an s3 issue deleteIntervalStart", s3error);
       throw s3error;
     } catch (Exception e) {
       LOGGER.warn("Unable completely remove tenant {}", tenant, e);
@@ -936,8 +935,8 @@ public class S3WriteStore implements WriteStore {
       ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
       return !objectListing.getObjectSummaries().isEmpty();
     } catch (AmazonS3Exception s3error) {
-        LOGGER.error("Detected an s3 issue starting the transaction", s3error);
-        throw s3error;
+      LOGGER.error("Detected an s3 issue intervalExists", s3error);
+      throw s3error;
     }
   }
 
@@ -951,8 +950,8 @@ public class S3WriteStore implements WriteStore {
       ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
       return !objectListing.getObjectSummaries().isEmpty();
     } catch (AmazonS3Exception s3error) {
-        LOGGER.error("Detected an s3 issue starting the transaction", s3error);
-        throw s3error;
+      LOGGER.error("Detected an s3 issue tableExists", s3error);
+      throw s3error;
     }
   }
 
@@ -966,8 +965,8 @@ public class S3WriteStore implements WriteStore {
       ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
       return !objectListing.getObjectSummaries().isEmpty();
     } catch (AmazonS3Exception s3error) {
-        LOGGER.error("Detected an s3 issue starting the transaction", s3error);
-        throw s3error;
+      LOGGER.error("Detected an s3 issue intervalStartExists", s3error);
+      throw s3error;
     }
   }
 
@@ -977,8 +976,8 @@ public class S3WriteStore implements WriteStore {
       String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(columnShardId.getShardId()), columnShardId.getColumnId().fullName());
       return s3Client.doesObjectExist(bucket, shardIdPath);
     } catch (AmazonS3Exception s3error) {
-        LOGGER.error("Detected an s3 issue starting the transaction", s3error);
-        throw s3error;
+      LOGGER.error("Detected an s3 issue columnShardIdExists", s3error);
+      throw s3error;
     }
   }
 
@@ -1011,8 +1010,8 @@ public class S3WriteStore implements WriteStore {
       }
       return null;
     } catch (AmazonS3Exception s3error) {
-        LOGGER.error("Detected an s3 issue starting the transaction", s3error);
-        throw s3error;
+      LOGGER.error("Detected an s3 issue getEntityIdColumn", s3error);
+      throw s3error;
     }
   }
 
