@@ -55,6 +55,7 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
@@ -79,6 +80,8 @@ public class S3WriteStore implements WriteStore {
       .initialCapacity(200_000)
       .expireAfterAccess(7, TimeUnit.DAYS).build();
   private Executor tpool;
+  private Executor captureWriteCleanup = Executors.newFixedThreadPool(1);
+  private Set<Object> captureWriteCleanJobs = new HashSet<>();
 
   public void setThreadPool(int threads) {
     this.tpool = Executors.newFixedThreadPool(threads);
@@ -510,6 +513,11 @@ public class S3WriteStore implements WriteStore {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+    
+    // Check to see if there are any jobs that are seven days or older. If so then trigger a job that will delete
+    // such that it doesn't aggressively accumulate too much dead data.
+    
+    
   }
 
   @Override
@@ -922,5 +930,14 @@ public class S3WriteStore implements WriteStore {
         saveCurrentValues(shardId, xact);
     }
     return DistXactRecord.generateNewTransaction(transaction, xact);
+  }
+
+  @Override
+  public void cleanCapture(ShardId shardId) {
+     try {
+        // Detect if a capture exists if it does then trigger a thread to slowly remove the capture information.
+     } catch (Throwable t) {
+        LOGGER.warn("", t);
+     }
   }
 }

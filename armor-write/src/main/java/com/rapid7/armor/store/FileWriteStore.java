@@ -599,4 +599,8 @@ public class FileWriteStore implements WriteStore {
       }
       return DistXactRecord.generateNewTransaction(transaction, xact);
   }
+
+  @Override
+  public void cleanCapture(ShardId shardId) {      
+  }
 }

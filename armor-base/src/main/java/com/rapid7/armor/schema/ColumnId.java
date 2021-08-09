@@ -19,6 +19,9 @@ public class ColumnId {
 
   public ColumnId(String fullName) {
     int lastUnderscore = fullName.lastIndexOf(SEPERATOR);
+    if (lastUnderscore == -1) {
+        throw new IllegalArgumentException("Unable to process column name of " + fullName);
+    }
     this.name = fullName.substring(0, lastUnderscore);
     this.type = DataType.getDataType(fullName.substring(lastUnderscore + 1)).getCode();
   }

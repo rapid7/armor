@@ -149,5 +149,13 @@ public interface WriteStore {
    */
   void captureWrites(ArmorXact transaction, ShardId shardId, List<Entity> entities, List<WriteRequest> writeRequests, Object deleteRequest);
 
+  /**
+   * Cleans up any captures if a capture exists.
+   *
+   * @param shardId
+   * @return
+   */
+  void cleanCapture(ShardId shardId);
+
   String saveError(ArmorXact transaction, ColumnShardId columnShardId, int size, InputStream inputStream, String error);
 }
