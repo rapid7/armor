@@ -168,6 +168,9 @@ public class ShardWriter implements IShardWriter {
     ensureInTransaction();
     if (captureWrite != null && captureWrite.test(shardId, ShardWriter.class.getSimpleName()))
       store.captureWrites(armorTransaction, shardId, null, null, entity);
+    else {
+      // Check if capture exists if so, trigger cleanup.
+    }
     for (ColumnFileWriter writer : columnFileWriters.values())
       writer.delete(entity, version, instanceId);
   }
