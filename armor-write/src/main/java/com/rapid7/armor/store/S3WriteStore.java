@@ -107,6 +107,9 @@ public class S3WriteStore implements WriteStore {
     omd.setContentLength(byteSize);
     try {
       putObject(key, inputStream, omd, columnShardId.getInterval());
+    } catch (AmazonS3Exception s3error) {
+        LOGGER.error("Detected an s3 issue saving a column", s3error);
+        throw s3error;
     } catch (ResetException e) {
       LOGGER.error("Detected a reset exception, the number of bytes is {}: {}", byteSize, e.getExtraInfo());
       throw e;
@@ -128,6 +131,9 @@ public class S3WriteStore implements WriteStore {
           }
         }
       }
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue loading ColumnFileWriter", s3error);
+      throw new RuntimeException(s3error);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
@@ -140,16 +146,21 @@ public class S3WriteStore implements WriteStore {
     lor.withPrefix(resolveCurrentPath(shardId) + Constants.STORE_DELIMETER);
     Set<ColumnId> columnIds = new HashSet<>();
     ListObjectsV2Result ol;
-    do {
-      ol = s3Client.listObjectsV2(lor);
-      List<S3ObjectSummary> summaries = ol.getObjectSummaries();
-      columnIds.addAll(summaries.stream()
-          .map(s -> Paths.get(s.getKey()).getFileName().toString())
-          .filter(n -> !n.contains(Constants.SHARD_METADATA))
-          .map(ColumnId::new).collect(toList()));
-      lor.setContinuationToken(ol.getNextContinuationToken());
-    } while (ol.isTruncated());
-    return new ArrayList<>(columnIds);
+    try {
+      do {
+        ol = s3Client.listObjectsV2(lor);
+        List<S3ObjectSummary> summaries = ol.getObjectSummaries();
+        columnIds.addAll(summaries.stream()
+            .map(s -> Paths.get(s.getKey()).getFileName().toString())
+            .filter(n -> !n.contains(Constants.SHARD_METADATA))
+            .map(ColumnId::new).collect(toList()));
+        lor.setContinuationToken(ol.getNextContinuationToken());
+      } while (ol.isTruncated());
+      return new ArrayList<>(columnIds);
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue using getColumnIds", s3error);
+      throw s3error;
+    }
   }
 
   @Override
@@ -159,14 +170,19 @@ public class S3WriteStore implements WriteStore {
     lor.withPrefix(PathBuilder.buildPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp)) + Constants.STORE_DELIMETER);
     ListObjectsV2Result ol;
     Set<ShardId> shardIds = new HashSet<>();
-    do {
-      ol = s3Client.listObjectsV2(lor);
-      List<String> commonPrefixes = ol.getCommonPrefixes();
-      List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
-      shardIds.addAll(rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toSet()));
-      lor.setContinuationToken(ol.getNextContinuationToken());
-    } while (ol.isTruncated());
-    return new ArrayList<>(shardIds);
+    try {
+      do {
+        ol = s3Client.listObjectsV2(lor);
+        List<String> commonPrefixes = ol.getCommonPrefixes();
+        List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
+        shardIds.addAll(rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toSet()));
+        lor.setContinuationToken(ol.getNextContinuationToken());
+      } while (ol.isTruncated());
+      return new ArrayList<>(shardIds);
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue using findShardIds", s3error);
+      throw s3error;
+    }
   }
 
   @Override
@@ -176,15 +192,20 @@ public class S3WriteStore implements WriteStore {
     lor.withPrefix(PathBuilder.buildPath(tenant, table, interval.getInterval(), interval.getIntervalStart(timestamp)) + Constants.STORE_DELIMETER);
     ListObjectsV2Result ol;
     Set<ShardId> shardIds = new HashSet<>();
-    do {
-      ol = s3Client.listObjectsV2(lor);
-      List<String> commonPrefixes = ol.getCommonPrefixes();
-      // Remove trailing /
-      List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
-      shardIds.addAll(rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toList()));
-      lor.setContinuationToken(ol.getNextContinuationToken());
-    } while (ol.isTruncated());
-    return new ArrayList<>(shardIds);
+    try {
+      do {
+        ol = s3Client.listObjectsV2(lor);
+        List<String> commonPrefixes = ol.getCommonPrefixes();
+        // Remove trailing /
+        List<String> rawShardNames = commonPrefixes.stream().map(cp -> cp.substring(0, cp.length() - 1)).collect(toList());
+        shardIds.addAll(rawShardNames.stream().map(s -> toShardId(tenant, table, interval, timestamp, s)).collect(toList()));
+        lor.setContinuationToken(ol.getNextContinuationToken());
+      } while (ol.isTruncated());
+      return new ArrayList<>(shardIds);
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue using findShardIds", s3error);
+      throw s3error;
+    }
   }
 
   @Override
@@ -218,6 +239,9 @@ public class S3WriteStore implements WriteStore {
               com.amazonaws.util.IOUtils.drainInputStream(s3InputStream);
           }
         }
+      } catch (AmazonS3Exception s3error) {
+        LOGGER.error("Detected an s3 issue using loadColumnWriters", s3error);
+        throw s3error;
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
@@ -243,7 +267,12 @@ public class S3WriteStore implements WriteStore {
     if (!columnExistsInCache(tenant, table, columnKey)){
       //save column file to s3
       String columnPath = PathBuilder.buildPath(metadataPath, columnKey);
-      putObject(columnPath, "", null);
+      try {
+          putObject(columnPath, "", null);
+      } catch (AmazonS3Exception s3error) {
+          LOGGER.error("Detected an s3 issue using saveColumnMetadata at {}", columnPath, s3error);
+          throw s3error;
+      }
   
       //save column file to cache
       String cachekey = PathBuilder.buildPath(tenant, table);
@@ -259,18 +288,23 @@ public class S3WriteStore implements WriteStore {
   @Override
   public ShardMetadata getShardMetadata(ShardId shardId) {
     String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(shardId), Constants.SHARD_METADATA + ".armor");
-    if (s3Client.doesObjectExist(bucket, shardIdPath)) {
-      try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
-        try {
-          return OBJECT_MAPPER.readValue(s3ObjectInputStream, ShardMetadata.class);
-        } finally {
-          com.amazonaws.util.IOUtils.drainInputStream(s3ObjectInputStream);
+    try {
+      if (s3Client.doesObjectExist(bucket, shardIdPath)) {
+        try (S3Object s3Object = s3Client.getObject(bucket, shardIdPath); S3ObjectInputStream s3ObjectInputStream = s3Object.getObjectContent()) {
+          try {
+            return OBJECT_MAPPER.readValue(s3ObjectInputStream, ShardMetadata.class);
+          } finally {
+            com.amazonaws.util.IOUtils.drainInputStream(s3ObjectInputStream);
+          }
+        } catch (IOException ioe) {
+          throw new RuntimeException(ioe);
         }
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
-      }
-    } else
-      return null;
+      } else
+        return null;
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue using getShardMetadata", s3error);
+      throw s3error;
+    }
   }
 
   @Override
@@ -283,9 +317,12 @@ public class S3WriteStore implements WriteStore {
         putObject(shardIdPath, payload, shardId.getInterval());
         break;
       } catch (Exception ioe) {
-        if (i + 1 == 10)
+        if (i + 1 == 10) {
+          if (ioe instanceof AmazonS3Exception) {
+            LOGGER.error("Detected an s3 issue using saveShardMetadata", ioe);
+          }
           throw new RuntimeException(ioe);
-        else {
+        } else {
           try {
             Thread.sleep((i + 1) * 1000);
           } catch (InterruptedException ie) {
@@ -372,40 +409,45 @@ public class S3WriteStore implements WriteStore {
   
   @Override
   public void commit(ArmorXact armorTransaction, ShardId shardId) {
-    DistXactRecord status = getCurrentValues(shardId);
-    DistXactRecordUtil.validateXact(status, armorTransaction);
-  
-    saveCurrentValues(shardId, new DistXactRecord(armorTransaction, status));
-    trackTenant(shardId.getTenant());
-    boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
+    try {
+      DistXactRecord status = getCurrentValues(shardId);
+      DistXactRecordUtil.validateXact(status, armorTransaction);
     
-    if (!isArchiving) {
-      tpool.execute(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            if (status == null || status.getPrevious() == null)
-              return;
-            String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), status.getPrevious());
-            ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
-                .withBucketName(bucket)
-                .withPrefix(toDelete);
-            ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
-            while (true) {
-              for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
-                s3Client.deleteObject(bucket, objectSummary.getKey());
+      saveCurrentValues(shardId, new DistXactRecord(armorTransaction, status));
+      trackTenant(shardId.getTenant());
+      boolean isArchiving = status != null && doesObjectExist(bucket, PathBuilder.buildPath(shardId.shardIdPath(), status.getCurrent(), ARCHIVING_MARKER));
+      
+      if (!isArchiving) {
+        tpool.execute(new Runnable() {
+          @Override
+          public void run() {
+            try {
+              if (status == null || status.getPrevious() == null)
+                return;
+              String toDelete = PathBuilder.buildPath(shardId.shardIdPath(), status.getPrevious());
+              ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+                  .withBucketName(bucket)
+                  .withPrefix(toDelete);
+              ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+              while (true) {
+                for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
+                  s3Client.deleteObject(bucket, objectSummary.getKey());
+                }
+                if (objectListing.isTruncated()) {
+                  objectListing = s3Client.listNextBatchOfObjects(objectListing);
+                } else {
+                  break;
+                }
               }
-              if (objectListing.isTruncated()) {
-                objectListing = s3Client.listNextBatchOfObjects(objectListing);
-              } else {
-                break;
-              }
+            } catch (Throwable t) {
+              LOGGER.warn("Unable to delete previous shard version under {}", status.getPrevious(), t);
             }
-          } catch (Throwable t) {
-            LOGGER.warn("Unable to delete previous shard version under {}", status.getPrevious(), t);
           }
-        }
-      });
+        });
+      }
+    } catch (AmazonS3Exception s3Error) {
+      LOGGER.error("There was an s3 issue for commit transaction", s3Error);
+      throw s3Error;
     }
   }
 
@@ -427,8 +469,12 @@ public class S3WriteStore implements WriteStore {
           break;
         }
       }
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue rolling back a transaction", s3error);
+      throw s3error;
     } catch (Exception e) {
-      LOGGER.error("Unable to cleanup changes, check {} for proper cleanup", toDelete);
+      LOGGER.error("Unable to cleanup changes, check {} for proper cleanup", toDelete, e);
+      throw e;
     }
   }
 
@@ -451,7 +497,10 @@ public class S3WriteStore implements WriteStore {
         } else {
           break;
         }
+        
       }
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue saving errors", s3error);
     } catch (Exception e) {
       LOGGER.warn("Unable to previous shard version under {}", toDelete, e);
     }
@@ -466,6 +515,9 @@ public class S3WriteStore implements WriteStore {
           PathBuilder.buildPath(columnShardId.getShardId().shardIdPath(), Constants.LAST_ERROR, transaction.getTarget(), columnShardId.getColumnId().fullName() + "_msg");
         putObject(description, error, columnShardId.getInterval());
       }
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue saving errors", s3error);
+      throw s3error;
     } catch (ResetException e) {
       LOGGER.error("Detected a reset exception, the number of bytes is {}: {}", size, e.getExtraInfo());
       throw e;
@@ -510,6 +562,9 @@ public class S3WriteStore implements WriteStore {
       String payloadName = PathBuilder.buildPath(key, "armorTransaction");
       String payload = OBJECT_MAPPER.writeValueAsString(transaction);
       putObject(payloadName, payload, shardId.getInterval());
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue capturing write requests", s3error);
+      throw s3error;
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -561,6 +616,9 @@ public class S3WriteStore implements WriteStore {
           if (key.startsWith(tenant))
               columnCache.invalidate(key);
       }
+    } catch (AmazonS3Exception s3error) {
+        LOGGER.error("Detected an s3 issue deleting the tenant", s3error);
+        throw s3error;
     } catch (Exception e) {
       LOGGER.warn("Unable to completely remove tenant {}", tenant, e);
       throw e;
@@ -584,6 +642,9 @@ public class S3WriteStore implements WriteStore {
           }
         }
       }
+    } catch (AmazonS3Exception s3error) {
+        LOGGER.error("Detected an s3 issue getting column metadata", s3error);
+        throw s3error;
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
@@ -591,13 +652,19 @@ public class S3WriteStore implements WriteStore {
   
   @Override
   public List<String> getTenants(boolean useCache) {
-    if (useCache) {
-      List<String> tenantsInCache = listTenantsFromCache();
-      return tenantsInCache.isEmpty() ? listTenantsFromBucket() : tenantsInCache;
-    } else {
-      return listTenantsFromBucket();
+    try {
+      if (useCache) {
+        List<String> tenantsInCache = listTenantsFromCache();
+        return tenantsInCache.isEmpty() ? listTenantsFromBucket() : tenantsInCache;
+      } else {
+        return listTenantsFromBucket();
+      }
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue listing tenants", s3error);
+      throw s3error;
     }
   }
+
   private List<String> listTenantsFromBucket() {
     ListObjectsV2Request lor = new ListObjectsV2Request()
         .withBucketName(bucket)
@@ -794,6 +861,9 @@ public class S3WriteStore implements WriteStore {
           break;
         }
       }
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue deleting the table", s3error);
+      throw s3error;
     } catch (Exception e) {
       LOGGER.warn("Unable completely remove tenant {}", tenant, e);
       throw e;
@@ -819,6 +889,9 @@ public class S3WriteStore implements WriteStore {
           break;
         }
       }
+    } catch (AmazonS3Exception s3error) {
+        LOGGER.error("Detected an s3 issue deleting the interval", s3error);
+        throw s3error;
     } catch (Exception e) {
       LOGGER.warn("Unable completely remove tenant {}", tenant, e);
       throw e;
@@ -843,6 +916,9 @@ public class S3WriteStore implements WriteStore {
           break;
         }
       }
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue deleteIntervalStart", s3error);
+      throw s3error;
     } catch (Exception e) {
       LOGGER.warn("Unable completely remove tenant {}", tenant, e);
       throw e;
@@ -851,38 +927,58 @@ public class S3WriteStore implements WriteStore {
 
   @Override
   public boolean intervalExists(String tenant, String table, Interval interval) {
-    String intervalPath = PathBuilder.buildPath(tenant, table, interval.getInterval()) + Constants.STORE_DELIMETER;
-    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
-        .withBucketName(bucket)
-        .withPrefix(intervalPath);
-    ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
-    return !objectListing.getObjectSummaries().isEmpty();
+    try {
+      String intervalPath = PathBuilder.buildPath(tenant, table, interval.getInterval()) + Constants.STORE_DELIMETER;
+      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+          .withBucketName(bucket)
+          .withPrefix(intervalPath);
+      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+      return !objectListing.getObjectSummaries().isEmpty();
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue intervalExists", s3error);
+      throw s3error;
+    }
   }
 
   @Override
   public boolean tableExists(String tenant, String table) {
-    String tablePath = PathBuilder.buildPath(tenant, table) + Constants.STORE_DELIMETER;
-    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
-        .withBucketName(bucket)
-        .withPrefix(tablePath);
-    ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
-    return !objectListing.getObjectSummaries().isEmpty();
+    try {
+      String tablePath = PathBuilder.buildPath(tenant, table) + Constants.STORE_DELIMETER;
+      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+          .withBucketName(bucket)
+          .withPrefix(tablePath);
+      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+      return !objectListing.getObjectSummaries().isEmpty();
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue tableExists", s3error);
+      throw s3error;
+    }
   }
 
   @Override
   public boolean intervalStartExists(String tenant, String table, Interval interval, String intervalStart) {
-    String intervalPath = PathBuilder.buildPath(tenant, table, interval.getInterval(), intervalStart) + Constants.STORE_DELIMETER;
-    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
-        .withBucketName(bucket)
-        .withPrefix(intervalPath);
-    ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
-    return !objectListing.getObjectSummaries().isEmpty();
+    try {
+      String intervalPath = PathBuilder.buildPath(tenant, table, interval.getInterval(), intervalStart) + Constants.STORE_DELIMETER;
+      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+          .withBucketName(bucket)
+          .withPrefix(intervalPath);
+      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+      return !objectListing.getObjectSummaries().isEmpty();
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue intervalStartExists", s3error);
+      throw s3error;
+    }
   }
 
   @Override
   public boolean columnShardIdExists(ColumnShardId columnShardId) {
-    String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(columnShardId.getShardId()), columnShardId.getColumnId().fullName());
-    return s3Client.doesObjectExist(bucket, shardIdPath);
+    try {
+      String shardIdPath = PathBuilder.buildPath(resolveCurrentPath(columnShardId.getShardId()), columnShardId.getColumnId().fullName());
+      return s3Client.doesObjectExist(bucket, shardIdPath);
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue columnShardIdExists", s3error);
+      throw s3error;
+    }
   }
 
   @Override
@@ -901,35 +997,45 @@ public class S3WriteStore implements WriteStore {
     }
     
     // Get from s3 if not in cache
-    String entityColumnPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR, ColumnId.ENTITY_COLUMN_IDENTIFIER);
-    ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
-        .withBucketName(bucket)
-        .withPrefix(entityColumnPath);
-    
-    ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
-    if (!objectListing.getObjectSummaries().isEmpty()) {
-      String columnFullName = Paths.get(objectListing.getObjectSummaries().get(0).getKey()).getFileName().toString().substring(1);
-      return new ColumnId(columnFullName);
+    try {
+      String entityColumnPath = PathBuilder.buildPath(tenant, table, COLUMN_METADATA_DIR, ColumnId.ENTITY_COLUMN_IDENTIFIER);
+      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+          .withBucketName(bucket)
+          .withPrefix(entityColumnPath);
+      
+      ObjectListing objectListing = s3Client.listObjects(listObjectsRequest);
+      if (!objectListing.getObjectSummaries().isEmpty()) {
+        String columnFullName = Paths.get(objectListing.getObjectSummaries().get(0).getKey()).getFileName().toString().substring(1);
+        return new ColumnId(columnFullName);
+      }
+      return null;
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue getEntityIdColumn", s3error);
+      throw s3error;
     }
-    return null;
   }
 
   @Override
   public ArmorXact begin(String transaction, ShardId shardId) {
     if (transaction == null)
        throw new IllegalArgumentException("No transaction was given to start the transaction");
-    DistXactRecord xact = getCurrentValues(shardId);
-    
-    // Special case: First one wins scenario. Since no previous transaction exists start the process
-    // of claiming it by saving a current first then building another transaction.
-    if (xact == null) {
-        String baselineTransaction = UUID.randomUUID().toString();
-        LOGGER.info("The shard at {} doesn't exist for transaction {}, establishing new baseline transaction of {}", shardId, transaction, baselineTransaction);
-        xact = new DistXactRecord(baselineTransaction, System.currentTimeMillis(), null, null);
-        xact.setAutoCurrent(true);
-        saveCurrentValues(shardId, xact);
+    try {
+      DistXactRecord xact = getCurrentValues(shardId);
+      
+      // Special case: First one wins scenario. Since no previous transaction exists start the process
+      // of claiming it by saving a current first then building another transaction.
+      if (xact == null) {
+          String baselineTransaction = UUID.randomUUID().toString();
+          LOGGER.info("The shard at {} doesn't exist for transaction {}, establishing new baseline transaction of {}", shardId, transaction, baselineTransaction);
+          xact = new DistXactRecord(baselineTransaction, System.currentTimeMillis(), null, null);
+          xact.setAutoCurrent(true);
+          saveCurrentValues(shardId, xact);
+      }
+      return DistXactRecord.generateNewTransaction(transaction, xact);
+    } catch (AmazonS3Exception s3error) {
+      LOGGER.error("Detected an s3 issue starting the transaction", s3error);
+      throw s3error;
     }
-    return DistXactRecord.generateNewTransaction(transaction, xact);
   }
 
   @Override
