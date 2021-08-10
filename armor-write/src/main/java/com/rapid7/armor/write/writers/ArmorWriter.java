@@ -178,46 +178,50 @@ public class ArmorWriter implements Closeable {
   }
 
   public void delete(String tenant, String table, Interval interval, Instant timestamp, Entity delete) {
-    if (transaction == null)
-      throw new XactError("No transaction was given, forget to call begin?");
-    ShardId shardId = store.findShardId(tenant, table, interval, timestamp, delete.getEntityId());
-    TableId tableId = new TableId(tenant, table);
-    TableWriter tableWriter = tableWriters.get(tableId);
-    if (tableWriter != null) {
-      // This occurs if a write happened first then delete.
-      IShardWriter sw = tableWriter.getShard(shardId);
-      if (sw != null) {
-        sw.delete(delete.getEntityId(), delete.getVersion(), delete.getInstanceId());
-        return;
-      } else {
-        // NOTE: Let it fall through, since its a new shard we haven't loaded yet.
+    try {
+      if (transaction == null)
+        throw new XactError("No transaction was given, forget to call begin?");
+      ShardId shardId = store.findShardId(tenant, table, interval, timestamp, delete.getEntityId());
+      TableId tableId = new TableId(tenant, table);
+      TableWriter tableWriter = tableWriters.get(tableId);
+      if (tableWriter != null) {
+        // This occurs if a write happened first then delete.
+        IShardWriter sw = tableWriter.getShard(shardId);
+        if (sw != null) {
+          sw.delete(delete.getEntityId(), delete.getVersion(), delete.getInstanceId());
+          return;
+        } else {
+          // NOTE: Let it fall through, since its a new shard we haven't loaded yet.
+        }
       }
+  
+      // If it is null then table doesn't exist yet which means we can just return.
+      if (!store.tableExists(tenant, table))
+        return;
+  
+      // TableMeta is not null then table does exist, in that case load it up and attempt a delete.
+      if (tableWriter == null) {
+        tableWriter = getTableWriter(tableId);
+      }
+      ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
+      if (entityIdColumn != null) {
+          if (!entityIdColumn.equals(delete.entityColumnId()))
+              throw new RuntimeException("The entity id column " + entityIdColumn + " is not equal to " + delete.entityColumnId());
+          tableEntityColumnIds.put(tableId, entityIdColumn);
+      } else {
+          tableEntityColumnIds.put(tableId, delete.entityColumnId());        
+      }
+  
+      IShardWriter sw = tableWriter.getShard(shardId);
+      if (sw == null) {
+        IShardWriter sw1 = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
+        sw1.begin(transaction);
+        sw = tableWriter.addShard(sw1);
+      }
+      sw.delete(delete.getEntityId(), delete.getVersion(), delete.getInstanceId());
+    } finally {
+      MDC.remove("table");
     }
-
-    // If it is null then table doesn't exist yet which means we can just return.
-    if (!store.tableExists(tenant, table))
-      return;
-
-    // TableMeta is not null then table does exist, in that case load it up and attempt a delete.
-    if (tableWriter == null) {
-      tableWriter = getTableWriter(tableId);
-    }
-    ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
-    if (entityIdColumn != null) {
-        if (!entityIdColumn.equals(delete.entityColumnId()))
-            throw new RuntimeException("The entity id column " + entityIdColumn + " is not equal to " + delete.entityColumnId());
-        tableEntityColumnIds.put(tableId, entityIdColumn);
-    } else {
-        tableEntityColumnIds.put(tableId, delete.entityColumnId());        
-    }
-
-    IShardWriter sw = tableWriter.getShard(shardId);
-    if (sw == null) {
-      IShardWriter sw1 = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
-      sw1.begin(transaction);
-      sw = tableWriter.addShard(sw1);
-    }
-    sw.delete(delete.getEntityId(), delete.getVersion(), delete.getInstanceId());
   }
   
   public synchronized TableWriter getTableWriter(TableId tableId) {
@@ -290,105 +294,110 @@ public class ArmorWriter implements Closeable {
   }
 
   public void write(String tenant, String table, Interval interval, Instant timestamp, List<Entity> entities) {
-    if (transaction == null)
-      throw new XactError("No transaction was given, forget to call begin?");
-    if (entities == null || entities.isEmpty())
-      return;
-
-    HashMap<ShardId, List<Entity>> shardToUpdates = new HashMap<>();
-    TableId tableId = new TableId(tenant, table);
-    final TableWriter tableWriter;
-    if (!tableWriters.containsKey(tableId)) {
-      if (store.tableExists(tenant, table)) {
-        // The table exists, load it up then
-        tableWriter = getTableWriter(tableId);
-        
-        // Make sure the entityid column hasn't changed.
-        ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
-        if (entityIdColumn == null) {
-          Entity entity = entities.get(0);
-          tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
-        } else {
-          if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName()))) {
-            Optional<Entity> first = entities.stream().filter(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())).findFirst();
-            String otherColumn = first.get().getEntityIdColumn();
-            throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + 
-                " but detected an entity that had a different name " + otherColumn + " for table " + tableId);
-          }
-          tableEntityColumnIds.put(tableId, entityIdColumn); 
-        }
-      } else {
-        Entity entity = entities.get(0);
-        // No shard metadata exists, create the first shard metadata for this.
-        tableWriter = getTableWriter(tableId);
-        tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
-      }
-    } else {
-      tableWriter = tableWriters.get(tableId);
-    }
-    for (Entity entity : entities) {
-      ShardId shardId = store.findShardId(tenant, table, interval, timestamp, entity.getEntityId());
-      List<Entity> entityUpdates = shardToUpdates.computeIfAbsent(shardId, k -> new ArrayList<>());
-      entityUpdates.add(entity);
-    }
-    int numShards = shardToUpdates.size();
-    ExecutorCompletionService<Void> ecs = new ExecutorCompletionService<>(threadPool);
-    for (Map.Entry<ShardId, List<Entity>> entry : shardToUpdates.entrySet()) {
-      ecs.submit(
-          () -> {
-            String originalThreadName = Thread.currentThread().getName();
-            try {
-              ShardId shardId = entry.getKey();
-              MDC.put("tenant_id", tenant);
-              MDC.put("armor_shard", Integer.toString(shardId.getShardNum()));
-              MDC.put("xact", transaction);
-              IShardWriter shardWriter = tableWriter.getShard(shardId);
-              Thread.currentThread().setName(originalThreadName + "(" + shardId.toString() + ")");
-              if (shardWriter == null) {
-                IShardWriter sw1 = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
-                sw1.begin(transaction);
-                shardWriter = tableWriter.addShard(sw1);
-              }
-
-              List<Entity> entityUpdates = entry.getValue();
-              Map<ColumnId, List<WriteRequest>> columnIdEntityColumns = new HashMap<>();
-              for (Entity eu : entityUpdates) {
-                Object entityId = eu.getEntityId();
-                long version = eu.getVersion();
-                String instanceId = eu.getInstanceId();
-                for (Column ec : eu.columns()) {
-                  WriteRequest internalRequest = new WriteRequest(entityId, version, instanceId, ec);
-                  List<WriteRequest> payloads = columnIdEntityColumns.computeIfAbsent(
-                      ec.getColumnId(),
-                      k -> new ArrayList<>()
-                  );
-                  payloads.add(internalRequest);
-                }
-              }
-              for (Map.Entry<ColumnId, List<WriteRequest>> e : columnIdEntityColumns.entrySet()) {
-                ColumnId columnId = e.getKey();
-                List<WriteRequest> columns = e.getValue();
-                shardWriter.write(columnId, columns);
-              }
-              return null;
-            } finally {
-              MDC.remove("tenant_id");
-              MDC.remove("armor_shard");
-              MDC.remove("xact");
-              Thread.currentThread().setName(originalThreadName);
-            }
-        }
-      );
-    }
-    for (int i = 0; i < numShards; ++i) {
-      try {
-        ecs.take().get();
-      } catch (Exception e) {
-        if (e.getCause() instanceof EntityIdTypeException)
-          throw ((EntityIdTypeException) e.getCause());
-        else
-          throw new RuntimeException(e);
-      }
+    try {
+     MDC.put("table", table);
+     if (transaction == null)
+       throw new XactError("No transaction was given, forget to call begin?");
+     if (entities == null || entities.isEmpty())
+       return;
+ 
+     HashMap<ShardId, List<Entity>> shardToUpdates = new HashMap<>();
+     TableId tableId = new TableId(tenant, table);
+     final TableWriter tableWriter;
+     if (!tableWriters.containsKey(tableId)) {
+       if (store.tableExists(tenant, table)) {
+         // The table exists, load it up then
+         tableWriter = getTableWriter(tableId);
+         
+         // Make sure the entityid column hasn't changed.
+         ColumnId entityIdColumn = store.getEntityIdColumn(tenant, table);
+         if (entityIdColumn == null) {
+           Entity entity = entities.get(0);
+           tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
+         } else {
+           if (entities.stream().anyMatch(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName()))) {
+             Optional<Entity> first = entities.stream().filter(m -> !m.getEntityIdColumn().equals(entityIdColumn.getName())).findFirst();
+             String otherColumn = first.get().getEntityIdColumn();
+             throw new RuntimeException("Inconsistent entity id column names expected " + entityIdColumn + 
+                 " but detected an entity that had a different name " + otherColumn + " for table " + tableId);
+           }
+           tableEntityColumnIds.put(tableId, entityIdColumn); 
+         }
+       } else {
+         Entity entity = entities.get(0);
+         // No shard metadata exists, create the first shard metadata for this.
+         tableWriter = getTableWriter(tableId);
+         tableEntityColumnIds.put(tableId, buildEntityColumnId(entity));
+       }
+     } else {
+       tableWriter = tableWriters.get(tableId);
+     }
+     for (Entity entity : entities) {
+       ShardId shardId = store.findShardId(tenant, table, interval, timestamp, entity.getEntityId());
+       List<Entity> entityUpdates = shardToUpdates.computeIfAbsent(shardId, k -> new ArrayList<>());
+       entityUpdates.add(entity);
+     }
+     int numShards = shardToUpdates.size();
+     ExecutorCompletionService<Void> ecs = new ExecutorCompletionService<>(threadPool);
+     for (Map.Entry<ShardId, List<Entity>> entry : shardToUpdates.entrySet()) {
+       ecs.submit(
+           () -> {
+             String originalThreadName = Thread.currentThread().getName();
+             try {
+               ShardId shardId = entry.getKey();
+               MDC.put("tenant_id", tenant);
+               MDC.put("armor_shard", Integer.toString(shardId.getShardNum()));
+               MDC.put("xact", transaction);
+               IShardWriter shardWriter = tableWriter.getShard(shardId);
+               Thread.currentThread().setName(originalThreadName + "(" + shardId.toString() + ")");
+               if (shardWriter == null) {
+                 IShardWriter sw1 = new ShardWriter(shardId, store, compress, compactionTrigger, captureWrites);
+                 sw1.begin(transaction);
+                 shardWriter = tableWriter.addShard(sw1);
+               }
+ 
+               List<Entity> entityUpdates = entry.getValue();
+               Map<ColumnId, List<WriteRequest>> columnIdEntityColumns = new HashMap<>();
+               for (Entity eu : entityUpdates) {
+                 Object entityId = eu.getEntityId();
+                 long version = eu.getVersion();
+                 String instanceId = eu.getInstanceId();
+                 for (Column ec : eu.columns()) {
+                   WriteRequest internalRequest = new WriteRequest(entityId, version, instanceId, ec);
+                   List<WriteRequest> payloads = columnIdEntityColumns.computeIfAbsent(
+                       ec.getColumnId(),
+                       k -> new ArrayList<>()
+                   );
+                   payloads.add(internalRequest);
+                 }
+               }
+               for (Map.Entry<ColumnId, List<WriteRequest>> e : columnIdEntityColumns.entrySet()) {
+                 ColumnId columnId = e.getKey();
+                 List<WriteRequest> columns = e.getValue();
+                 shardWriter.write(columnId, columns);
+               }
+               return null;
+             } finally {
+               MDC.remove("tenant_id");
+               MDC.remove("armor_shard");
+               MDC.remove("xact");
+               Thread.currentThread().setName(originalThreadName);
+             }
+         }
+       );
+     }
+     for (int i = 0; i < numShards; ++i) {
+       try {
+         ecs.take().get();
+       } catch (Exception e) {
+         if (e.getCause() instanceof EntityIdTypeException)
+           throw ((EntityIdTypeException) e.getCause());
+         else
+           throw new RuntimeException(e);
+       }
+     }
+    } finally {
+        MDC.remove("table");
     }
   }
 
