@@ -95,14 +95,16 @@ public class ColumnFileReader {
       int readBytes = 0;
       if (entry.sectionType == ColumnFileSection.METADATA) {
         readBytes = readMetadata(dataInputStream);
-      } else
-      {
+      } else {
         readBytes = readSection(dataInputStream, listener, entry.sectionType);
       }
+
       totalBytesRead += readBytes;
     }
   }
 
+  // Reads the section by calling back to the listener, if the listener exists.
+  // listener must return the # of bytes it has read from the dataInputStream.
   private int readSection(DataInputStream dataInputStream, ColumnFileListener listener, ColumnFileSection sectionType)
      throws IOException
   {

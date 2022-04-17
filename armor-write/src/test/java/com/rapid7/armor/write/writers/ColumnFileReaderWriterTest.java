@@ -8,6 +8,7 @@ import com.rapid7.armor.entity.EntityRecord;
 import com.rapid7.armor.entity.EntityRecordSummary;
 import com.rapid7.armor.interval.Interval;
 import com.rapid7.armor.io.Compression;
+import com.rapid7.armor.io.IOTools;
 import com.rapid7.armor.meta.ColumnMetadata;
 import com.rapid7.armor.schema.ColumnId;
 import com.rapid7.armor.schema.DataType;
@@ -17,15 +18,19 @@ import com.rapid7.armor.shard.ShardId;
 import com.rapid7.armor.write.StreamProduct;
 import com.google.common.io.ByteSource;
 import com.google.common.io.ByteStreams;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.*;
 
 import com.rapid7.armor.write.WriteRequest;
+import com.rapid7.armor.write.component.ValueIndexWriter;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -83,6 +88,80 @@ public class ColumnFileReaderWriterTest {
       assertTrue(bytes.length > 0);
 
       runColumnFileListener(bytes, printListener());
+      return;
+   }
+
+   static private class FoundValueIndex {
+      boolean foundValueIndex = false;
+   };
+
+   @Test
+   public void testValueIndex()
+      throws IOException {
+      ModShardStrategy shardStrategy = new ModShardStrategy(10);
+      int entity1Shard = shardStrategy.shardNum(1);
+      ColumnId testColumn = new ColumnId("vuln", DataType.LONG);
+
+      ColumnShardId columnShardId = new ColumnShardId(new ShardId(TENANT, TABLE, INTERVAL.getInterval(), INTERVAL.getIntervalStart(TIMESTAMP), entity1Shard), testColumn);
+
+      ColumnFileWriter cfw = new ColumnFileWriter(columnShardId);
+      List<WriteRequest> writeRequests = new ArrayList<>();
+      for(int i = 0 ; i < 10 ; ++i)
+      {
+         Number entityId = 1000 + i;
+         long version = 1;
+         String randomId = UUID.randomUUID().toString();
+         Column ecv = new Column(testColumn);
+         for (long j = 0 ; j < 10; ++j)
+         {
+            ecv.addValue(j);
+         }
+
+         WriteRequest wr = new WriteRequest(entityId, version, randomId, ecv);
+         writeRequests.add(wr);
+      }
+      cfw.write(writeRequests);
+
+      StreamProduct result = cfw.buildInputStreamV2(Compression.NONE);
+      assertNotNull(result);
+      byte[] bytes = bytesFromStreamProduct(result);
+      assertEquals(result.getByteSize(), bytes.length);
+      assertTrue(bytes.length > 0);
+
+      runColumnFileListener(bytes, printListener());
+      FoundValueIndex fvi = new FoundValueIndex();
+      runColumnFileListener(bytes, new ColumnFileListener()
+      {
+         @Override public int columnFileSection(ColumnFileSection armorSection, ColumnMetadata metadata, DataInputStream inputStream, int compressedLength, int uncompressedLength)
+         {
+            if (armorSection == ColumnFileSection.EXTENDED_INDEX) {
+               assertEquals(compressedLength, 0);
+               assertEquals(uncompressedLength, 569);
+
+               try
+               {
+                  long uuid = inputStream.readLong();
+                  assertEquals(0x31460001, uuid);
+                  byte[] raw = new byte[561];
+                  int bytesRead = 0;
+                  bytesRead = inputStream.read(raw);
+
+                  ValueIndexWriter x = new ValueIndexWriter(columnShardId);
+                  x.load(new ByteArrayInputStream(raw));
+                  Set<Integer> vals = x.getValToEntities().get(0L);
+                  assertEquals(10, vals.size());
+                  fvi.foundValueIndex = true;
+                  return bytesRead;
+               }
+               catch (IOException e)
+               {
+                  throw new RuntimeException("Unexpected IO exception within columnFileSection", e);
+               }
+            }
+            return 0;
+         }
+      });
+      assertTrue(fvi.foundValueIndex, "found value index");
       return;
    }
 
