@@ -67,7 +67,7 @@
         <commons.version>1.5</commons.version>
         <s3mock.version>0.2.6</s3mock.version>
         <roaringBitmap.version>0.9.3</roaringBitmap.version>
-        <aws.version>1.11.445</aws.version>
+        <aws.version>1.12.261</aws.version>
         <slf4j.version>1.7.26</slf4j.version>
     </properties>
 
