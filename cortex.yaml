@@ -1,0 +1,18 @@
+---
+info:
+  title: Armor
+  x-cortex-git:
+    github:
+      alias: r7org
+      repository: rapid7/armor
+  x-cortex-tag: armor
+  x-cortex-type: service
+  x-cortex-groups:
+  - strategy:on-prem
+  - criticality:critical
+  - exposure:external-ship
+  x-cortex-domain-parents:
+  - tag: endpoint-on-premise
+openapi: 3.0.1
+servers:
+- url: "/"
