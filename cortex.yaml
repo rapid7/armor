@@ -12,7 +12,7 @@ info:
   - criticality:critical
   - exposure:external-ship
   x-cortex-domain-parents:
-  - tag: endpoint-on-premise
+  - tag: endpoint-other
 openapi: 3.0.1
 servers:
 - url: "/"
